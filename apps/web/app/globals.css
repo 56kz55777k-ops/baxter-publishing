@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Baxter — base layer.
+ * Editorial Constitution: warm canvas, near-black ink, oxblood accent.
+ * Body lives at 18px / 1.65. Type is the architecture.
+ */
+
+:root {
+  --canvas: #f5f3ee;
+  --ink: #1a1a1a;
+  --ink-soft: rgba(26, 26, 26, 0.72);
+  --ink-faint: rgba(26, 26, 26, 0.5);
+  --rule: rgba(26, 26, 26, 0.12);
+  --accent: #8a2820;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  font-variation-settings: 'opsz' 24, 'SOFT' 50;
+}
+
+/* DIN-proxy stack: shell, navigation, metadata, captions. */
+.font-shell,
+nav,
+[data-shell] {
+  font-family: var(--font-din-proxy), system-ui, sans-serif;
+  font-variation-settings: normal;
+}
+
+/* Metadata: small, tracked, uppercase. Used for labels. */
+.metadata {
+  font-family: var(--font-din-proxy), system-ui, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Editorial body — used inside long-form prose. */
+.prose-editorial {
+  max-width: 38.75rem;
+}
+.prose-editorial p + p {
+  margin-top: 1.25em;
+}
+
+/* Hairline rule — used between sections. Never heavier than this. */
+.rule {
+  border-top: 1px solid var(--rule);
+}
+
+/* Selection: never the accent. Subtle ink wash. */
+::selection {
+  background: rgba(26, 26, 26, 0.12);
+  color: var(--ink);
+}
+
+/* Links: no underline by default. One property changes on hover. */
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+a:hover {
+  color: var(--accent);
+}
+
+/* Focus: visible, never garish. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Buttons are restrained. The interface does not raise its voice. */
+button {
+  font-family: var(--font-din-proxy), system-ui, sans-serif;
+  cursor: pointer;
+}

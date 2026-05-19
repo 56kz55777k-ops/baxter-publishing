@@ -1,0 +1,279 @@
+# Baxter Publishing — Editorial Constitution
+
+*Version 1 — a living document, refined through real interactions, creator testing, and emotional observation. Not frozen.*
+
+A working document, equal in weight to the technical plan.
+
+The implementation plan answers *what* and *how*. This document answers *how it should feel*. Every slice in Week 1 is evaluated against both.
+
+---
+
+## Three foundational principles
+
+These sit above everything else. When any later guidance conflicts with these, these win.
+
+### Attention Respect
+
+Baxter does not manipulate urgency, attention, or behaviour through:
+
+- countdown timers
+- artificial scarcity
+- engagement traps
+- notification pressure
+- infinite-scroll addiction patterns
+- deceptive CTA hierarchy
+- psychological coercion patterns common in ecommerce and social media
+
+The platform respects creator attention, reader attention, and the slower rhythm of publishing culture. Where a dark pattern would increase a metric, the metric loses.
+
+### Platform Humility
+
+Baxter exists to support publications, not overshadow them.
+
+The interface should never compete with the work for attention. Branding remains restrained. Publications, creators, and sequencing remain primary. The Baxter wordmark appears where wayfinding requires it, and not as decoration.
+
+This principle protects the platform from over-branding, visual ego, and the gradual startup drift toward making the product the hero. The work is always the hero.
+
+### Composed Warmth
+
+Baxter avoids performative friendliness, but remains human and attentive.
+
+The tone should feel composed, respectful, and quietly warm — not corporate, playful, or emotionally sterile. Restraint is not coldness. The difference matters:
+
+- *Cold:* "Submission received. Reference #4471-A."
+- *Performative:* "🎉 Amazing! Your submission is in!"
+- *Composed warmth:* "Submitted. Baxter will review your work within five business days. We'll write to you when there's news."
+
+The last one is what we're after. It treats the reader as an adult, takes the moment seriously, and still leaves a hand on the shoulder.
+
+---
+
+## The two questions every screen must answer
+
+Before any screen is considered "done," it must pass two reads:
+
+1. **Does this feel like software, or does this feel like publishing?**
+2. **If I removed every brand mark, would someone still know this isn't a SaaS app?**
+
+If the answer to either is wrong, pull it back. Atmosphere is not a polish step.
+
+---
+
+## The seven feelings to protect
+
+These are non-negotiable across the product. Every interaction either deposits to or withdraws from this account.
+
+| Feeling | Means | The opposite (avoid) |
+|---|---|---|
+| **Atmosphere** | The screen has a tone before it has content | Functional-first, decorated later |
+| **Pacing** | Time is given. Moments breathe. | Speed-as-virtue, instant everything |
+| **Silence** | Restraint of UI elements, copy, motion | Filling space because space exists |
+| **Anticipation** | Things are coming. The wait matters. | Resolved-immediately, no buildup |
+| **Restraint** | Less is the design philosophy, not a constraint | Maximalism, "comprehensive" UIs |
+| **Object reverence** | The publication is treated as a finished thing | Treating publications like rows in a table |
+| **Authorship** | The creator's name and work hold weight | Templated, depersonalized presentation |
+
+---
+
+## The five emotional pressure points
+
+These are where the product wins or loses its tone. Each gets explicit design attention separate from feature implementation.
+
+### 1. Onboarding
+**The risk:** Sign-up flows are where SaaS conventions are strongest and most invisible.
+
+**The discipline:**
+- No multi-step progress bar with percentage complete
+- No "Step 1 of 4" framing
+- No "Welcome to Baxter! 🎉"
+- No checklist of "complete your profile to unlock features"
+- Sign-up is a quiet door, not a funnel
+- The first sentence the creator reads sets the tone for everything
+
+**What it should feel like:** Walking into a small independent bookstore where the owner looks up, nods, and goes back to their book. You're welcome, not greeted.
+
+### 2. Submission
+**The risk:** "Submit" is the most over-engineered moment in every SaaS product. Confetti, toasts, modals.
+
+**The discipline:**
+- The final submit moment is a single decisive action, not a celebration
+- The confirmation state is generous in whitespace and short on words
+- No progress percentage during async scans — show that work is happening, not how fast
+- The waiting state is dignified, not anxious
+- No "Your submission is in queue position #47" — that's a kitchen ticket, not a publication
+
+**What it should feel like:** Sliding a manuscript across a desk. The desk is clean. The room is quiet. You leave.
+
+### 3. Publication pages
+**The risk:** Treating publication pages like e-commerce product pages.
+
+**The discipline:**
+- The cover image gets disproportionate space (the cover is the storefront)
+- Specs, format, page count are present but de-emphasized
+- "Add to cart" is not the visual centre of gravity
+- No "Customers also bought" — antithetical to the curated model
+- No urgency language ("Only 3 left!" — even if true, surface differently)
+- Reviews appear, but quietly, below the work
+
+**What it should feel like:** A page in a museum bookstore catalog. The work is the subject. The transaction is incidental to the encounter.
+
+### 4. Marketplace browsing
+**The risk:** Marketplace UIs default to dense grids and filter-driven search.
+
+**The discipline:**
+- The homepage holds maybe 15-25 publications visible at most before scroll
+- No "Load more" — the marketplace is finite and curated
+- No filter sidebar visible by default
+- Editor Picks is sparse and editorial, not a "shop" rail
+- Search exists but isn't the primary discovery mode
+- Hover/focus states are subtle — no scale-up, no shadow pop, no "snappy" feedback
+
+**What it should feel like:** Walking the aisles of a gallery bookstore. You browse with your eyes, not your filters.
+
+### 5. Transitions and empty states
+**The risk:** These are where SaaS conventions creep in invisibly because designers consider them low-stakes.
+
+**The discipline:**
+- Page transitions are quiet — soft fade or nothing. No slide-in, no skeleton shimmer.
+- Empty states are written, not illustrated. No mascots, no cute copy.
+- "No publications yet" is a sentence, not a card with a CTA button.
+- Loading states are restrained — no spinners with "Just a moment!" copy
+- Error states are calm. "Something didn't work. Try again, or contact us." Not "Oops!"
+
+**What it should feel like:** A book between chapters. White space is content.
+
+---
+
+## Copy doctrine
+
+The voice that runs through every string in the product.
+
+### Always
+- Plain English, short sentences
+- Present tense, declarative mood
+- The creator's name appears as it would on a book spine
+- Time is named directly: "Reviewed within five business days," not "Fast review!"
+- Numbers in body copy are spelled out when small ("five publications," not "5 publications")
+
+### Never
+- Exclamation points
+- Emojis
+- "We" referring to Baxter (use "Baxter" or no attribution at all)
+- "Awesome," "great," "fantastic," "love it"
+- "Get started," "Let's go," "Ready?"
+- "Oops," "Uh oh," "Yikes"
+- "Submit your masterpiece" or any flattery of the work being created
+- "Powered by," "Made with," footer credits
+
+### Examples
+
+| Wrong | Right |
+|---|---|
+| "Welcome back, Nik! 👋" | "Nik." |
+| "Your publication has been submitted! 🎉" | "Submitted. Baxter will review your work within five business days." |
+| "Oops! Something went wrong." | "Something didn't work. Try again." |
+| "Get started by creating your first publication" | "Begin a publication." |
+| "Awesome! Your file uploaded successfully." | (silence — the file is now visible. No notification needed.) |
+| "Submit your masterpiece for review" | "Submit for review." |
+
+---
+
+## Visual atmosphere rules
+
+These are guardrails for the design system, not a complete spec.
+
+### Space
+- Default spacing scale starts larger than feels natural for a web app
+- Page margins on desktop: at least 80px gutter, often more
+- Hero areas: generous vertical breathing room
+- Don't fill the viewport with content because the viewport is there
+
+### Motion
+- Default transition duration: 400–600ms (slower than typical UI)
+- Easing: gentle, not springy. No bounce, no overshoot.
+- Hover states change at most one property (opacity, color), not three
+- No parallax. No scroll-triggered animations.
+- Page navigation feels like turning a page, not switching screens
+
+### Color
+- White-warm or off-white is the canvas
+- Black is for type, used at <90% opacity by default
+- Grey scale is restrained — three or four greys, not a full palette
+- Accent color exists but is rarely used. When used, intentionally.
+- No gradients. No glassmorphism. No neumorphism. No "design trends."
+
+### Typography
+- DIN for logo and section-defining headings
+- Body type is editorial — likely a serif for long-form, sans for UI
+- Type sizes step up larger than typical SaaS (the headline is allowed to be a headline)
+- Tracking and leading are tuned editorially, not defaulted
+- Text alignment is left, almost always. Centered text is reserved.
+
+### Imagery
+- Publication covers are presented at editorial scale — not as 200px thumbnails
+- Image cropping respects the work's composition
+- No drop shadows on publication covers unless they evoke a real book on a shelf
+- Placeholder states use restrained patterns or solid color, never stock imagery
+
+---
+
+## The slice-by-slice gut check
+
+For each Week 1 slice, before it's marked complete, two checks:
+
+1. **The brand sniff test.** Walk through the slice as a first-time user. Does it feel like Baxter? Or does it feel like a Vercel template?
+2. **The removal test.** What can be removed and still leave the function intact? Remove it. Then ask again.
+
+I'll add a "tone notes" section to each slice's PR description, explicitly calling out the atmosphere decisions and what was deliberately omitted.
+
+---
+
+## What this changes about the build
+
+Concretely, this doctrine adjusts a few things in the Week 1 plan:
+
+### Slice 1 (Foundation)
+- The static homepage is no longer "minimum viable" — it's the first proof of tone. Worth an extra half-day to get right.
+- Design tokens include motion timing and easing curves, not just color and type.
+- I'll commit a "voice and tone" reference card to the repo alongside the tokens.
+
+### Slice 2 (Auth + Creator Profile)
+- Onboarding copy gets written by hand, not borrowed from Supabase examples.
+- The empty profile state ("you have no publications yet") is itself a designed moment.
+- The follow button is small and quiet — not a primary CTA.
+
+### Slice 5 (Ceremonial Submission)
+- This slice gets an extra half-day budget specifically for the confirmation state.
+- The confirmation state is designed as if it's a poster, not a screen.
+- We resist the temptation to show "what happens next" with a checklist or timeline.
+
+### Slice 6 (Admin Review Queue)
+- The admin surface gets the same tonal discipline. It's the only screen where I'll allow it to look slightly more functional, but the reviewer is also part of the cultural ecosystem.
+- Reviewer notes to creators use the same voice as the rest of the product.
+- Decision emails to creators are written, not templated-feeling.
+
+### Slice 7 (Marketplace Shell)
+- This is the most important atmosphere slice. Will likely take 1.5 days, not 1.
+- Cover sizing, grid density, and section pacing get explicit design attention.
+- The homepage does *less* than it could. That restraint is the design.
+
+---
+
+## The standing commitment
+
+Every screen ships with intentional restraint, not because we ran out of time but because restraint *is* the design. When a future feature request arrives and the answer is "we could add it, but it would compromise the atmosphere," the answer is no.
+
+Atmosphere is the moat.
+
+---
+
+## A note on this document's status
+
+This is a constitution, not a freeze. It's stable enough to build against, and it will be refined slowly as real creators and readers begin to interact with the platform. Specifically, we expect to learn:
+
+- where the silence works and where it becomes friction
+- where more warmth is needed than the doctrine currently allows
+- where restraint deepens trust and where it creates uncertainty
+- which atmosphere decisions translate to actual user feeling and which were our own taste projected
+
+Revisions happen at milestone reviews, not mid-slice. Versioned so we can see the drift over time.
