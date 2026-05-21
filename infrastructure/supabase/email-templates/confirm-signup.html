@@ -1,0 +1,66 @@
+<!--
+  Baxter — Supabase "Confirm signup" email template.
+
+  Paste into: Supabase Dashboard -> Authentication -> Email Templates -> Confirm signup
+  Subject:    Confirm your email address — Baxter
+
+  This file is not wired into the build; it is the source of truth for the
+  value pasted into the Supabase dashboard. {{ .ConfirmationURL }} is
+  substituted by Supabase at send time — leave it intact. The "twenty-four
+  hours" wording must match the project's Email OTP expiration setting.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light only">
+    <meta name="supported-color-schemes" content="light">
+  </head>
+  <body style="margin:0; padding:0; background-color:#f5f3ee;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f3ee;">
+      <tr>
+        <td align="center" style="padding:56px 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:512px; margin:0 auto;">
+            <tr>
+              <td style="padding-bottom:56px;">
+                <span style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:15px; letter-spacing:3px; text-transform:uppercase; color:#1a1a1a;">Baxter</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:24px;">
+                <h1 style="margin:0; font-family:Georgia,'Times New Roman',serif; font-weight:normal; font-size:30px; line-height:1.25; color:#1a1a1a;">Confirm your email address.</h1>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:17px; line-height:1.65; color:#403e39;">Baxter received a request to open an account with this email address. Confirm the address below, and you can choose how your name appears on your publications.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 0 36px 0;">
+                <a href="{{ .ConfirmationURL }}" style="display:inline-block; font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:#1a1a1a; text-decoration:none; border:1px solid #1a1a1a; padding:15px 30px;">Confirm email address</a>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:15px; line-height:1.65; color:#6f6c65;">The link is valid for twenty-four hours. If you did not request this account, no action is needed — the address will not be added without this confirmation.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:44px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="border-top:1px solid #e3e0d8; padding-top:24px;">
+                      <span style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#9b988f;">Baxter · Publishing</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
