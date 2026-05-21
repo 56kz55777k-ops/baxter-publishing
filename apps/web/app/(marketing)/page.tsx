@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
+import { signOut } from '../(auth)/actions';
 
 /**
  * Baxter — homepage.
@@ -14,7 +16,15 @@ import Link from 'next/link';
  * Voice: present tense, declarative. No exclamation points. No "we".
  * No "get started". No flattery.
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // The CTA is auth-aware: a signed-in creator goes straight to /studio.
+  // A signed-out visitor is routed through /sign-up. No "Get started".
+  const beginHref = user ? '/studio' : '/sign-up';
   return (
     <main className="min-h-screen">
       {/* Shell — Baxter wordmark + restrained navigation. */}
@@ -26,11 +36,25 @@ export default function HomePage() {
         >
           Baxter
         </Link>
-        <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex gap-10">
+        <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
           <Link href="/publications">Publications</Link>
           <Link href="/creators">Creators</Link>
           <Link href="/about">About</Link>
-          <Link href="/sign-in">Sign in</Link>
+          {user ? (
+            <>
+              <Link href="/studio">Studio</Link>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft hover:text-ink transition-colors duration-300"
+                >
+                  Sign out
+                </button>
+              </form>
+            </>
+          ) : (
+            <Link href="/sign-in">Sign in</Link>
+          )}
         </nav>
       </header>
 
@@ -89,7 +113,7 @@ export default function HomePage() {
           </p>
           <div className="mt-12">
             <Link
-              href="/sign-up"
+              href={beginHref}
               className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
             >
               Begin a publication
