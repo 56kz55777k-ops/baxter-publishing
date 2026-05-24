@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ClaimHandleForm } from './claim-handle-form';
 import { UpdateProfileForm } from './update-profile-form';
+import { DeleteAccountForm } from './delete-account-form';
 
 export const metadata = {
   title: 'Profile — Baxter',
@@ -80,6 +81,18 @@ export default async function ProfileSettingsPage() {
         initialDisplayName={profile?.display_name ?? ''}
         initialBio={profile?.bio ?? ''}
       />
+
+      <section className="mt-24 pt-10 border-t border-rule">
+        <p className="metadata mb-4">Account</p>
+        <h2 className="text-[1.5rem] leading-[1.15] tracking-tight mb-4">
+          Delete your account.
+        </h2>
+        <p className="text-ink-soft mb-8 prose-editorial">
+          Deleting your account removes your profile, handle, and follows
+          from Baxter. This cannot be undone.
+        </p>
+        <DeleteAccountForm handle={handle} />
+      </section>
     </article>
   );
 }

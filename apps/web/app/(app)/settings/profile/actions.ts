@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * Profile actions — claim handle, update display name and bio.
@@ -158,4 +159,88 @@ export async function updateProfile(
 
   revalidatePath('/settings/profile');
   return { status: 'success' };
+}
+
+export type DeleteAccountState =
+  | { status: 'idle' }
+  | { status: 'error'; message: string };
+
+/**
+ * Delete the signed-in user's account.
+ *
+ * Confirmation: the user must type their current handle. This guards
+ * against misfires without staging a modal. Available only after a handle
+ * has been claimed — pending-handle users cannot type a `~pending-` token,
+ * so they must claim first. (Pending-state delete UX is a future polish.)
+ *
+ * Order of operations:
+ *   1. Delete public.users — cascades follows + assets, nulls audit-log
+ *      actor_ids. Service role bypasses RLS (no DELETE policy exists).
+ *   2. Delete auth.users via admin API. Invalidates all sessions.
+ *   3. Best-effort local signOut to clear the browser cookie.
+ *   4. Redirect to /. The user leaves Baxter cleanly.
+ */
+export async function deleteAccount(
+  _prev: DeleteAccountState,
+  formData: FormData
+): Promise<DeleteAccountState> {
+  const typed = String(formData.get('handle') ?? '').trim().toLowerCase();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { status: 'error', message: 'Sign in first.' };
+  }
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('handle')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.handle || profile.handle.startsWith('~pending-')) {
+    return {
+      status: 'error',
+      message: 'Claim a handle before deleting the account.',
+    };
+  }
+  if (typed !== profile.handle) {
+    return {
+      status: 'error',
+      message: 'The handle did not match. Try again.',
+    };
+  }
+
+  const admin = createAdminClient();
+
+  const { error: rowError } = await admin
+    .from('users')
+    .delete()
+    .eq('id', user.id);
+  if (rowError) {
+    return {
+      status: 'error',
+      message: 'Something prevented the account from being removed. Try again.',
+    };
+  }
+
+  const { error: authError } = await admin.auth.admin.deleteUser(user.id);
+  if (authError) {
+    return {
+      status: 'error',
+      message: 'Something prevented the account from being removed. Try again.',
+    };
+  }
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Session is already invalid server-side; the local cookie clear is
+    // best-effort and will resolve on the next request regardless.
+  }
+
+  revalidatePath('/', 'layout');
+  redirect('/');
 }
