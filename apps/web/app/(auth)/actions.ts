@@ -42,7 +42,7 @@ export async function signUp(
     options: {
       emailRedirectTo:
         process.env.NEXT_PUBLIC_SITE_URL
-          ? `${process.env.NEXT_PUBLIC_SITE_URL}/settings/profile`
+          ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/settings/profile`
           : undefined,
     },
   });
