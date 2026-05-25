@@ -9,6 +9,14 @@ type UploadState =
   | { phase: 'registering'; filename: string }
   | { phase: 'error'; message: string };
 
+type UploadFormProps = {
+  publicationId: string;
+  /** Called after a successful upload + register, before router.refresh(). */
+  onSuccess?: () => void;
+  /** If provided, renders a quiet Cancel button in the idle state. */
+  cancel?: () => void;
+};
+
 /**
  * PDF upload to R2 quarantine.
  *
@@ -22,7 +30,7 @@ type UploadState =
  * file is in flight, not racing. After completion, the parent server
  * component refreshes and shows "File received. Awaiting check."
  */
-export function UploadForm({ publicationId }: { publicationId: string }) {
+export function UploadForm({ publicationId, onSuccess, cancel }: UploadFormProps) {
   const router = useRouter();
   const [state, setState] = useState<UploadState>({ phase: 'idle' });
   const pending = state.phase === 'uploading' || state.phase === 'registering';
@@ -83,6 +91,7 @@ export function UploadForm({ publicationId }: { publicationId: string }) {
         );
       }
 
+      onSuccess?.();
       router.refresh();
     } catch (err) {
       const message =
@@ -126,6 +135,16 @@ export function UploadForm({ publicationId }: { publicationId: string }) {
       <p className="metadata text-ink-faint mt-4">
         Print-ready, single pages, no spreads.
       </p>
+
+      {cancel && (
+        <button
+          type="button"
+          onClick={cancel}
+          className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft hover:text-ink transition-colors duration-300 mt-6"
+        >
+          Cancel
+        </button>
+      )}
 
       {state.phase === 'error' && (
         <p

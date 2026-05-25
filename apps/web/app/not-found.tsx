@@ -27,18 +27,12 @@ export default function NotFound() {
           hold. The publication may have been moved, the handle may be wrong,
           or the page may not exist yet.
         </p>
-        <div className="mt-12 flex gap-8">
+        <div className="mt-12">
           <Link
             href="/"
             className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
           >
             Return home
-          </Link>
-          <Link
-            href="/publications"
-            className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink-soft border-b border-rule pb-1 hover:text-ink hover:border-ink transition-colors duration-400 ease-gentle"
-          >
-            Browse publications
           </Link>
         </div>
       </article>

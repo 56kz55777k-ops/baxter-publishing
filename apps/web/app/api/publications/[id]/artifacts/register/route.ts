@@ -60,6 +60,12 @@ export async function POST(
   });
 
   if (error) {
+    console.error('register artifact: insert failed', {
+      code: error.code,
+      message: error.message,
+      publicationId,
+      userId: user.id,
+    });
     return NextResponse.json(
       { message: 'Something prevented the file from being recorded.' },
       { status: 500 }

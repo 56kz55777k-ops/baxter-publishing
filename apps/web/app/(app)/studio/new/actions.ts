@@ -92,6 +92,13 @@ export async function createPublication(
     .single();
 
   if (error || !row) {
+    console.error('createPublication: insert failed', {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+      userId: user.id,
+    });
     return {
       status: 'error',
       message:

@@ -90,6 +90,11 @@ export async function claimHandle(
         field: 'handle',
       };
     }
+    console.error('claimHandle: update failed', {
+      code: error.code,
+      message: error.message,
+      userId: user.id,
+    });
     return {
       status: 'error',
       message: 'Something prevented the handle from being saved. Try again.',
@@ -151,6 +156,11 @@ export async function updateProfile(
     .eq('id', user.id);
 
   if (error) {
+    console.error('updateProfile: update failed', {
+      code: error.code,
+      message: error.message,
+      userId: user.id,
+    });
     return {
       status: 'error',
       message: 'Something prevented the profile from being saved. Try again.',
@@ -220,6 +230,11 @@ export async function deleteAccount(
     .delete()
     .eq('id', user.id);
   if (rowError) {
+    console.error('deleteAccount: users delete failed', {
+      code: rowError.code,
+      message: rowError.message,
+      userId: user.id,
+    });
     return {
       status: 'error',
       message: 'Something prevented the account from being removed. Try again.',
@@ -228,6 +243,10 @@ export async function deleteAccount(
 
   const { error: authError } = await admin.auth.admin.deleteUser(user.id);
   if (authError) {
+    console.error('deleteAccount: admin.deleteUser failed', {
+      message: authError.message,
+      userId: user.id,
+    });
     return {
       status: 'error',
       message: 'Something prevented the account from being removed. Try again.',

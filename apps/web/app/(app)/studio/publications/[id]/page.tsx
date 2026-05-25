@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { UploadForm } from './upload-form';
+import { ArtifactSection } from './artifact-section';
 
 export const metadata = {
   title: 'Publication — Baxter',
@@ -73,27 +73,17 @@ export default async function PublicationDetailPage({
 
       <section className="mt-20 pt-10 border-t border-rule">
         <p className="metadata mb-4">File</p>
-        {latestArtifact ? (
-          <div>
-            <p className="font-serif text-body text-ink">
-              File received. Awaiting check.
-            </p>
-            <p className="metadata text-ink-faint mt-3">
-              {(latestArtifact.size_bytes / 1024 / 1024).toFixed(1)} MB ·
-              uploaded{' '}
-              {new Date(latestArtifact.uploaded_at).toLocaleDateString(
-                'en-CA',
-                {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
+        <ArtifactSection
+          publicationId={publication.id}
+          latestArtifact={
+            latestArtifact
+              ? {
+                  sizeBytes: latestArtifact.size_bytes,
+                  uploadedAt: latestArtifact.uploaded_at,
                 }
-              )}
-            </p>
-          </div>
-        ) : (
-          <UploadForm publicationId={publication.id} />
-        )}
+              : null
+          }
+        />
       </section>
 
       <div className="mt-16">

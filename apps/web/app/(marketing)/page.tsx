@@ -37,9 +37,6 @@ export default async function HomePage() {
           Baxter
         </Link>
         <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
-          <Link href="/publications">Publications</Link>
-          <Link href="/creators">Creators</Link>
-          <Link href="/about">About</Link>
           {user ? (
             <>
               <Link href="/studio">Studio</Link>
@@ -140,14 +137,6 @@ export default async function HomePage() {
             tracked. Reviews are written by buyers, after the publication has
             arrived.
           </p>
-          <div className="mt-12">
-            <Link
-              href="/publications"
-              className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
-            >
-              Browse publications
-            </Link>
-          </div>
         </div>
       </section>
 
@@ -156,28 +145,11 @@ export default async function HomePage() {
       </div>
 
       {/* Footer. Minimal. The room is closing. */}
-      <footer className="px-gutter py-20 grid grid-cols-1 md:grid-cols-12 gap-y-12 md:gap-x-16">
-        <div className="md:col-span-3">
-          <p className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink">
-            Baxter
-          </p>
-          <p className="metadata mt-4">Toronto · est. 2026</p>
-        </div>
-        <div className="md:col-span-3 md:col-start-7">
-          <p className="metadata mb-4">Publications</p>
-          <ul className="font-shell text-[0.875rem] text-ink-soft space-y-2">
-            <li><Link href="/publications">All publications</Link></li>
-            <li><Link href="/creators">Creators</Link></li>
-          </ul>
-        </div>
-        <div className="md:col-span-3 md:col-start-10">
-          <p className="metadata mb-4">House</p>
-          <ul className="font-shell text-[0.875rem] text-ink-soft space-y-2">
-            <li><Link href="/about">About Baxter</Link></li>
-            <li><Link href="/standards">Editorial standards</Link></li>
-            <li><Link href="/contact">Contact</Link></li>
-          </ul>
-        </div>
+      <footer className="px-gutter py-20">
+        <p className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink">
+          Baxter
+        </p>
+        <p className="metadata mt-3">Toronto · est. 2026</p>
       </footer>
     </main>
   );

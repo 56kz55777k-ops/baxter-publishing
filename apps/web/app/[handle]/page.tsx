@@ -106,8 +106,6 @@ export default async function ProfilePage({
           Baxter
         </Link>
         <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
-          <Link href="/publications">Publications</Link>
-          <Link href="/creators">Creators</Link>
           {user ? (
             <>
               <Link href="/studio">Studio</Link>
