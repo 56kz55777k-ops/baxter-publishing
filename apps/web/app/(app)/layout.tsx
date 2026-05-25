@@ -48,6 +48,7 @@ export default async function AppLayout({
         </Link>
         <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
           <Link href="/studio">Studio</Link>
+          <Link href="/library">Library</Link>
           {!isPending && handle ? (
             <Link href={`/${encodeURIComponent(handle)}`}>Profile</Link>
           ) : (
