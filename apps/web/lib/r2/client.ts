@@ -14,6 +14,16 @@ export function r2Client() {
       accessKeyId: process.env.R2_ACCESS_KEY_ID!,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
     },
+    // Path-style addressing. Some R2 CORS configurations apply cleanly
+    // to the account endpoint but not to virtual-hosted-style bucket
+    // subdomains; path-style sidesteps that.
+    forcePathStyle: true,
+    // AWS SDK v3 defaults to baking CRC32 checksums into presigned URLs;
+    // browser PUTs cannot compute the matching checksum and R2 rejects
+    // the request (sometimes even at the preflight step). WHEN_REQUIRED
+    // skips the default and signs a cleaner URL the browser can fulfil.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
 }
 
