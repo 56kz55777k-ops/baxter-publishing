@@ -133,7 +133,7 @@ export function UploadForm({ publicationId, onSuccess, cancel }: UploadFormProps
         />
       </label>
       <p className="metadata text-ink-faint mt-4">
-        Print-ready, single pages, no spreads.
+        Print-ready, single pages, with front and back covers.
       </p>
 
       {cancel && (

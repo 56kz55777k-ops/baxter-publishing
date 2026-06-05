@@ -73,20 +73,6 @@ export function NewPublicationForm() {
         </select>
       </label>
 
-      <label className="flex flex-col gap-2">
-        <span className="metadata">Page count</span>
-        <input
-          name="pageCount"
-          type="number"
-          min={1}
-          max={2000}
-          required
-          disabled={pending}
-          className="bg-transparent border-b border-rule py-2 text-[1.05rem] text-ink focus:outline-none focus:border-ink transition-colors duration-300"
-        />
-        <span className="text-[0.8rem] text-ink-faint">Including covers.</span>
-      </label>
-
       {state.status === 'error' && (
         <p
           role="alert"

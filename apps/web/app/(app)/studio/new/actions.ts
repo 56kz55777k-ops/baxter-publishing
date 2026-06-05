@@ -34,7 +34,6 @@ export async function createPublication(
   const title = String(formData.get('title') ?? '').trim();
   const formatPresetId = String(formData.get('formatPresetId') ?? '');
   const categoryRaw = String(formData.get('category') ?? '');
-  const pageCountRaw = String(formData.get('pageCount') ?? '');
 
   if (!title) {
     return { status: 'error', message: 'A title is required.' };
@@ -56,15 +55,6 @@ export async function createPublication(
   }
   const category: PublicationCategory = categoryRaw;
 
-  const pageCount = Number(pageCountRaw);
-  if (!Number.isInteger(pageCount) || pageCount < 1 || pageCount > 2000) {
-    return {
-      status: 'error',
-      message:
-        'Page count must be a whole number between one and two thousand.',
-    };
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
@@ -83,7 +73,9 @@ export async function createPublication(
       title,
       category,
       format: 'print',
-      page_count: pageCount,
+      // page_count is filled in by the register-artifact route after upload,
+      // when the PDF is parsed. Left null at creation so the creator does not
+      // have to guess before producing the work.
       trim_width_mm: preset.trimWidthMm,
       trim_height_mm: preset.trimHeightMm,
       // status defaults to 'draft', currency to 'CAD'.
