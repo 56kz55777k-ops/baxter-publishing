@@ -147,9 +147,27 @@ Warnings require acknowledgement before the creator continues, but: warnings are
 
 ---
 
+## D-014 · Slice 3b preflight — file promotion, retention, and cleanup
+
+**Chosen.** Two buckets with distinct roles. `baxter-clean` holds passed files (the active file plus retained prior versions); `baxter-quarantine` is a staging area holding only `pending` and `failed` files. The lifecycle:
+
+- **On pass:** copy the object from quarantine to `baxter-clean`, update the artifact row to point at the clean bucket and key, then delete the quarantine copy once the copy is confirmed. Clean is the single source of truth; quarantine never accumulates passed files.
+- **On fail:** keep the object in quarantine with the artifact row at `failed`. The creator can re-download and inspect exactly what they sent. (Withdrawing a creator's file would be punitive — against Attention Respect.)
+- **Replacement / supersession:** swept at the moment a new file is registered — synchronously, in the register/replace flow, no background job. Deleting the superseded object(s) from whichever bucket they live in and clearing their artifact rows.
+- **Retention: two.** Keep the current active file plus its immediate predecessor. Older artifacts are swept on each new registration.
+
+**The retention invariant.** "Two" counts the two most recent uploads (pass or fail), with one hard guarantee: **the latest passed artifact — the active publication file — is never swept**, even when newer failed attempts would otherwise push it past the count. So a creator who uploads a good file and then fails twice still has their good file. Concretely, keep: (a) the latest passed artifact (the active file), (b) the single artifact immediately preceding it, and (c) any in-flight `pending`/`failed` attempt newer than the active file; sweep everything else.
+
+**Why.** A PDF is a processing file attached to a publication, not project history — there is no version-history surface today and none is planned for this slice (D-009 / data-model clarification). Retention is therefore an operational choice: enough to recover from a bad replace and to let an admin reference the prior submission during a revisions round, without turning the buckets into an archive or implying a versions feature that doesn't exist. Synchronous sweep over a cron keeps the infrastructure surface minimal until a real cleanup need appears.
+
+**Implementation notes.** The existing `artifacts.is_canonical` flag (unused to date) can mark the active file, making "the active file" queryable and the never-sweep invariant enforceable in one predicate. Deletes should tolerate an already-absent object (idempotent) so a retried Inngest step or a partial prior failure self-heals.
+
+**What would force reconsideration.** A creator-facing version-history feature, an admin requirement to retain every submitted artifact for audit, or print-partner rules requiring longer archival — any of which turns retention into a product feature rather than a cleanup policy, with its own slice.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
-- **Slice 3b promotion + cleanup** — on pass, copy quarantine → clean and whether to delete or archive the quarantine original; on fail, whether to retain the quarantine object; replace-flow orphan sweep. Pending the data-model clarification (PDFs are processing files attached to a publication, not project history). Next to resolve.
 - **PDF rendering pipeline** — DocRaptor vs `react-pdf` vs Vercel function with Puppeteer. Spike B.
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
