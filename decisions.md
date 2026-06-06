@@ -110,8 +110,46 @@ A running record of foundational choices. Each decision states what was chosen, 
 
 ---
 
+## D-012 · Slice 3b preflight — status model and check severity
+
+**Chosen.** Preflight resolves an artifact to one of three states: `pending`, `passed`, `failed`. There is no `warnings` status. A file either can proceed or it cannot.
+
+Blocking checks (any failure ⇒ `failed`, the file cannot proceed):
+- Page dimensions match the selected format (e.g. an A4 PDF in an A5 publication, or a portrait PDF in a square publication, fails).
+- Page count within the selected format's permitted bounds.
+- Multiple-of-four page count, where the print format requires it (e.g. saddle stitch).
+
+Warning checks (annotations on a `passed` file; never change status):
+- Image resolution below recommended print DPI.
+- Fonts that may not be embedded.
+- No bleed detected on pages with edge-to-edge artwork.
+
+Warnings require acknowledgement before the creator continues, but: warnings are not a status, do not prevent passing, and are not failures. A single acknowledgement covers all warnings; the creator cannot continue until it is recorded; after acknowledgement the warnings remain attached to the file and remain visible.
+
+**Why.** The platform blocks only on objective print failures — the things a printer literally rejects. Everything else is an artistic or production judgement that belongs to the creator. Collapsing "warnings" into a status would either gate work that is legitimately the creator's call or imply a third outcome that doesn't exist. Acknowledgement (not override) records that the creator saw the note without framing their choice as accepting a risk.
+
+**What would force reconsideration.** If a "warning" turns out to reliably predict a printer rejection for a given format, it graduates to a blocker. The severity assignments are calibrated against real print output, not fixed.
+
+---
+
+## D-013 · Slice 3b preflight — result UI reads as situations, not software states
+
+**Chosen.** The creator never sees internal status language — no "passed," "failed," "success," or "error." They encounter situations.
+
+- **Waiting:** "File received." / "Review in progress." No percentages, no timers, no urgency.
+- **Cannot proceed:** "This file cannot proceed.", then the blocking issues stated directly (e.g. "Page dimensions do not match the selected format." / "Page count must be a multiple of four."). No "failed" language, no framing preamble — the issues carry the context.
+- **Can proceed, with notes:** "The file can proceed.", then each warning stated individually, then a single acknowledgement action. No liability language — no "accepted risk," "proceed anyway," "I understand," or "ignore warnings." After acknowledgement, the warnings stay visible and the primary line is unchanged.
+- **Passes clean:** no success messaging at all. No banner, badge, chip, or celebratory copy. The file simply becomes the active publication file; success resolves into the normal state of the interface.
+
+**Why.** Editorial Constitution. Success is communicated by the absence of friction, not by announcement; warnings inform rather than patronise; the work remains the hero. Exposing software states ("Success!") would make Baxter feel like a SaaS product at the most exposed moment in the upload flow. Silence on a clean pass is the deliberate, constitutional choice.
+
+**What would force reconsideration.** If creator testing shows the silence reads as uncertainty ("did it work?") rather than calm, the clean-pass state gains the lightest possible confirmation — a single composed line — before any badge or banner is considered.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
+- **Slice 3b promotion + cleanup** — on pass, copy quarantine → clean and whether to delete or archive the quarantine original; on fail, whether to retain the quarantine object; replace-flow orphan sweep. Pending the data-model clarification (PDFs are processing files attached to a publication, not project history). Next to resolve.
 - **PDF rendering pipeline** — DocRaptor vs `react-pdf` vs Vercel function with Puppeteer. Spike B.
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
