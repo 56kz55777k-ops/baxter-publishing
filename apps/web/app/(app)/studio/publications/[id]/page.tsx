@@ -1,7 +1,24 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { ArtifactSection } from './artifact-section';
+import {
+  ArtifactSection,
+  type LatestArtifactView,
+  type PreflightIssueView,
+} from './artifact-section';
+
+/** Defensive readers for the loosely-typed preflight jsonb. */
+function asIssues(value: unknown): PreflightIssueView[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is Record<string, unknown> => !!v && typeof v === 'object')
+    .map((v) => ({
+      code: String(v.code ?? ''),
+      title: String(v.title ?? ''),
+      detail: String(v.detail ?? ''),
+    }))
+    .filter((i) => i.title && i.detail);
+}
 
 export const metadata = {
   title: 'Publication — Baxter',
@@ -40,12 +57,32 @@ export default async function PublicationDetailPage({
 
   const { data: artifacts } = await supabase
     .from('artifacts')
-    .select('id, bucket, size_bytes, content_type, uploaded_at')
+    .select(
+      'id, size_bytes, uploaded_at, preflight, preflight_status'
+    )
     .eq('publication_id', id)
     .order('uploaded_at', { ascending: false });
 
-  const latestArtifact =
-    artifacts && artifacts.length > 0 ? artifacts[0] : null;
+  const latest = artifacts && artifacts.length > 0 ? artifacts[0] : null;
+  const preflight =
+    latest && latest.preflight && typeof latest.preflight === 'object'
+      ? (latest.preflight as Record<string, unknown>)
+      : {};
+
+  const latestArtifact: LatestArtifactView | null = latest
+    ? {
+        id: latest.id,
+        sizeBytes: latest.size_bytes,
+        uploadedAt: latest.uploaded_at,
+        status:
+          (latest.preflight_status as LatestArtifactView['status']) ??
+          'pending',
+        blockers: asIssues(preflight.blockers),
+        warnings: asIssues(preflight.warnings),
+        warningsAcknowledged: Boolean(preflight.warningsAcknowledgedAt),
+      }
+    : null;
+
   const status = publication.status as keyof typeof STATUS_LABEL;
 
   return (
@@ -75,14 +112,7 @@ export default async function PublicationDetailPage({
         <p className="metadata mb-4">File</p>
         <ArtifactSection
           publicationId={publication.id}
-          latestArtifact={
-            latestArtifact
-              ? {
-                  sizeBytes: latestArtifact.size_bytes,
-                  uploadedAt: latestArtifact.uploaded_at,
-                }
-              : null
-          }
+          latestArtifact={latestArtifact}
         />
       </section>
 

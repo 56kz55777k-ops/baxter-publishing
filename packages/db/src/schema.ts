@@ -48,6 +48,18 @@ export const publicationFormat = pgEnum('publication_format', [
   'print_digital',   // bundled
 ]);
 
+/**
+ * Preflight lifecycle for an uploaded artifact.
+ * `pending` until the worker runs; `passed` (file may proceed, possibly with
+ * non-blocking warnings) or `failed` (blocking issues, file cannot proceed).
+ * Written server-side only (Inngest worker, service role) — never by clients.
+ */
+export const preflightStatus = pgEnum('preflight_status', [
+  'pending',
+  'passed',
+  'failed',
+]);
+
 /** Account role. */
 export const userRole = pgEnum('user_role', [
   'reader',          // can purchase, review, follow
@@ -94,6 +106,7 @@ export const publications = pgTable(
     subtitle: text('subtitle'),
     description: text('description'),
     format: publicationFormat('format').notNull(),
+    formatPresetId: text('format_preset_id'),            // @baxter/domain preset id, e.g. 'zine_a5'
     category: text('category').notNull(),                // editorial taxonomy (free-form for now)
     status: publicationStatus('status').notNull().default('draft'),
     /** Price in minor units (cents). Currency held in publications.currency. */
@@ -137,6 +150,8 @@ export const artifacts = pgTable(
     contentType: text('content_type').notNull(),
     /** Output of preflight: pageCount, dimensions, fontEmbedding, bleed, dpi, warnings. */
     preflight: jsonb('preflight'),
+    /** Lifecycle status of the preflight check. Server-written only. */
+    preflightStatus: preflightStatus('preflight_status').notNull().default('pending'),
     /** Whether this artifact is the canonical submission for the publication. */
     isCanonical: boolean('is_canonical').notNull().default(false),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),

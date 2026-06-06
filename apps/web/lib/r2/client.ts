@@ -29,3 +29,6 @@ export function r2Client() {
 
 export const QUARANTINE_BUCKET =
   process.env.R2_BUCKET_QUARANTINE ?? 'baxter-quarantine';
+
+/** Destination for preflight-passed objects. Server-side access only. */
+export const CLEAN_BUCKET = process.env.R2_BUCKET_ARTIFACTS ?? 'baxter-clean';

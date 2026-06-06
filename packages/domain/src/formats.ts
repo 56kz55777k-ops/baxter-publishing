@@ -15,6 +15,28 @@ export interface PublicationFormatPreset {
   trimWidthMm: number;
   trimHeightMm: number;
   description: string;
+  /**
+   * Print rules consumed by preflight (see `preflight.ts`). These are
+   * calibration defaults — tune against real printer requirements and the
+   * Slice 3b test fixtures. Dimension/page-count/multiple-of-four feed
+   * blocking checks; bleed/DPI feed non-blocking warnings.
+   */
+  rules: FormatPrintRules;
+}
+
+export interface FormatPrintRules {
+  /** Inclusive lower bound on total pages. */
+  minPages: number;
+  /** Inclusive upper bound on total pages. */
+  maxPages: number;
+  /** Saddle-stitch and similar binding require a multiple-of-four page count. */
+  requiresMultipleOfFour: boolean;
+  /** Allowed deviation, in mm, of a page's trim from the preset trim. */
+  dimensionToleranceMm: number;
+  /** Expected bleed margin in mm (0 = bleed not expected). Warning only. */
+  bleedMm: number;
+  /** Minimum acceptable image resolution in DPI. Warning only. */
+  minImageDpi: number;
 }
 
 export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
@@ -24,6 +46,14 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
     trimWidthMm: 148,
     trimHeightMm: 210,
     description: 'Folded A4, portrait.',
+    rules: {
+      minPages: 4,
+      maxPages: 64,
+      requiresMultipleOfFour: true,
+      dimensionToleranceMm: 1,
+      bleedMm: 3,
+      minImageDpi: 300,
+    },
   },
   {
     id: 'magazine_a4',
@@ -31,6 +61,14 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
     trimWidthMm: 210,
     trimHeightMm: 297,
     description: 'Standard magazine, portrait.',
+    rules: {
+      minPages: 8,
+      maxPages: 96,
+      requiresMultipleOfFour: true,
+      dimensionToleranceMm: 1,
+      bleedMm: 3,
+      minImageDpi: 300,
+    },
   },
   {
     id: 'photobook_square_210',
@@ -38,6 +76,15 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
     trimWidthMm: 210,
     trimHeightMm: 210,
     description: 'Square, 210mm.',
+    rules: {
+      // Perfect-bound: no multiple-of-four constraint.
+      minPages: 20,
+      maxPages: 240,
+      requiresMultipleOfFour: false,
+      dimensionToleranceMm: 1,
+      bleedMm: 3,
+      minImageDpi: 300,
+    },
   },
 ] as const;
 

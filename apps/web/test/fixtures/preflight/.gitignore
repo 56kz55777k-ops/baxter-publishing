@@ -1,0 +1,2 @@
+# Real PDF exports added for regression tests are opt-in only.
+*.pdf

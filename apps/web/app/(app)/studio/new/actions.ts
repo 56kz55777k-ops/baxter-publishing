@@ -73,9 +73,10 @@ export async function createPublication(
       title,
       category,
       format: 'print',
-      // page_count is filled in by the register-artifact route after upload,
-      // when the PDF is parsed. Left null at creation so the creator does not
-      // have to guess before producing the work.
+      format_preset_id: preset.id,
+      // page_count is filled in by the preflight worker after upload, when the
+      // PDF is parsed. Left null at creation so the creator does not have to
+      // guess before producing the work.
       trim_width_mm: preset.trimWidthMm,
       trim_height_mm: preset.trimHeightMm,
       // status defaults to 'draft', currency to 'CAD'.
