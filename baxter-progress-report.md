@@ -12,7 +12,7 @@
 
 Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a (publication shell + browser-direct upload to R2 quarantine, with page count auto-derived from the uploaded PDF) shipped and verified. Slice 3b infrastructure is in place: Inngest is wired into the Next.js app, the production endpoint is synced with Inngest Cloud, a stub preflight function runs successfully against a test event, and the second R2 bucket (`baxter-clean`) exists. What's left for Slice 3b is purely application code — the real preflight worker body, event emission from the artifact-register API, and the preflight-result UI — plus four design decisions worth taking deliberately, captured in section 11.
 
-**Update (later session):** the four design questions are resolved (decisions `D-012`, `D-013`, `D-014` in `decisions.md`) and **Slice 3b is now implemented in code and pushed to `main` (commit `8b9895b`)**. It is **not yet live**: it is pending the production database migration (`0003`), a deploy, and a production smoke test. Details and the exact go-live steps are in sections 13 and 14.
+**Update (later session):** the four design questions are resolved (decisions `D-012`, `D-013`, `D-014` in `decisions.md`), **Slice 3b is implemented (commit `8b9895b`), migration `0003` is applied to prod, and the production smoke test passed — Slice 3b is LIVE.** All five preflight paths plus the retention sweep were verified end-to-end in production. Details in sections 13 and 14.
 
 ---
 
@@ -153,24 +153,25 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 
 ## 9. Outstanding items
 
-1. **Slice 3b go-live** — the application code is written and pushed (`8b9895b`); what remains is operational: apply migration `0003` to prod, deploy, and run the smoke test (section 14). The original "write the code" item is done.
+1. **Slice 3b go-live — DONE.** Migration `0003` applied to prod, deploy live, and the production smoke test passed (section 14). Slice 3b is live.
 2. **Custom SMTP** so confirmation emails send from a Baxter domain rather than `noreply@mail.app.supabase.io`. Pre-launch.
 3. **Other Supabase email templates** (Magic Link, Reset Password, Change Email, Reauthentication) are still stock. None are triggered in Slice 2.
 4. **Replace-flow object cleanup** — resolved by the Slice 3b retention sweep (`D-014`): superseded objects are deleted at register time, keeping the active file plus its immediate predecessor.
 5. **Custom domain** for production (`baxter.press` or similar). Pre-launch.
 6. **Preflight calibration** — source real fixtures (low-DPI, non-embedded fonts), implement deferred DPI detection, and verify the best-effort font check against real exports. See section 13.
 7. **Pre-existing ESLint 9 config breakage** — repo-wide, unrelated to Slice 3b. See section 13.
+8. **KB-aware file-size formatting** (follow-up polish, NOT part of Slice 3b) — the artifact receipt shows "0.0 MB" for files under ~50 KB because the formatter rounds MB to one decimal (`artifact-section.tsx`). Switch to KB-aware formatting (e.g. show KB below 1 MB). Cosmetic; surfaced by the synthetic smoke-test fixtures.
 
 ---
 
 ## 10. Git and deployment state
 
 - Repo: `https://github.com/56kz55777k-ops/baxter-publishing`, branch `main`.
-- `origin/main` is at `8b9895b` (Slice 3b application code). Local is in sync.
+- `origin/main` is at the latest docs commit on `main` (Slice 3b code `8b9895b` + decisions/report updates). Local is in sync.
 - Working copy lives at `~/Desktop/baxter-app` (moved from `~/Downloads/baxter-app` after Downloads got cleaned). The repo was re-cloned from origin mid-session after the original folder was inadvertently deleted; all pushed history is intact.
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
-- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`. **`0003_preflight_status.sql` is committed but NOT yet applied to prod** — it must be applied before or with the deploy that includes `8b9895b` (the publication detail query and the create action reference the new columns).
+- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`, `0003_preflight_status.sql`. (`0003` was applied during the smoke test via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied; see section 14.)
 - Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`.
 - R2 buckets: `baxter-quarantine` (CORS allowing `PUT` from the production origin), `baxter-clean` (no CORS — server-side access only).
 - Inngest Cloud app `baxter-publishing` synced against the production endpoint.
@@ -331,3 +332,21 @@ Run after applying migration `0003` and deploying `8b9895b`. Production URL: `ht
 12. Upload a deliberately **corrupt or password-protected PDF**. The worker should not crash; the result should read **"This file cannot proceed."** with a composed "could not be read" message, and the file stays in quarantine.
 
 **If anything is off:** check the Inngest dashboard run logs for the `publication-preflight` function (each step — load, inspect, record-verdict, promote, sweep — is visible), and Vercel logs for the register API's event-send.
+
+### Result — PASSED (executed via the Chrome extension, DB verified in the Supabase SQL editor)
+
+One defect found and fixed: **migration `0003` had not actually been applied to prod** before the deploy. It surfaced immediately as a create-publication failure ("Something prevented the publication from being created") because the create action inserts `format_preset_id`. Applied `0003` via the SQL editor, re-verified the columns/enum, and re-ran — all green thereafter.
+
+All five preflight paths verified end-to-end in production (UI per D-013 + DB rows):
+
+| Path | UI | DB |
+|---|---|---|
+| Clean A5 (8pp, bleed) | silent clean pass, page count 8 | `passed`, `baxter-clean`, canonical, page_count 8, no blockers/warnings |
+| 7pp not-multiple-of-four | "This file cannot proceed." → multiple-of-four | `failed`, stays `baxter-quarantine`, page_count null |
+| A4 in A5 | "This file cannot proceed." → page dimensions | `failed`, stays `baxter-quarantine` |
+| No-bleed | "The file can proceed." + Bleed note + Acknowledge | `passed`, `baxter-clean`; after Acknowledge, `warningsAcknowledgedAt` set, status unchanged |
+| Corrupt | "This file cannot proceed." → "could not be read" | `failed`, stays `baxter-quarantine`, worker did not crash |
+
+**Retention sweep (D-014) verified** on the clean publication: a 2nd passing upload kept 2 artifacts (new canonical + predecessor); a 3rd passing upload swept the oldest (2 retained); a subsequent *failing* upload did **not** sweep the latest passed file — confirming the never-sweep-active invariant.
+
+**Cleanup:** the five `Smoke Test 0…` publications were deleted from prod (cascade removed their artifact rows). The 7 orphaned R2 objects were left for manual deletion (the Cloudflare dashboard would not load during the session); delete these prefixes — `baxter-clean`: `publications/d970cadd-0cfd-4a8b-a2aa-eb8424212544/`, `publications/7854e234-835b-48a5-8e8d-3a4ea3893e8e/`; `baxter-quarantine`: `publications/d970cadd-0cfd-4a8b-a2aa-eb8424212544/`, `publications/bd9db2f2-b018-4a47-9bc8-8d26ef0eb509/`, `publications/67594610-0066-4710-8802-87c1c4283232/`, `publications/d9bfea44-0abe-4f0f-9304-6491c1565390/`.
