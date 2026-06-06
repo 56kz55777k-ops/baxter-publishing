@@ -12,6 +12,8 @@
 
 Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a (publication shell + browser-direct upload to R2 quarantine, with page count auto-derived from the uploaded PDF) shipped and verified. Slice 3b infrastructure is in place: Inngest is wired into the Next.js app, the production endpoint is synced with Inngest Cloud, a stub preflight function runs successfully against a test event, and the second R2 bucket (`baxter-clean`) exists. What's left for Slice 3b is purely application code — the real preflight worker body, event emission from the artifact-register API, and the preflight-result UI — plus four design decisions worth taking deliberately, captured in section 11.
 
+**Update (later session):** the four design questions are resolved (decisions `D-012`, `D-013`, `D-014` in `decisions.md`) and **Slice 3b is now implemented in code and pushed to `main` (commit `8b9895b`)**. It is **not yet live**: it is pending the production database migration (`0003`), a deploy, and a production smoke test. Details and the exact go-live steps are in sections 13 and 14.
+
 ---
 
 ## 2. The production 500 — diagnosed and fixed (commit `b09392d`)
@@ -151,22 +153,24 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 
 ## 9. Outstanding items
 
-1. **Slice 3b application code** — replace the stub worker body with real preflight logic, emit `publication/artifact.uploaded` from the artifact-register API, and build the preflight-result UI on the publication detail page. Infrastructure is done; design decisions in section 11 are open.
+1. **Slice 3b go-live** — the application code is written and pushed (`8b9895b`); what remains is operational: apply migration `0003` to prod, deploy, and run the smoke test (section 14). The original "write the code" item is done.
 2. **Custom SMTP** so confirmation emails send from a Baxter domain rather than `noreply@mail.app.supabase.io`. Pre-launch.
 3. **Other Supabase email templates** (Magic Link, Reset Password, Change Email, Reauthentication) are still stock. None are triggered in Slice 2.
-4. **Replace-flow object cleanup** — when a file is replaced, the old R2 object stays in quarantine. Could be swept by the Slice 3b worker or as a separate cleanup job.
+4. **Replace-flow object cleanup** — resolved by the Slice 3b retention sweep (`D-014`): superseded objects are deleted at register time, keeping the active file plus its immediate predecessor.
 5. **Custom domain** for production (`baxter.press` or similar). Pre-launch.
+6. **Preflight calibration** — source real fixtures (low-DPI, non-embedded fonts), implement deferred DPI detection, and verify the best-effort font check against real exports. See section 13.
+7. **Pre-existing ESLint 9 config breakage** — repo-wide, unrelated to Slice 3b. See section 13.
 
 ---
 
 ## 10. Git and deployment state
 
 - Repo: `https://github.com/56kz55777k-ops/baxter-publishing`, branch `main`.
-- `origin/main` is at `55ed70e` (Inngest plumbing). Local is in sync.
+- `origin/main` is at `8b9895b` (Slice 3b application code). Local is in sync.
 - Working copy lives at `~/Desktop/baxter-app` (moved from `~/Downloads/baxter-app` after Downloads got cleaned). The repo was re-cloned from origin mid-session after the original folder was inadvertently deleted; all pushed history is intact.
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
-- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`.
+- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`. **`0003_preflight_status.sql` is committed but NOT yet applied to prod** — it must be applied before or with the deploy that includes `8b9895b` (the publication detail query and the create action reference the new columns).
 - Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`.
 - R2 buckets: `baxter-quarantine` (CORS allowing `PUT` from the production origin), `baxter-clean` (no CORS — server-side access only).
 - Inngest Cloud app `baxter-publishing` synced against the production endpoint.
@@ -185,12 +189,18 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 | `02c35a3` | chore(polish): dead links, error logging, replace-file affordance |
 | `07aa5d8` | fix(publication): derive page count from the uploaded PDF, not from the creator |
 | `55ed70e` | chore(inngest): wire Inngest SDK with a stub preflight function |
+| `1816efe` | chore(deps): sync lockfile with Slice 3a/3b dependencies |
+| `55f70d4` | docs(slice-3b): record preflight decisions and session handoffs |
+| `05b71e6` | docs(slice-3b): record D-014 promotion, retention, and cleanup policy |
+| `8b9895b` | feat(slice-3b): PDF preflight worker, promotion, and result UI |
 
 Note: `07aa5d8` was authored with a placeholder identity because the fresh clone didn't have git config set at commit time. Future commits will use the correct `Ben Gibson <benjamin@benjamingibson.ca>` identity (global git config has since been set). The one outlier is cosmetic — content is correct.
 
 ---
 
 ## 11. Slice 3b — open design questions
+
+> **Resolved.** All four were decided and recorded as `D-012` (checks + status model), `D-013` (result UI), and `D-014` (promotion, retention, cleanup) in `decisions.md`; test PDFs (question 4) are tracked as a fixtures sub-task. The original framing is kept below for the record. The as-built behaviour is in section 13.
 
 Four decisions worth taking before writing the worker. Especially the second, which sets the voice for one of the most exposed moments in the product.
 
@@ -228,3 +238,96 @@ Four decisions worth taking before writing the worker. Especially the second, wh
 2. **Open a fresh chat for Slice 3b** seeded with this report. Slice 3b is a clean milestone boundary and the result-UI design benefits from a clean context.
 3. **In that chat:** emit the Inngest event from the artifact-register API, replace the stub function body with real preflight logic, write the result UI, and verify end-to-end with the test PDFs.
 4. **Custom SMTP** can wait until shortly before public launch, but it's small and worth doing early so the rest of the email surfaces inherit a Baxter sender from the start.
+
+---
+
+## 13. Slice 3b — shipped in code (pending production migration / deploy / smoke test)
+
+Implemented and pushed as commit **`8b9895b`**. **Status: in code on `main`, not yet live.** Go-live is gated on migration `0003`, a deploy, and the smoke test in section 14.
+
+### Schema — migration `0003_preflight_status.sql` (REQUIRED before/with deploy)
+
+Hand-written, consistent with `0001`/`0002`. **Must be applied to prod before or with the deploy that includes `8b9895b`** — the create action and the publication detail query reference the new columns; an un-migrated prod will error.
+
+- `preflight_status` enum on `artifacts` — values **`pending | passed | failed`** (default `pending`). Written **server-side only** (the worker, via the service-role client); there is deliberately no client RLS UPDATE policy on artifacts, so a creator cannot set their own file to `passed` and bypass the check.
+- `publications.format_preset_id` (text) — the `@baxter/domain` preset id, so the worker resolves page-count bounds and the multiple-of-four rule without inferring from trim dimensions. Existing rows backfilled by trim dimensions.
+
+### Status model and check severity (`D-012`)
+
+A file either can proceed (`passed`) or cannot (`failed`). There is no `warnings` status — warnings are annotations on a passed file and never change the status.
+
+- **Blockers** (any present ⇒ `failed`): page dimensions match the selected format; page count within the format's bounds; page count is a multiple of four where the binding requires it.
+- **Warnings** (annotate a `passed` file, require acknowledgement to continue but never block): image resolution below the recommended DPI; fonts possibly not embedded; no bleed detected on edge-to-edge pages.
+- A fact that cannot be determined produces **no** warning (silence over a guess).
+
+### Promotion, retention, cleanup (`D-014`)
+
+- **On pass:** copy the object quarantine → clean, repoint the artifact at the clean bucket, mark it canonical, set `publications.page_count`, then delete the quarantine copy.
+- **On fail:** keep the object in quarantine at `failed` so the creator can inspect it.
+- **Replacement / supersession:** swept synchronously at register time (no cron).
+- **Retention: two** — the active file plus its immediate predecessor — with a hard invariant that **the latest passed file is never swept**, even when newer failed attempts would push it past the count. R2 deletes are idempotent.
+
+### Result UI copy (`D-013`)
+
+The creator encounters situations, never internal status words.
+
+- **Waiting:** "File received." / "Review in progress."
+- **Cannot proceed:** "This file cannot proceed." then the blocking issues stated directly. No "failed" language, no preamble.
+- **Can proceed, with notes:** "The file can proceed." then each warning, then a single **Acknowledge** action. No liability language ("proceed anyway", "I understand", "accepted risk"). After acknowledgement the warnings remain visible and the primary line is unchanged.
+- **Passes clean:** no success message at all — the file simply becomes the active publication file.
+
+### Verification status
+
+- **Typecheck green** across all five packages.
+- **Preflight harness 6/6** (`apps/web/test/preflight.verify.ts`, run with `node apps/web/test/preflight.verify.ts`): clean pass, wrong-dimensions blocker, multiple-of-four blocker, page-count-bounds blocker, missing-bleed warning, and corrupt-file graceful failure — all against the real inspector + evaluator on generated PDFs.
+- Not yet exercised against R2 / Inngest / Supabase in production — that is the section 14 smoke test.
+
+### Known calibration gaps
+
+- **Real low-DPI fixture** — needed; not yet sourced.
+- **Real non-embedded-font fixture** — needed; not yet sourced.
+- **DPI detection deferred** — the inspector returns "undetermined" for image DPI (no warning) until a content-stream parser is added and calibrated.
+- **Font check is best-effort** — a font-dictionary walk that treats standard-14 as embedded-equivalent; unverified against real exports.
+- Fixture status is tracked in `apps/web/test/fixtures/preflight/README.md`. The format rule defaults (page bounds, which formats require multiple-of-four, bleed, min DPI) live in `packages/domain/src/formats.ts` and are worth a calibration pass.
+
+### Pre-existing ESLint 9 config issue (separate from Slice 3b)
+
+`npm run lint` fails repo-wide: ESLint 9.39.4 is installed (already in the committed lockfile at `55ed70e`) but the packages still use the old `.eslintrc.json` format that ESLint 9 dropped. **Not caused by Slice 3b**, and production builds (which use `next build`) are unaffected. Tracked as a separate cleanup (migrate to flat config).
+
+---
+
+## 14. Production smoke test — Slice 3b
+
+Run after applying migration `0003` and deploying `8b9895b`. Production URL: `https://baxter-publishing-web.vercel.app`.
+
+**Pre-flight (no pun intended):**
+
+1. Apply `0003_preflight_status.sql` in the Supabase SQL editor (project `qnqbkihndxppommgfrxd`). Confirm: `artifacts.preflight_status` exists (enum, default `pending`) and `publications.format_preset_id` exists.
+2. Confirm the deploy that includes `8b9895b` is live (Vercel) and that Inngest Cloud shows the `publication-preflight` function synced with the real body (not the stub) against `/api/inngest`.
+
+**Happy path — clean file passes and promotes:**
+
+3. Sign in, begin a publication (pick **A5 Zine**), reach the detail page.
+4. Upload a **clean, print-ready A5 PDF** with a multiple-of-four page count (e.g. 8pp) and bleed. The page should first read **"File received." / "Review in progress."**
+5. Within seconds, refresh: the result should resolve to the **clean-pass state** — no success banner, just the file as the active file (size · upload date) and a Replace affordance. The metadata page count should now be populated.
+6. In Cloudflare R2: the object now exists in **`baxter-clean`** and is **gone from `baxter-quarantine`**. In Supabase: the artifact row has `preflight_status = passed`, `bucket = baxter-clean`, `is_canonical = true`, and `publications.page_count` is set.
+
+**Blocking path — file cannot proceed:**
+
+7. On a new (or replaced) publication, upload a **7-page** A5 PDF (or one at A4 dimensions). The result should read **"This file cannot proceed."** with the specific blocker(s) listed ("Page count must be a multiple of four." and/or "Page dimensions do not match the selected format.").
+8. Confirm: `preflight_status = failed`, the object **remains in `baxter-quarantine`** (not promoted), and `publications.page_count` is unchanged.
+
+**Warning path — passes with notes:**
+
+9. Upload a clean, correctly-sized, multiple-of-four PDF **without bleed**. The result should read **"The file can proceed."** with a **Bleed** note and an **Acknowledge** action.
+10. Click **Acknowledge**. The warning stays visible, the primary line is unchanged, and the button disappears. In Supabase the artifact's `preflight` jsonb has `warningsAcknowledgedAt` set; `preflight_status` stays `passed`.
+
+**Retention / replacement:**
+
+11. On a publication that already has a passed file, upload a replacement that passes. Confirm only **two** artifacts are retained (the new active + its immediate predecessor), older objects are swept from their buckets, and the **active passed file is never deleted** even if you then upload a failing file.
+
+**Graceful failure:**
+
+12. Upload a deliberately **corrupt or password-protected PDF**. The worker should not crash; the result should read **"This file cannot proceed."** with a composed "could not be read" message, and the file stays in quarantine.
+
+**If anything is off:** check the Inngest dashboard run logs for the `publication-preflight` function (each step — load, inspect, record-verdict, promote, sweep — is visible), and Vercel logs for the register API's event-send.
