@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { QUARANTINE_BUCKET, CLEAN_BUCKET } from '@/lib/r2/client';
 import { getObjectBytes, copyObject, deleteObject } from '@/lib/r2/objects';
 import { inspectPdf } from '@/lib/pdf/inspect';
+import { renderPreviewPages } from '@/lib/pdf/render';
+import { uploadImage, deleteImage } from '@/lib/cloudflare/images';
 import {
   evaluatePreflight,
   getFormatPreset,
@@ -159,6 +161,94 @@ const preflight = inngest.createFunction(
           .eq('id', publicationId);
         // Remove the now-promoted copy from quarantine.
         await deleteObject(QUARANTINE_BUCKET, key);
+      });
+
+      // Render cover + preview pages and publish them to Cloudflare Images.
+      // Isolated: a render/upload failure must NEVER unmake a passed
+      // publication — it stays passed and live; the cover simply stays absent
+      // and the failure is logged for internal visibility. Retried by the
+      // creator re-uploading; not by failing the run (so the sweep still runs).
+      await step.run('render-previews', async () => {
+        try {
+          const bytes = await getObjectBytes(CLEAN_BUCKET, key);
+          if (!bytes) {
+            console.error('render-previews: clean object missing', {
+              key,
+              publicationId,
+            });
+            return { ok: false, reason: 'clean object missing' };
+          }
+
+          // Re-render cleanup (D-014 parity): drop previous preview assets so
+          // derived imagery always tracks the active file. Clear the cover
+          // reference first to avoid a dangling pointer mid-rebuild.
+          await db
+            .from('publications')
+            .update({ cover_asset_id: null })
+            .eq('id', publicationId);
+          const { data: stale } = await db
+            .from('assets')
+            .select('external_id')
+            .eq('publication_id', publicationId)
+            .eq('provider', 'cloudflare_images')
+            .eq('kind', 'preview_page');
+          for (const a of stale ?? []) {
+            if (a.external_id) await deleteImage(a.external_id);
+          }
+          if (stale && stale.length > 0) {
+            await db
+              .from('assets')
+              .delete()
+              .eq('publication_id', publicationId)
+              .eq('provider', 'cloudflare_images')
+              .eq('kind', 'preview_page');
+          }
+
+          // Render → upload → record one asset per page.
+          const pages = renderPreviewPages(bytes, {
+            maxPages: 6,
+            targetWidth: 1600,
+            quality: 80,
+          });
+          let coverAssetId: string | null = null;
+          for (const p of pages) {
+            const imageId = await uploadImage(
+              p.jpeg,
+              `pub-${publicationId}-p${p.page}.jpg`
+            );
+            const { data: asset } = await db
+              .from('assets')
+              .insert({
+                publication_id: publicationId,
+                provider: 'cloudflare_images',
+                external_id: imageId,
+                kind: 'preview_page',
+                meta: { page: p.page, width: p.width, height: p.height },
+              })
+              .select('id')
+              .single();
+            if (p.page === 1 && asset) coverAssetId = asset.id;
+          }
+
+          // Page 1 is the cover.
+          if (coverAssetId) {
+            await db
+              .from('publications')
+              .update({
+                cover_asset_id: coverAssetId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', publicationId);
+          }
+
+          return { ok: true, count: pages.length };
+        } catch (err) {
+          console.error('render-previews failed (publication remains passed)', {
+            publicationId,
+            error: String(err),
+          });
+          return { ok: false, error: String(err) };
+        }
       });
     }
 

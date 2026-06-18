@@ -13,7 +13,14 @@ const nextConfig = {
   // serverless function with "Cannot find module 'next/dist/compiled/source-map'".
   outputFileTracingIncludes: {
     '/**': ['../../node_modules/next/dist/compiled/source-map/**/*'],
+    // The preflight worker rasterizes PDFs with mupdf (WASM). Force its files
+    // — including the .wasm — into the Inngest function bundle so they exist at
+    // runtime; the tracer won't follow mupdf's internal wasm load otherwise.
+    '/api/inngest/**': ['../../node_modules/mupdf/**/*'],
   },
+  // mupdf is WASM-backed; keep it external so webpack doesn't try to bundle the
+  // .wasm and instead loads it from node_modules at runtime.
+  serverExternalPackages: ['mupdf'],
   transpilePackages: ['@baxter/ui-tokens', '@baxter/domain', '@baxter/db'],
   images: {
     remotePatterns: [
