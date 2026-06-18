@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-06
 **Builds on:** Slice 3b (preflight pipeline, live). Reframed from the original "Preview Generation + Preflight UI" since preflight UI shipped in 3b.
-**Status:** planned; render engine proven by spike; build starting.
+**Status:** ✅ **SHIPPED & VERIFIED in production** (commits `9bcb450` + `808b4ed`; decision `D-015`). Built as planned below — mupdf render, Cloudflare Images delivery, TrimBox crop, assets-table reuse (no migration), isolated failure handling, re-render-on-replace. Production-verified end-to-end (cover + previews render; re-render sweeps old images). See progress report §15.
 
 ---
 

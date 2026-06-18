@@ -14,6 +14,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 
 **Update (later session):** the four design questions are resolved (decisions `D-012`, `D-013`, `D-014` in `decisions.md`), **Slice 3b is implemented (commit `8b9895b`), migration `0003` is applied to prod, and the production smoke test passed — Slice 3b is LIVE.** All five preflight paths plus the retention sweep were verified end-to-end in production. Details in sections 13 and 14.
 
+**Update (Slice 4):** **Slice 4 (preview & cover generation) is shipped and verified live in production** (commits `9bcb450` + `808b4ed`; decision `D-015`). On a preflight pass the worker rasterizes the cover + first six pages with mupdf (TrimBox-cropped), uploads them to Cloudflare Images, and the publication page renders the cover + previews. No migration was needed (reuses `assets` + `cover_asset_id`). Cloudflare Images is now standing infrastructure (enabled, three Vercel env vars, three variants). Details in section 15.
+
 ---
 
 ## 2. The production 500 — diagnosed and fixed (commit `b09392d`)
@@ -159,22 +161,25 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 4. **Replace-flow object cleanup** — resolved by the Slice 3b retention sweep (`D-014`): superseded objects are deleted at register time, keeping the active file plus its immediate predecessor.
 5. **Custom domain** for production (`baxter.press` or similar). Pre-launch.
 6. **Preflight calibration** — source real fixtures (low-DPI, non-embedded fonts), implement deferred DPI detection, and verify the best-effort font check against real exports. See section 13.
-7. **Pre-existing ESLint 9 config breakage** — repo-wide, unrelated to Slice 3b. See section 13.
-8. **KB-aware file-size formatting** (follow-up polish, NOT part of Slice 3b) — the artifact receipt shows "0.0 MB" for files under ~50 KB because the formatter rounds MB to one decimal (`artifact-section.tsx`). Switch to KB-aware formatting (e.g. show KB below 1 MB). Cosmetic; surfaced by the synthetic smoke-test fixtures.
+7. **Pre-existing ESLint 9 config breakage — DONE.** Migrated repo-wide to flat config (`eslint.config.mjs` + `@baxter/eslint-config` base/next), committed `aa9cd84`; `npm run lint` is green again.
+8. **KB-aware file-size formatting** (follow-up polish) — the artifact receipt shows "0.0 MB" for files under ~50 KB because the formatter rounds MB to one decimal (`artifact-section.tsx`). Switch to KB-aware formatting (e.g. show KB below 1 MB). Cosmetic; surfaced by the synthetic test fixtures.
+9. **Slice 4 (preview & cover generation) — DONE.** Shipped and verified in production (section 15).
+10. **Preview-pipeline follow-ups (post-Slice-4)** — orphaned Cloudflare images / clean-bucket objects on *publication deletion* aren't swept (only re-render sweeps); creator cover-override is deferred; preview-generation could later move to its own Inngest function for independent retries (currently an isolated, catch-and-log step).
 
 ---
 
 ## 10. Git and deployment state
 
 - Repo: `https://github.com/56kz55777k-ops/baxter-publishing`, branch `main`.
-- `origin/main` is at the latest docs commit on `main` (Slice 3b code `8b9895b` + decisions/report updates). Local is in sync.
+- `origin/main` is at the latest commit on `main` (through Slice 4: `808b4ed`, plus subsequent doc updates). Local is in sync.
 - Working copy lives at `~/Desktop/baxter-app` (moved from `~/Downloads/baxter-app` after Downloads got cleaned). The repo was re-cloned from origin mid-session after the original folder was inadvertently deleted; all pushed history is intact.
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
-- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`, `0003_preflight_status.sql`. (`0003` was applied during the smoke test via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied; see section 14.)
-- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`.
+- Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`, `0003_preflight_status.sql`. (`0003` was applied during the smoke test via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied; see section 14.) **Slice 4 added no migration** (reuses the existing `assets` table + `publications.cover_asset_id`).
+- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_TOKEN`, `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (the last three added in Slice 4, all Sensitive, Production + Preview).
 - R2 buckets: `baxter-quarantine` (CORS allowing `PUT` from the production origin), `baxter-clean` (no CORS — server-side access only).
 - Inngest Cloud app `baxter-publishing` synced against the production endpoint.
+- Cloudflare Images: enabled on account `502673a122d7ad2ba3a5ad4f71f5b07e` (Images & Stream $0/mo plan); account hash `kuZbDeDRpro6gw7ZktB7TQ`; named variants `cover` (1200w), `grid` (600w), `full` (1600w), all `fit: scale-down`. Public delivery via `imagedelivery.net`.
 
 ### Commit timeline this session
 
@@ -194,6 +199,13 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 | `55f70d4` | docs(slice-3b): record preflight decisions and session handoffs |
 | `05b71e6` | docs(slice-3b): record D-014 promotion, retention, and cleanup policy |
 | `8b9895b` | feat(slice-3b): PDF preflight worker, promotion, and result UI |
+| `4946c84` | docs(slice-3b): mark Slice 3b shipped in code, pending prod migration/deploy/smoke |
+| `b88a9c3` | docs(slice-3b): mark production smoke test passed |
+| `ab85f6f` | docs: Slice 3b post-implementation review |
+| `1493632` | docs(slice-4): preview & cover generation plan |
+| `aa9cd84` | chore(lint): migrate to ESLint 9 flat config |
+| `9bcb450` | feat(slice-4): render cover + previews to Cloudflare Images on preflight pass |
+| `808b4ed` | feat(slice-4): show cover + previews on the publication page |
 
 Note: `07aa5d8` was authored with a placeholder identity because the fresh clone didn't have git config set at commit time. Future commits will use the correct `Ben Gibson <benjamin@benjamingibson.ca>` identity (global git config has since been set). The one outlier is cosmetic — content is correct.
 
@@ -350,3 +362,32 @@ All five preflight paths verified end-to-end in production (UI per D-013 + DB ro
 **Retention sweep (D-014) verified** on the clean publication: a 2nd passing upload kept 2 artifacts (new canonical + predecessor); a 3rd passing upload swept the oldest (2 retained); a subsequent *failing* upload did **not** sweep the latest passed file — confirming the never-sweep-active invariant.
 
 **Cleanup:** the five `Smoke Test 0…` publications were deleted from prod (cascade removed their artifact rows). The 7 orphaned R2 objects were left for manual deletion (the Cloudflare dashboard would not load during the session); delete these prefixes — `baxter-clean`: `publications/d970cadd-0cfd-4a8b-a2aa-eb8424212544/`, `publications/7854e234-835b-48a5-8e8d-3a4ea3893e8e/`; `baxter-quarantine`: `publications/d970cadd-0cfd-4a8b-a2aa-eb8424212544/`, `publications/bd9db2f2-b018-4a47-9bc8-8d26ef0eb509/`, `publications/67594610-0066-4710-8802-87c1c4283232/`, `publications/d9bfea44-0abe-4f0f-9304-6491c1565390/`.
+
+---
+
+## 15. Slice 4 — Preview & cover generation (shipped & verified)
+
+Reframed from the original plan's "Preview Generation + Preflight UI" (preflight UI shipped in 3b), so Slice 4 was squarely **preview & cover generation**. Planned in `baxter-slice4-plan.md`; architecture recorded as `D-015`. **Shipped to `main` (`9bcb450` pipeline, `808b4ed` UI) and verified live in production.**
+
+### What shipped
+
+- **Render engine — mupdf (WASM).** `apps/web/lib/pdf/render.ts` rasterizes the cover (page 1) + first six pages, each cropped to its TrimBox (falls back to full page when absent), as one ~1600w JPEG master per page. Pure/unit-testable; no native binaries; proven by a spike (cover + 6 previews in ~0.3–0.5s, ~120 MB peak — comfortably within Vercel limits).
+- **Delivery — Cloudflare Images.** `apps/web/lib/cloudflare/images.ts` uploads each master **public** (`requireSignedURLs: false`) and exposes idempotent delete + a delivery-URL builder. Responsive sizing via account variants (`cover`/`grid`/`full`). The source PDF stays private in `baxter-clean`; only derived images are public.
+- **Worker step.** On a preflight pass, after promotion, the worker renders → uploads → writes one `preview_page` asset per page and sets `publications.cover_asset_id` to page 1. **No schema migration** (reuses `assets` + `cover_asset_id`).
+- **Failure isolation.** Render/upload failure never unmakes a passed publication — it stays passed and live, the cover simply stays absent, and the failure is logged (and visible in the Inngest run). The retention sweep still runs.
+- **Re-render on replace (D-014 parity).** A new passing file regenerates previews and deletes the superseded Cloudflare images + asset rows first.
+- **UI.** The publication page shows the cover prominently with the remaining pages below in a quiet leafing column; the section is absent until previews exist.
+- **Config.** `mupdf` marked `serverExternalPackages` and its WASM traced into the `/api/inngest` bundle (`next.config.js`).
+
+### Production verification (executed via the Chrome extension)
+
+- **Happy path:** uploaded a clean 8-page A5 → passed → the publication page rendered the cover + pages 2–6 from Cloudflare Images (cropped to trim). Cloudflare showed 6 images.
+- **Re-render / sweep:** re-uploaded → previews regenerated and the old images were swept (Cloudflare held at 6, not 12) — confirming the re-render cleanup.
+- The one real prod risk — the mupdf WASM loading inside the deployed Vercel function — is proven working by the successful render.
+- **Cleanup:** the "Slice 4 Preview Check" test publication was deleted from prod (cascade). Two trivial manual deletions remained for the operator: the 6 Cloudflare images (Hosted images → select all → delete) and the `baxter-clean` prefix `publications/22c0237a-e84e-4e08-addc-7fd97888519c/`.
+
+### Known follow-ups (carried in section 9)
+
+- Orphaned Cloudflare images / clean-bucket objects on **publication deletion** aren't swept (only re-render sweeps).
+- Creator cover-override deferred.
+- Preview generation could later move to its own Inngest function for independent retries (currently an isolated catch-and-log step).

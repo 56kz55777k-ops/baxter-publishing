@@ -166,9 +166,26 @@ Warnings require acknowledgement before the creator continues, but: warnings are
 
 ---
 
+## D-015 · Slice 4 preview & cover generation — render engine and delivery
+
+**Chosen.** On a preflight pass, the worker rasterizes the cover (page 1) + first six pages and publishes them as public presentation images.
+
+- **Engine: mupdf (WASM).** Renders each page cropped to its TrimBox (finished page, no bleed; falls back to full page when no TrimBox), as one ~1600w JPEG master per page. Pure, no native binaries — bundles cleanly into the Vercel/Inngest function (proven by spike: cover + 6 previews in ~0.3–0.5s, ~120 MB peak). Marked `serverExternalPackages` with its WASM traced into `/api/inngest`.
+- **Delivery: Cloudflare Images** (per D-004). One master uploaded per page, **public** (`requireSignedURLs: false`); responsive sizing via account variants `cover` (1200w) / `grid` (600w) / `full` (1600w), `fit: scale-down`. The source PDF stays private in `baxter-clean`; only derived images are public.
+- **Data: reuse, no migration.** One `assets` row per page (`provider='cloudflare_images'`, `kind='preview_page'`, `external_id`=image id, `meta`={page,w,h}); `publications.cover_asset_id` → page 1.
+- **Pipeline shape.** A step in the existing preflight worker, not a separate trigger. Failure is **isolated** (caught + logged): a render/upload error never unmakes a passed publication — it stays passed, the cover stays absent, the sweep still runs. Re-render on replace deletes superseded images/assets first (D-014 parity).
+
+**Why.** mupdf is the only rasterizer that fit the serverless runtime without native binaries or a separate service; the spike proved it well within limits. Cloudflare Images was already the chosen derived-imagery layer (D-004) and gives responsive variants for free — covers are the marketplace's shop window, so they deserve a real public image layer, not raw public R2. Reusing `assets` avoided a migration (the one defect in Slice 3b was an unapplied migration). Keeping generation an isolated step honours "a passed publication must never be blocked by preview work."
+
+**What would force reconsideration.** A rasterization need mupdf can't meet (e.g. exotic PDF features) → revisit engine or add a rendering service. Heavy preview volume or a need for independent retries → promote preview generation to its own Inngest function. A creator cover-override feature → page-selection UI + a stored cover-page choice.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
-- **PDF rendering pipeline** — DocRaptor vs `react-pdf` vs Vercel function with Puppeteer. Spike B.
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
 - **DIN licensing** — when to pull DM Sans and license real DIN. After Slice 4 ship.
+- **Preview lifecycle on publication delete** — orphaned Cloudflare images / clean-bucket objects aren't swept on publication deletion (only on re-render). Add a cleanup path if it matters pre-launch.
+
+*(Resolved: "PDF rendering pipeline" — settled by D-015 (mupdf + Cloudflare Images).)*
