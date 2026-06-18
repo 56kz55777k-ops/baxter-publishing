@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-18
 **Builds on:** Slices 1–4 (live). Preflight (3b) gates submission; previews (4) give the summary something to show.
-**Status:** planned; a short design-questions pass is recommended before building (lead items: email provider + confirmation-state voice).
+**Status:** design decisions **locked** (`D-016`). Two-surface model: editing in the workspace, declaration on a read-only review page. Ready to build once the Resend prerequisite is set. (Section 6 below is superseded by D-016.)
 
 ---
 
@@ -53,14 +53,19 @@ A **multi-step flow that must not feel like a wizard.** The Constitution bans *"
 
 ---
 
-## 6. Design decisions to settle (proposed design-questions pass)
+## 6. Design decisions — LOCKED (see `D-016`)
 
-1. **Email provider** — Resend (plan's choice) vs alternative. Gating prerequisite: account, API key, verified from-address. (App-sent transactional, separate from Supabase auth SMTP.)
-2. **Flow shape** — one scrolling ceremonial page vs discrete steps-without-a-stepper; the exact confirmation-state copy and voice.
-3. **Pricing now vs later** — collect price/edition at submission, or defer to approval? (Stripe isn't until Slice 8, so price may be informational for now.)
-4. **Tags** — schema has `category` (single text) but **no tags column**; ship tags in 5 (needs a migration) or defer.
-5. **Sensitive-category notice** — which categories trigger the extended notice and what it says.
-6. **Review SLA wording** — exact phrasing/number ("within five business days"), named directly per the copy doctrine.
+Resolved via a design pass (Claude + ChatGPT + Ben). Summary; full rationale in `decisions.md` D-016.
+
+1. **Email provider:** **Resend.**
+2. **Flow shape:** **two-surface model** — *submission is a declaration, not a form.*
+   - **Workspace** (`/studio/publications/[id]`): editable; holds title, subtitle, description, category, price, edition, file, previews; normal save; used in `draft` and `revisions`. Marketplace info (price/description/edition) is entered here (new quiet section).
+   - **Review** (dedicated page, named "Review"): **read-only**, shows cover/title/format/page count/preflight/category/description/price/edition + review notice; **one action, "Submit for review," no editable fields**; "Edit publication" returns to the workspace.
+   - **Copy:** notice = "Baxter will review this publication within five business days."; confirmation = "Submitted." + that notice; under-review = "Under review" / "Baxter is reviewing this publication." / "Submitted [date]".
+3. **Pricing:** collected **now**, in the workspace.
+4. **Tags:** **deferred** (no migration).
+5. **Sensitive-category notice:** high-risk categories only — "Some categories require additional review. Submission does not guarantee publication."
+6. **SLA:** five business days.
 
 ---
 

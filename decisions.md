@@ -181,6 +181,37 @@ Warnings require acknowledgement before the creator continues, but: warnings are
 
 ---
 
+## D-016 · Slice 5 — ceremonial submission: a declaration, not a form
+
+**Chosen.** Submission is the moment a creator declares a publication ready for review — not a place where information is gathered. This forces a **two-surface model**:
+
+- **Surface 1 — the workspace** (the existing `/studio/publications/[id]` page). Editable; where the messy, iterative work lives (title, subtitle, description, category, price, edition, file, previews). Normal save. Used during `draft` **and** `revisions`. Marketplace info (price/description/edition) is entered here — it gets a quiet **Marketplace** section alongside the existing file/preview/metadata.
+- **Surface 2 — the review** (a dedicated page; named **"Review"**, not "Submit"). **Read-only.** Shows cover, title, format, page count, preflight status, category, description, price, edition, and the review notice. **One decisive action — "Submit for review" — and no editable fields.** An "Edit publication" link returns to the workspace. The page performs review; the button performs submission.
+
+This is the heart of the slice (the Constitution-critical surface). The earlier single-page idea was rejected: putting editable fields on the submission page makes it data-entry wearing a ceremony's clothes, forces a save-vs-submit dual action, and muddies the revisions loop. Separating editing (workspace) from declaration (review) makes the review page ask "Is this ready?" (a publishing question) rather than "What's left to fill in?" (a software question).
+
+**Sequence:** `Draft → Review → Submitted → Under review`. On submit: `draft → in_review` via the pure state machine, recorded in `publication_events`, stamping `submitted_at`; **gated** on the canonical artifact being `passed`; an Inngest job sends the admin notification (Resend); the publication locks read-only.
+
+**Copy (all pass the Constitution "Never" list):**
+- Review notice: **"Baxter will review this publication within five business days."**
+- Confirmation (poster, not a screen): large **"Submitted."** / small "Baxter will review this publication within five business days." Nothing else.
+- Under-review state: title **"Under review"**, body "Baxter is reviewing this publication.", then "Submitted [date]".
+- Sensitive-category notice (high-risk categories only — e.g. political campaigning, extremist advocacy, explicit sexual content, graphic violence, hate, potentially unlawful): **"Some categories require additional review. Submission does not guarantee publication."**
+
+**Other rulings:**
+- **Email provider: Resend** — modest needs (admin notification now; decision/operational emails later), simple, inexpensive, "disappears." Separate from the pre-launch custom-SMTP item (that's for Supabase auth emails).
+- **Pricing: collected now**, in the workspace (price + edition). Informational until Stripe (Slice 8), but part of the publication and useful to the reviewer.
+- **Tags: deferred** — `category` suffices; no tag system until discovery behaviour is understood. No migration.
+- **SLA: five business days.**
+
+**Why.** Editing and declaring are different psychological states; combining them weakens both. The two-surface model also makes the confirmation copy literally true ("Submitted." — the work was already complete) and keeps the ceremony a ceremony.
+
+**Schema.** No migration (all fields exist: `price_minor`, `currency`, `edition_size`, `description`, `subtitle`, `submitted_at`; `in_review` in the enum; `publication_events` exists). Tags would need one — deferred.
+
+**What would force reconsideration.** A discovery/search need that requires tags; a decision to defer pricing to post-approval; or admin-review findings that change what the review surface must show.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
