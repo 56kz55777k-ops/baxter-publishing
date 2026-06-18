@@ -10,6 +10,7 @@ import {
   type LatestArtifactView,
   type PreflightIssueView,
 } from './artifact-section';
+import { MarketplaceSection } from './marketplace-section';
 
 /** Defensive readers for the loosely-typed preflight jsonb. */
 function asIssues(value: unknown): PreflightIssueView[] {
@@ -22,6 +23,20 @@ function asIssues(value: unknown): PreflightIssueView[] {
       detail: String(v.detail ?? ''),
     }))
     .filter((i) => i.title && i.detail);
+}
+
+function formatPrice(priceMinor: number | null, currency: string): string {
+  if (priceMinor === null || priceMinor === undefined) return '—';
+  return `$${(priceMinor / 100).toFixed(2)} ${currency}`;
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 export const metadata = {
@@ -39,10 +54,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function PublicationDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ submitted?: string }>;
 }) {
   const { id } = await params;
+  const { submitted } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -52,18 +70,34 @@ export default async function PublicationDetailPage({
   const { data: publication } = await supabase
     .from('publications')
     .select(
-      'id, title, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, created_at, cover_asset_id'
+      'id, title, subtitle, description, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, cover_asset_id, price_minor, currency, edition_size, submitted_at'
     )
     .eq('id', id)
     .maybeSingle();
 
   if (!publication || publication.creator_id !== user.id) notFound();
 
+  const status = publication.status as keyof typeof STATUS_LABEL;
+  const editable = status === 'draft' || status === 'revisions';
+  const currency = publication.currency ?? 'CAD';
+
+  // --- The "Submitted." poster (D-016) — the moment right after submitting ---
+  if (status === 'in_review' && submitted) {
+    return (
+      <main className="px-gutter py-40 max-w-[44rem]">
+        <h1 className="font-serif text-h1 leading-[1.05] tracking-tight">
+          Submitted.
+        </h1>
+        <p className="font-serif text-lede text-ink-soft mt-8 max-w-measure">
+          Baxter will review this publication within five business days.
+        </p>
+      </main>
+    );
+  }
+
   const { data: artifacts } = await supabase
     .from('artifacts')
-    .select(
-      'id, size_bytes, uploaded_at, preflight, preflight_status'
-    )
+    .select('id, size_bytes, uploaded_at, preflight, preflight_status')
     .eq('publication_id', id)
     .order('uploaded_at', { ascending: false });
 
@@ -87,8 +121,7 @@ export default async function PublicationDetailPage({
       }
     : null;
 
-  // Preview imagery (Slice 4): cover + preview pages, delivered via Cloudflare
-  // Images variants. Present only once the worker has rendered a passed file.
+  // Preview imagery (Slice 4).
   const { data: previewAssets } = await supabase
     .from('assets')
     .select('id, external_id, meta')
@@ -114,7 +147,30 @@ export default async function PublicationDetailPage({
     : [];
   const cover = previews.find((p) => p.isCover) ?? previews[0] ?? null;
 
-  const status = publication.status as keyof typeof STATUS_LABEL;
+  const previewSection = cover ? (
+    <section className="mt-20 pt-10 border-t border-rule">
+      <p className="metadata mb-6">Preview</p>
+      <img
+        src={cover.coverUrl}
+        alt={`${publication.title} — cover`}
+        className="w-full max-w-[30rem] h-auto border border-rule"
+      />
+      {previews.some((p) => !p.isCover) && (
+        <div className="mt-12 space-y-8 max-w-[24rem]">
+          {previews
+            .filter((p) => !p.isCover)
+            .map((p) => (
+              <img
+                key={p.page}
+                src={p.fullUrl}
+                alt={`${publication.title} — page ${p.page}`}
+                className="w-full h-auto border border-rule"
+              />
+            ))}
+        </div>
+      )}
+    </section>
+  ) : null;
 
   return (
     <main className="px-gutter py-24 max-w-[44rem]">
@@ -122,6 +178,21 @@ export default async function PublicationDetailPage({
       <h1 className="font-serif text-h1 leading-[1.05] tracking-tight">
         {publication.title}
       </h1>
+
+      {/* Under review (D-016) — read-only, dignified, not anxious. */}
+      {status === 'in_review' && (
+        <section className="mt-12 pt-10 border-t border-rule">
+          <p className="font-serif text-body text-ink">Under review</p>
+          <p className="metadata text-ink-faint mt-3">
+            Baxter is reviewing this publication.
+          </p>
+          {publication.submitted_at && (
+            <p className="metadata text-ink-faint mt-1">
+              Submitted {formatDate(publication.submitted_at)}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="mt-12 grid grid-cols-[8rem_1fr] gap-y-4 gap-x-8 text-[0.95rem]">
         <p className="metadata text-ink-faint">Status</p>
@@ -139,38 +210,70 @@ export default async function PublicationDetailPage({
         <p className="text-ink">{publication.page_count ?? '—'}</p>
       </section>
 
-      {cover && (
-        <section className="mt-20 pt-10 border-t border-rule">
-          <p className="metadata mb-6">Preview</p>
-          <img
-            src={cover.coverUrl}
-            alt={`${publication.title} — cover`}
-            className="w-full max-w-[30rem] h-auto border border-rule"
+      {/* Marketplace — editable in the workspace; read-only otherwise. */}
+      <section className="mt-20 pt-10 border-t border-rule">
+        <p className="metadata mb-6">Marketplace</p>
+        {editable ? (
+          <MarketplaceSection
+            publicationId={publication.id}
+            currency={currency}
+            initial={{
+              subtitle: publication.subtitle ?? '',
+              description: publication.description ?? '',
+              price:
+                publication.price_minor !== null &&
+                publication.price_minor !== undefined
+                  ? String(publication.price_minor / 100)
+                  : '',
+              edition:
+                publication.edition_size !== null &&
+                publication.edition_size !== undefined
+                  ? String(publication.edition_size)
+                  : '',
+            }}
           />
-          {previews.some((p) => !p.isCover) && (
-            <div className="mt-12 space-y-8 max-w-[24rem]">
-              {previews
-                .filter((p) => !p.isCover)
-                .map((p) => (
-                  <img
-                    key={p.page}
-                    src={p.fullUrl}
-                    alt={`${publication.title} — page ${p.page}`}
-                    className="w-full h-auto border border-rule"
-                  />
-                ))}
-            </div>
-          )}
+        ) : (
+          <div className="grid grid-cols-[8rem_1fr] gap-y-4 gap-x-8 text-[0.95rem]">
+            <p className="metadata text-ink-faint">Description</p>
+            <p className="text-ink whitespace-pre-line">
+              {publication.description || '—'}
+            </p>
+            <p className="metadata text-ink-faint">Price</p>
+            <p className="text-ink">
+              {formatPrice(publication.price_minor, currency)}
+            </p>
+            <p className="metadata text-ink-faint">Edition</p>
+            <p className="text-ink">
+              {publication.edition_size ?? 'Open edition'}
+            </p>
+          </div>
+        )}
+      </section>
+
+      {previewSection}
+
+      {/* File — editable only in the workspace. */}
+      {editable && (
+        <section className="mt-20 pt-10 border-t border-rule">
+          <p className="metadata mb-4">File</p>
+          <ArtifactSection
+            publicationId={publication.id}
+            latestArtifact={latestArtifact}
+          />
         </section>
       )}
 
-      <section className="mt-20 pt-10 border-t border-rule">
-        <p className="metadata mb-4">File</p>
-        <ArtifactSection
-          publicationId={publication.id}
-          latestArtifact={latestArtifact}
-        />
-      </section>
+      {/* Review & submit — the declaration lives on its own page (D-016). */}
+      {editable && (
+        <div className="mt-20 pt-10 border-t border-rule">
+          <Link
+            href={`/studio/publications/${publication.id}/review`}
+            className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
+          >
+            Review submission
+          </Link>
+        </div>
+      )}
 
       <div className="mt-16">
         <Link

@@ -5,6 +5,7 @@ import { getObjectBytes, copyObject, deleteObject } from '@/lib/r2/objects';
 import { inspectPdf } from '@/lib/pdf/inspect';
 import { renderPreviewPages } from '@/lib/pdf/render';
 import { uploadImage, deleteImage } from '@/lib/cloudflare/images';
+import { sendAdminEmail } from '@/lib/email/resend';
 import {
   evaluatePreflight,
   getFormatPreset,
@@ -303,4 +304,61 @@ function failure(detail: string) {
   };
 }
 
-export const functions = [preflight];
+/**
+ * Submission notification (Slice 5 / D-016).
+ *
+ * Triggered when a creator submits a publication for review. Sends an admin
+ * notification via Resend (a clean integration point that no-ops until the key
+ * is set). Isolated from the submission itself — the transition already
+ * committed; a notification failure only retries the email.
+ */
+const submittedNotify = inngest.createFunction(
+  { id: 'publication-submitted-notify', retries: 3 },
+  { event: 'publication/submitted' },
+  async ({ event }) => {
+    const { publicationId } = event.data as { publicationId: string };
+    const db = createAdminClient();
+
+    const { data: pub } = await db
+      .from('publications')
+      .select('id, title, category, creator_id, price_minor, currency, edition_size')
+      .eq('id', publicationId)
+      .maybeSingle();
+    if (!pub) return { ok: false, reason: 'publication not found' };
+
+    const { data: creator } = await db
+      .from('users')
+      .select('handle, display_name')
+      .eq('id', pub.creator_id)
+      .maybeSingle();
+
+    const price =
+      pub.price_minor !== null && pub.price_minor !== undefined
+        ? `${(pub.price_minor / 100).toFixed(2)} ${pub.currency ?? 'CAD'}`
+        : '—';
+    const edition =
+      pub.edition_size !== null && pub.edition_size !== undefined
+        ? String(pub.edition_size)
+        : 'open edition';
+
+    const text = [
+      'A publication has been submitted for review.',
+      '',
+      `Title: ${pub.title}`,
+      `Category: ${pub.category}`,
+      `Creator: ${creator?.display_name ?? ''} (@${creator?.handle ?? ''})`,
+      `Price: ${price}`,
+      `Edition: ${edition}`,
+      '',
+      'The admin review queue arrives in Slice 6.',
+    ].join('\n');
+
+    const { sent } = await sendAdminEmail({
+      subject: `Submitted for review: ${pub.title}`,
+      text,
+    });
+    return { ok: true, emailed: sent };
+  }
+);
+
+export const functions = [preflight, submittedNotify];
