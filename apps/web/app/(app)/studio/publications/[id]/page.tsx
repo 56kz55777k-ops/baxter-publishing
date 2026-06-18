@@ -1,6 +1,10 @@
+/* eslint-disable @next/next/no-img-element -- preview imagery is delivered by
+   Cloudflare Images variants (already CDN-optimized); next/image would only add
+   a redundant optimization hop. */
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { imageDeliveryUrl } from '@/lib/cloudflare/images';
 import {
   ArtifactSection,
   type LatestArtifactView,
@@ -48,7 +52,7 @@ export default async function PublicationDetailPage({
   const { data: publication } = await supabase
     .from('publications')
     .select(
-      'id, title, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, created_at'
+      'id, title, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, created_at, cover_asset_id'
     )
     .eq('id', id)
     .maybeSingle();
@@ -83,6 +87,33 @@ export default async function PublicationDetailPage({
       }
     : null;
 
+  // Preview imagery (Slice 4): cover + preview pages, delivered via Cloudflare
+  // Images variants. Present only once the worker has rendered a passed file.
+  const { data: previewAssets } = await supabase
+    .from('assets')
+    .select('id, external_id, meta')
+    .eq('publication_id', id)
+    .eq('provider', 'cloudflare_images')
+    .eq('kind', 'preview_page');
+
+  const hashReady = Boolean(process.env.CLOUDFLARE_IMAGES_ACCOUNT_HASH);
+  const previews = hashReady
+    ? (previewAssets ?? [])
+        .map((a) => {
+          const meta = (a.meta && typeof a.meta === 'object'
+            ? a.meta
+            : {}) as Record<string, unknown>;
+          return {
+            page: Number(meta.page ?? 0),
+            coverUrl: imageDeliveryUrl(a.external_id, 'cover'),
+            fullUrl: imageDeliveryUrl(a.external_id, 'full'),
+            isCover: a.id === publication.cover_asset_id,
+          };
+        })
+        .sort((x, y) => x.page - y.page)
+    : [];
+  const cover = previews.find((p) => p.isCover) ?? previews[0] ?? null;
+
   const status = publication.status as keyof typeof STATUS_LABEL;
 
   return (
@@ -107,6 +138,31 @@ export default async function PublicationDetailPage({
         <p className="metadata text-ink-faint">Page count</p>
         <p className="text-ink">{publication.page_count ?? '—'}</p>
       </section>
+
+      {cover && (
+        <section className="mt-20 pt-10 border-t border-rule">
+          <p className="metadata mb-6">Preview</p>
+          <img
+            src={cover.coverUrl}
+            alt={`${publication.title} — cover`}
+            className="w-full max-w-[30rem] h-auto border border-rule"
+          />
+          {previews.some((p) => !p.isCover) && (
+            <div className="mt-12 space-y-8 max-w-[24rem]">
+              {previews
+                .filter((p) => !p.isCover)
+                .map((p) => (
+                  <img
+                    key={p.page}
+                    src={p.fullUrl}
+                    alt={`${publication.title} — page ${p.page}`}
+                    className="w-full h-auto border border-rule"
+                  />
+                ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="mt-20 pt-10 border-t border-rule">
         <p className="metadata mb-4">File</p>
