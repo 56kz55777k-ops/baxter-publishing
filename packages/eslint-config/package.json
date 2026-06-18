@@ -2,8 +2,13 @@
   "name": "@baxter/eslint-config",
   "version": "0.1.0",
   "private": true,
-  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": "./base.js",
+    "./next": "./next.js"
+  },
   "dependencies": {
+    "@eslint/eslintrc": "^3.2.0",
     "eslint-config-next": "^15.5.0"
   }
 }
