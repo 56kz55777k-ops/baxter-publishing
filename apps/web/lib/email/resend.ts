@@ -8,7 +8,9 @@
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM = process.env.RESEND_FROM ?? 'Baxter <onboarding@resend.dev>';
+// Matches the documented var in .env.example. Falls back to Resend's test
+// sender, which works without a verified domain.
+const FROM = process.env.RESEND_FROM_ADDRESS ?? 'Baxter <onboarding@resend.dev>';
 const ADMIN_TO = process.env.ADMIN_NOTIFICATION_EMAIL ?? 'benjamin@benjamingibson.ca';
 
 export interface AdminEmail {
