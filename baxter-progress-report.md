@@ -160,7 +160,7 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 ## 9. Outstanding items
 
 1. **Slice 3b go-live — DONE.** Migration `0003` applied to prod, deploy live, and the production smoke test passed (section 14). Slice 3b is live.
-2. **Custom SMTP** so confirmation emails send from a Baxter domain rather than `noreply@mail.app.supabase.io`. Pre-launch.
+2. **Custom SMTP for Supabase auth emails — DONE.** Supabase Auth now sends via Resend SMTP (`smtp.resend.com:465`, username `resend`, the baxter.press account's API key) from `Baxter <notifications@baxter.press>`. Verified: a magic-link email **Delivered** from that sender (section 18).
 3. **Other Supabase email templates** (Magic Link, Reset Password, Change Email, Reauthentication) are still stock. None are triggered in Slice 2.
 4. **Replace-flow object cleanup** — resolved by the Slice 3b retention sweep (`D-014`): superseded objects are deleted at register time, keeping the active file plus its immediate predecessor.
 5. **Custom domain** for production (`baxter.press` or similar). Pre-launch.
@@ -170,7 +170,7 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 9. **Slice 4 (preview & cover generation) — DONE.** Shipped and verified in production (section 15).
 10. **Preview-pipeline follow-ups (post-Slice-4)** — orphaned Cloudflare images / clean-bucket objects on *publication deletion* aren't swept (only re-render sweeps); creator cover-override is deferred; preview-generation could later move to its own Inngest function for independent retries (currently an isolated, catch-and-log step).
 11. **Slice 5 (ceremonial submission flow) — DONE.** Shipped and verified in production, admin email included (section 16).
-12. **Branded `baxter.press` email sender — DONE.** Verified in a dedicated Resend account, DNS in GoDaddy, Vercel env updated, and a production submission confirmed delivery from `notifications@baxter.press` (section 17). Note: this only covers **transactional/admin** email via Resend. Supabase **auth** emails (confirm-signup, etc.) still send from `noreply@mail.app.supabase.io` and need custom SMTP separately — item 2 remains.
+12. **Branded `baxter.press` email sender — DONE.** Verified in a dedicated Resend account, DNS in GoDaddy, Vercel env updated, and a production submission confirmed delivery from `notifications@baxter.press` (section 17). Note: this covers **transactional/admin** email via Resend; Supabase **auth** emails are handled separately via custom SMTP (also Resend) — now DONE (item 2, section 18).
 13. **Inngest sync is manual (operational policy, `D-017`)** — the Vercel-native Inngest integration is intentionally NOT installed. **After any deploy that adds a NEW Inngest function, Resync the app** (Inngest → Apps → baxter-publishing → Resync). Folded into per-slice verification.
 
 ---
@@ -477,5 +477,25 @@ The verification publication **"Baxter Sender Test"** (`1296dcd4-6fca-4a12-8c12-
 
 ### Residual
 
-- **Supabase auth emails** (confirm-signup, magic link, etc.) still send from `noreply@mail.app.supabase.io` — a **separate** custom-SMTP task (outstanding item 2), independent of this Resend work.
+- **Supabase auth emails** are now sent via custom SMTP through the same Resend account — see section 18 (resolves outstanding item 2).
 - The old torontocreatives Resend account/key is now dead weight (harmless); can be removed later.
+
+---
+
+## 18. Supabase auth email — custom SMTP via Resend (shipped & verified)
+
+Resolves outstanding item 2. Supabase's authentication emails (magic link, confirm-signup, password recovery, etc.) no longer send from `noreply@mail.app.supabase.io`; they route through Resend's SMTP using the same dedicated `baxter.press` account as the transactional sender (§17).
+
+**Config** — Supabase → Authentication → Emails → **SMTP Settings**, "Enable custom SMTP" on:
+
+- **Sender:** `Baxter <notifications@baxter.press>`
+- **Host / Port:** `smtp.resend.com` / `465`
+- **Username:** `resend`
+- **Password:** the baxter.press Resend account API key (the same `re_…` key as `RESEND_API_KEY`; pasted by the operator, never handled in-session)
+- Enabling custom SMTP also raised Supabase's auth email rate limit to **30/hour** (adjustable).
+
+**Verification (production):** sent a magic link to `benjamin@benjamingibson.ca` from Supabase → Authentication → Users. The Resend log shows it **Delivered** from **`"Baxter" <notifications@baxter.press>`** (subject "Your sign-in link", id `2672496d-…`). Supabase accepting the send (its success toast) is itself proof the SMTP handshake + credentials are valid; a bad config errors at that step.
+
+**Notes:**
+- Reuses the full-access Baxter key (operator's choice over a dedicated SMTP key) — one key now serves both the app's transactional sends and Supabase's auth SMTP.
+- The Slice 2 confirm-signup HTML template (`infrastructure/supabase/email-templates/confirm-signup.html`, pasted into Supabase) is unaffected — only the transport/sender changed. The other stock templates (magic link, recovery, etc.) now at least send from the Baxter domain; tailoring their copy to the Constitution is a separate, optional polish.
