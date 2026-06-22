@@ -212,6 +212,16 @@ This is the heart of the slice (the Constitution-critical surface). The earlier 
 
 ---
 
+## D-017 · Inngest sync — manual, not the Vercel-native integration
+
+**Chosen.** Keep Inngest connected manually: the `INNGEST_*` keys from the existing Toronto Creatives Inngest account ("Baxter" production env) live in Vercel, and the app serves functions at `/api/inngest`. **Do not install the Vercel Marketplace Inngest integration.** Guardrail: **when a deploy adds a *new* Inngest function, manually Resync the app** (Inngest → Apps → baxter-publishing → Resync) so it registers — folded into per-slice verification.
+
+**Why.** The marketplace integration is "Vercel Native": it provisions and manages the `INNGEST_*` keys and, over an externally-created account on a Hobby plan, risks creating a separate Vercel-managed Inngest project and overwriting the working keys — which would disconnect the already-synced functions and break the preflight worker *and* the submission email. The recurrence cost of manual sync is ~one click, and only on the rare slice that adds a function. Surfaced when the Slice 5 email failed silently because `publication-submitted-notify` had never synced (the app's last sync was Slice 3b; nothing re-syncs on deploy).
+
+**What would force reconsideration.** Frequent new functions, multiple deploys a day, or a deliberate migration to a Vercel-managed Inngest account — then revisit the integration, installed carefully with confirmation that it links the existing env rather than creating a new project.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.

@@ -16,6 +16,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 
 **Update (Slice 4):** **Slice 4 (preview & cover generation) is shipped and verified live in production** (commits `9bcb450` + `808b4ed`; decision `D-015`). On a preflight pass the worker rasterizes the cover + first six pages with mupdf (TrimBox-cropped), uploads them to Cloudflare Images, and the publication page renders the cover + previews. No migration was needed (reuses `assets` + `cover_asset_id`). Cloudflare Images is now standing infrastructure (enabled, three Vercel env vars, three variants). Details in section 15.
 
+**Update (Slice 5):** **Slice 5 (ceremonial submission flow) is shipped and verified live in production** (commits `08f1979` + `7ce25f0`; decision `D-016`). Submission is a declaration, not a form: editing lives in the workspace, declaration on a read-only Review page with one action; `draft→in_review` via the state machine + audit event; "Submitted." poster and "Under review" state; admin notification via Inngest → Resend (now `Delivered` to `benjamin@benjamingibson.ca`). No migration. Two operational notes surfaced: Inngest sync is **manual** (no Vercel integration — `D-017`), and email currently sends from the verified `resend.torontocreatives.com` (branded `baxter.press` sender is a follow-up). Details in section 16.
+
 ---
 
 ## 2. The production 500 — diagnosed and fixed (commit `b09392d`)
@@ -165,6 +167,9 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 8. **KB-aware file-size formatting** (follow-up polish) — the artifact receipt shows "0.0 MB" for files under ~50 KB because the formatter rounds MB to one decimal (`artifact-section.tsx`). Switch to KB-aware formatting (e.g. show KB below 1 MB). Cosmetic; surfaced by the synthetic test fixtures.
 9. **Slice 4 (preview & cover generation) — DONE.** Shipped and verified in production (section 15).
 10. **Preview-pipeline follow-ups (post-Slice-4)** — orphaned Cloudflare images / clean-bucket objects on *publication deletion* aren't swept (only re-render sweeps); creator cover-override is deferred; preview-generation could later move to its own Inngest function for independent retries (currently an isolated, catch-and-log step).
+11. **Slice 5 (ceremonial submission flow) — DONE.** Shipped and verified in production, admin email included (section 16).
+12. **Branded `baxter.press` email sender** — the admin notification currently sends from the verified `resend.torontocreatives.com`. `baxter.press` is purchased (GoDaddy); verify it in Resend (DNS) and set `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>` before any customer-facing email (later slices). Supersedes the generic "custom domain" item for email purposes.
+13. **Inngest sync is manual (operational policy, `D-017`)** — the Vercel-native Inngest integration is intentionally NOT installed. **After any deploy that adds a NEW Inngest function, Resync the app** (Inngest → Apps → baxter-publishing → Resync). Folded into per-slice verification.
 
 ---
 
@@ -176,7 +181,8 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
 - Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`, `0003_preflight_status.sql`. (`0003` was applied during the smoke test via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied; see section 14.) **Slice 4 added no migration** (reuses the existing `assets` table + `publications.cover_asset_id`).
-- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_TOKEN`, `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (the last three added in Slice 4, all Sensitive, Production + Preview).
+- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_TOKEN`, `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (Slice 4), `RESEND_API_KEY`, `RESEND_FROM_ADDRESS` (currently `…@resend.torontocreatives.com`), `ADMIN_NOTIFICATION_EMAIL` = `benjamin@benjamingibson.ca` (Slice 5). All Sensitive, Production + Preview.
+- **Inngest sync is MANUAL (`D-017`).** The Vercel-native Inngest integration is not installed (it risks re-provisioning the working `INNGEST_*` keys / a separate project). **Runbook: after deploying a slice that adds a NEW Inngest function, Resync** (Inngest → Apps → baxter-publishing → Resync) or the new function won't register. This is exactly what silently broke the Slice 5 email until resynced.
 - R2 buckets: `baxter-quarantine` (CORS allowing `PUT` from the production origin), `baxter-clean` (no CORS — server-side access only).
 - Inngest Cloud app `baxter-publishing` synced against the production endpoint.
 - Cloudflare Images: enabled on account `502673a122d7ad2ba3a5ad4f71f5b07e` (Images & Stream $0/mo plan); account hash `kuZbDeDRpro6gw7ZktB7TQ`; named variants `cover` (1200w), `grid` (600w), `full` (1600w), all `fit: scale-down`. Public delivery via `imagedelivery.net`.
@@ -391,3 +397,31 @@ Reframed from the original plan's "Preview Generation + Preflight UI" (preflight
 - Orphaned Cloudflare images / clean-bucket objects on **publication deletion** aren't swept (only re-render sweeps).
 - Creator cover-override deferred.
 - Preview generation could later move to its own Inngest function for independent retries (currently an isolated catch-and-log step).
+
+---
+
+## 16. Slice 5 — Ceremonial submission flow (shipped & verified)
+
+Decision `D-016`. **Shipped (`08f1979` + `7ce25f0`) and verified live in production, admin email included.**
+
+### What shipped
+
+- **Submission is a declaration, not a form** — a two-surface model:
+  - **Workspace** (`/studio/publications/[id]`): editable Marketplace section (subtitle, description, price, edition) via `saveMarketplace`; confined to `draft`/`revisions`. Price entered in dollars, stored as minor units; blank edition = open edition.
+  - **Review** (`/studio/publications/[id]/review`): read-only declaration — cover, format, page count, category (+ sensitive-category notice hook), description, price, edition, review notice; one **Submit for review** action, no editable fields; "Edit publication" returns to the workspace; shows what's missing when ineligible.
+- **Submit** — server-validated, gated on canonical preflight `passed` + price + description; `draft|revisions → in_review` via the pure state machine; writes `status`/`submitted_at` + the insert-only `publication_events` audit row via service role; emits `publication/submitted`.
+- **Confirmation + state** — the **"Submitted."** poster, then the read-only **"Under review"** state (locked D-013-style copy).
+- **Admin notification** — Inngest `publication-submitted-notify` → Resend (`lib/email/resend.ts`, a clean integration point that no-ops without `RESEND_API_KEY`). Recipient `benjamin@benjamingibson.ca`.
+- **No migration** (reuses existing publication fields + `publication_events`).
+
+### Production verification (via the Chrome extension)
+
+Full flow confirmed: create → workspace marketplace save → upload/preflight pass → read-only Review → Submit → `in_review` (DB: status, `submitted_at`, one `publication_events` row) → "Submitted." poster → "Under review" read-only state.
+
+### The email debugging saga (worth remembering)
+
+The admin email didn't arrive at first. Diagnosis ruled out, in order: not delivery/spam (Resend log empty), not a missing key (`RESEND_API_KEY` present in Vercel), not the from-address. **Root cause: the new `publication-submitted-notify` function had never synced to Inngest** — the app's last sync was Slice 3b ("1 function found"), and nothing re-syncs on deploy. Fixed by a manual **Resync** (both functions now registered); a fresh submission then **Delivered** to `benjamin@benjamingibson.ca` (confirmed in the Resend log). Operational policy recorded as `D-017` (manual sync + resync-after-new-function runbook).
+
+### Follow-ups (in section 9)
+
+Branded `baxter.press` email sender (currently TC domain); manual Inngest resync guardrail; test-data cleanup (publications `3b1744ea`, `3c617cd2`, `64c5c2e4` + their R2/Cloudflare objects).

@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-18
 **Builds on:** Slices 1–4 (live). Preflight (3b) gates submission; previews (4) give the summary something to show.
-**Status:** design decisions **locked** (`D-016`). Two-surface model: editing in the workspace, declaration on a read-only review page. Ready to build once the Resend prerequisite is set. (Section 6 below is superseded by D-016.)
+**Status:** ✅ **SHIPPED & VERIFIED in production** (commits `08f1979` + `7ce25f0`; decisions `D-016`, `D-017`). Two-surface model built as designed; admin email Delivered. Email sends from the verified `resend.torontocreatives.com` for now (branded `baxter.press` sender is a follow-up). Inngest sync is manual (`D-017`). See progress report §16. (Section 6 below is superseded by D-016.)
 
 ---
 
