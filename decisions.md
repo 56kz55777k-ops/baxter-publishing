@@ -222,6 +222,20 @@ This is the heart of the slice (the Constitution-critical surface). The earlier 
 
 ---
 
+## D-018 · Branded email — a dedicated Resend account for `baxter.press`
+
+**Chosen.** Transactional/admin email sends from **`notifications@baxter.press`**, with `baxter.press` verified in a **new, dedicated Resend account** (created via GitHub login). That account is the **authoritative** sender for Baxter; its API key is the one in Vercel's `RESEND_API_KEY`, and `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>`. The older Resend account (holding `resend.torontocreatives.com`, used as the interim sender in Slice 5) is **retired from this project** — its key was replaced.
+
+**Why.** Resend's free tier verifies **one domain per account**, and the existing account already held `resend.torontocreatives.com`; adding `baxter.press` to it (and the "Create Team" path) both hit a paywall. A separate free account avoids a paid plan while giving Baxter its own brand-domain sender. DNS was added in GoDaddy: DKIM (`resend._domainkey` TXT), SPF MX (`send` → `feedback-smtp.us-east-1.amazonses.com`, pri 10), SPF TXT (`send` → `v=spf1 include:amazonses.com ~all`); GoDaddy's default `_dmarc` record sufficed, so no DMARC was added. No application code changed — the integration point (`lib/email/resend.ts`) was already env-driven from D-016/Slice 5. Verified end-to-end in production: an admin notification **Delivered** from `notifications@baxter.press` (progress report §17).
+
+**Operational notes.**
+- This covers **Resend transactional email only**. Supabase **auth** emails still send from `noreply@mail.app.supabase.io` — a separate custom-SMTP task, unchanged by this decision.
+- Two Resend accounts now exist; only the `baxter.press` one is live. Future email work (decision emails, receipts) belongs in that account.
+
+**What would force reconsideration.** Outgrowing the free tier (volume, multiple domains, team seats) → consolidate onto a paid Resend plan, at which point the two accounts could merge and the torontocreatives account be closed. A move to a different ESP would re-point `RESEND_*` env vars and the DNS records.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.

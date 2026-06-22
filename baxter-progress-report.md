@@ -18,6 +18,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 
 **Update (Slice 5):** **Slice 5 (ceremonial submission flow) is shipped and verified live in production** (commits `08f1979` + `7ce25f0`; decision `D-016`). Submission is a declaration, not a form: editing lives in the workspace, declaration on a read-only Review page with one action; `draft→in_review` via the state machine + audit event; "Submitted." poster and "Under review" state; admin notification via Inngest → Resend (now `Delivered` to `benjamin@benjamingibson.ca`). No migration. Two operational notes surfaced: Inngest sync is **manual** (no Vercel integration — `D-017`), and email currently sends from the verified `resend.torontocreatives.com` (branded `baxter.press` sender is a follow-up). Details in section 16.
 
+**Update (branded email sender):** **The branded `baxter.press` email sender is live and verified in production.** `baxter.press` is verified in a **new, dedicated Resend account** (the free tier allows one domain per account, and the existing account already held `resend.torontocreatives.com`); DKIM + SPF DNS records were added in GoDaddy; Vercel now carries the new account's `RESEND_API_KEY` and `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>`. An end-to-end production submission confirmed the admin notification **Delivered** to `benjamin@benjamingibson.ca` **from `notifications@baxter.press`**. No code change (the integration point was already in place). Details in section 17. This closes outstanding item 12.
+
 ---
 
 ## 2. The production 500 — diagnosed and fixed (commit `b09392d`)
@@ -168,7 +170,7 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 9. **Slice 4 (preview & cover generation) — DONE.** Shipped and verified in production (section 15).
 10. **Preview-pipeline follow-ups (post-Slice-4)** — orphaned Cloudflare images / clean-bucket objects on *publication deletion* aren't swept (only re-render sweeps); creator cover-override is deferred; preview-generation could later move to its own Inngest function for independent retries (currently an isolated, catch-and-log step).
 11. **Slice 5 (ceremonial submission flow) — DONE.** Shipped and verified in production, admin email included (section 16).
-12. **Branded `baxter.press` email sender** — the admin notification currently sends from the verified `resend.torontocreatives.com`. `baxter.press` is purchased (GoDaddy); verify it in Resend (DNS) and set `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>` before any customer-facing email (later slices). Supersedes the generic "custom domain" item for email purposes.
+12. **Branded `baxter.press` email sender — DONE.** Verified in a dedicated Resend account, DNS in GoDaddy, Vercel env updated, and a production submission confirmed delivery from `notifications@baxter.press` (section 17). Note: this only covers **transactional/admin** email via Resend. Supabase **auth** emails (confirm-signup, etc.) still send from `noreply@mail.app.supabase.io` and need custom SMTP separately — item 2 remains.
 13. **Inngest sync is manual (operational policy, `D-017`)** — the Vercel-native Inngest integration is intentionally NOT installed. **After any deploy that adds a NEW Inngest function, Resync the app** (Inngest → Apps → baxter-publishing → Resync). Folded into per-slice verification.
 
 ---
@@ -181,11 +183,12 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
 - Migrations applied to prod: `0000_initial_schema.sql`, `0001_rls_and_auth_trigger.sql`, `0002_role_default_creator.sql`, `0003_preflight_status.sql`. (`0003` was applied during the smoke test via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied; see section 14.) **Slice 4 added no migration** (reuses the existing `assets` table + `publications.cover_asset_id`).
-- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_TOKEN`, `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (Slice 4), `RESEND_API_KEY`, `RESEND_FROM_ADDRESS` (currently `…@resend.torontocreatives.com`), `ADMIN_NOTIFICATION_EMAIL` = `benjamin@benjamingibson.ca` (Slice 5). All Sensitive, Production + Preview.
+- Vercel env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_QUARANTINE`, `R2_BUCKET_ARTIFACTS`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_TOKEN`, `CLOUDFLARE_IMAGES_ACCOUNT_HASH` (Slice 4), `RESEND_API_KEY` (now the **dedicated baxter.press Resend account's** key — replaced the torontocreatives key), `RESEND_FROM_ADDRESS` = `Baxter <notifications@baxter.press>`, `ADMIN_NOTIFICATION_EMAIL` = `benjamin@benjamingibson.ca` (Slice 5). All Sensitive, Production + Preview.
 - **Inngest sync is MANUAL (`D-017`).** The Vercel-native Inngest integration is not installed (it risks re-provisioning the working `INNGEST_*` keys / a separate project). **Runbook: after deploying a slice that adds a NEW Inngest function, Resync** (Inngest → Apps → baxter-publishing → Resync) or the new function won't register. This is exactly what silently broke the Slice 5 email until resynced.
 - R2 buckets: `baxter-quarantine` (CORS allowing `PUT` from the production origin), `baxter-clean` (no CORS — server-side access only).
 - Inngest Cloud app `baxter-publishing` synced against the production endpoint.
 - Cloudflare Images: enabled on account `502673a122d7ad2ba3a5ad4f71f5b07e` (Images & Stream $0/mo plan); account hash `kuZbDeDRpro6gw7ZktB7TQ`; named variants `cover` (1200w), `grid` (600w), `full` (1600w), all `fit: scale-down`. Public delivery via `imagedelivery.net`.
+- **Resend (transactional email): two accounts.** The **authoritative** account for Baxter is the **dedicated `baxter.press` account** (created via GitHub login; free tier; domain `baxter.press` **Verified**, region `us-east-1`/North Virginia; its key is the one in Vercel's `RESEND_API_KEY`). The older account (holding `resend.torontocreatives.com`) is **no longer used** by this project — its key was replaced. Free tier = one verified domain per account, which is why a second account exists. Sends originate from `notifications@baxter.press`.
 
 ### Commit timeline this session
 
@@ -424,4 +427,55 @@ The admin email didn't arrive at first. Diagnosis ruled out, in order: not deliv
 
 ### Follow-ups (in section 9)
 
-Branded `baxter.press` email sender (currently TC domain); manual Inngest resync guardrail; test-data cleanup (publications `3b1744ea`, `3c617cd2`, `64c5c2e4` + their R2/Cloudflare objects).
+Branded `baxter.press` email sender — **DONE** (section 17). Manual Inngest resync guardrail (`D-017`). Slice 5 test-data cleanup (publications `3b1744ea`, `3c617cd2`, `64c5c2e4`) was completed; the DB is back to zero publications.
+
+---
+
+## 17. Branded `baxter.press` email sender (shipped & verified)
+
+The admin notification now sends from the brand domain. **No application code changed** — the Resend integration point (`apps/web/lib/email/resend.ts`, reads `RESEND_API_KEY` / `RESEND_FROM_ADDRESS`) was already in place from Slice 5; this was purely an external-service + env-var change, analogous to standing up Cloudflare Images in Slice 4.
+
+### The account constraint (why a second Resend account)
+
+Resend's free tier allows **one verified domain per account**, and the existing account already held `resend.torontocreatives.com`. Adding `baxter.press` to it (and the "Create Team" path) both hit a paywall. Rather than pay, a **new, dedicated Resend account** was created (GitHub login) to own `baxter.press`. That account is now the **authoritative** sender for Baxter; the older account is no longer used by this project. (See section 10 → Resend.)
+
+### Setup steps performed
+
+1. **Resend → Add domain `baxter.press`** (region North Virginia / `us-east-1`) in the new account → "Manual setup" revealed the DNS records.
+2. **GoDaddy → DNS Management for `baxter.press`** → added three records (Save All Records → "Success"):
+
+   | Type | Name | Value | Priority |
+   |---|---|---|---|
+   | TXT | `resend._domainkey` | the DKIM public key (`p=MIGfMA0GCSqGSIb3…wIDAQAB`, a 1024-bit RSA key — validated as 162 DER bytes before entry) | — |
+   | MX | `send` | `feedback-smtp.us-east-1.amazonses.com` | 10 |
+   | TXT | `send` | `v=spf1 include:amazonses.com ~all` | — |
+
+   GoDaddy already had a default `_dmarc` TXT record, so **no DMARC record was needed**, and there were no conflicting SPF/DKIM/MX records. (Resend's underlying transport is Amazon SES, hence the `amazonses.com` SPF include and SES feedback MX.)
+3. **Resend verification** flipped `baxter.press` to **Verified** ("Your domain is ready to send emails") within minutes — provider auto-detected as GoDaddy.
+4. **Vercel env vars** (Production): `RESEND_API_KEY` replaced with the **new account's** key (pasted by the operator — never handled in-session), and `RESEND_FROM_ADDRESS` set to `Baxter <notifications@baxter.press>`. `ADMIN_NOTIFICATION_EMAIL` unchanged (`benjamin@benjamingibson.ca`). Redeployed.
+
+**No Inngest resync was required** — no new function was added; the existing `publication-submitted-notify` is invoked at the stable production `/api/inngest` URL, so the redeploy's new env vars take effect automatically (consistent with `D-017`: resync is only needed for *new* functions).
+
+### Production verification (executed via the Chrome extension)
+
+A full end-to-end submission was run against production: created an A5 Zine "Baxter Sender Test", saved marketplace (description + $12.00), uploaded a clean 8-page A5 PDF → preflight **passed** (page count 8, cover/previews rendered) → read-only Review (eligibility green) → **Submit for review** → `in_review` + "Submitted." poster. The Resend **Emails** log then showed, within seconds:
+
+- **From:** `notifications@baxter.press`
+- **To:** `benjamin@benjamingibson.ca`
+- **Subject:** "Submitted for review: Baxter Sender Test"
+- **Events:** Sent → **Delivered**
+- (Message id `7da08ee2-fe34-4a39-bd08-2d…`)
+
+A Delivered status is itself proof the branded sender is correctly configured — Resend rejects any send whose From-domain isn't verified in the account, and `baxter.press` is the only verified domain there. (The Resend "Preview" pane shows empty only because `sendAdminEmail` sends plain `text`, not HTML — expected.)
+
+### Test-data cleanup
+
+The verification publication **"Baxter Sender Test"** (`1296dcd4-6fca-4a12-8c12-b7b05e5e9d5f`) was deleted from prod via the Supabase SQL editor (`cover_asset_id` nulled, then `DELETE` — cascading to its artifact, 6 `preview_page` assets, and `publication_events`); a follow-up count confirmed **zero publications remain**. Orphaned storage objects left for manual purge (the Cloudflare dashboard wedges browser automation):
+
+- **R2 `baxter-clean`** — prefix `publications/1296dcd4-6fca-4a12-8c12-b7b05e5e9d5f/` (and check `baxter-quarantine` for the same prefix).
+- **Cloudflare Images** — 6 ids: `56ca6a5f-8867-46df-9338-9aafd9317c00`, `663f352b-6b07-4dbb-8756-9ef1c0c1cc00`, `728eca90-3a4c-4427-dc12-80ecde773c00`, `9965c977-88e5-43c7-08c5-686172654a00`, `7f0a6aff-bd94-4377-71d3-6291db844a00`, `1b4c2641-e791-4b31-0979-17c23a8e0f00`.
+
+### Residual
+
+- **Supabase auth emails** (confirm-signup, magic link, etc.) still send from `noreply@mail.app.supabase.io` — a **separate** custom-SMTP task (outstanding item 2), independent of this Resend work.
+- The old torontocreatives Resend account/key is now dead weight (harmless); can be removed later.
