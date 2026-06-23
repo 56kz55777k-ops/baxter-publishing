@@ -1,6 +1,6 @@
 # Baxter Publishing — Progress Report
 
-**Date:** 2026-06-05
+**Date:** 2026-06-05 · **Updated:** 2026-06-23 — current through Slice 5, the branded `baxter.press` email sender, and Supabase auth SMTP. **Slices 1–5 are closed; next milestone is Slice 6 (admin review queue).**
 **From:** Claude Code (paired with Ben Gibson)
 **For:** ChatGPT — review
 **Builds on:** `baxter-claude-code-handoff.md` (Perplexity Computer's handoff) and the prior progress reports.
@@ -178,7 +178,7 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 ## 10. Git and deployment state
 
 - Repo: `https://github.com/56kz55777k-ops/baxter-publishing`, branch `main`.
-- `origin/main` is at the latest commit on `main` (through Slice 4: `808b4ed`, plus subsequent doc updates). Local is in sync.
+- `origin/main` is at the latest commit on `main` — through Slice 5 (`08f1979` + `7ce25f0`), then the branded-email and auth-SMTP doc updates (`c6c6ceb`, `937a9fa`; current HEAD). Local is in sync. The branded `baxter.press` sender and Supabase auth SMTP were external-service + env changes — no code commits.
 - Working copy lives at `~/Desktop/baxter-app` (moved from `~/Downloads/baxter-app` after Downloads got cleaned). The repo was re-cloned from origin mid-session after the original folder was inadvertently deleted; all pushed history is intact.
 - Vercel project `baxter-publishing-web`, production URL `https://baxter-publishing-web.vercel.app`. The duplicate `project-w4oob` was removed earlier in the session.
 - Supabase project `qnqbkihndxppommgfrxd`.
@@ -190,7 +190,7 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 - Cloudflare Images: enabled on account `502673a122d7ad2ba3a5ad4f71f5b07e` (Images & Stream $0/mo plan); account hash `kuZbDeDRpro6gw7ZktB7TQ`; named variants `cover` (1200w), `grid` (600w), `full` (1600w), all `fit: scale-down`. Public delivery via `imagedelivery.net`.
 - **Resend (transactional email): two accounts.** The **authoritative** account for Baxter is the **dedicated `baxter.press` account** (created via GitHub login; free tier; domain `baxter.press` **Verified**, region `us-east-1`/North Virginia; its key is the one in Vercel's `RESEND_API_KEY`). The older account (holding `resend.torontocreatives.com`) is **no longer used** by this project — its key was replaced. Free tier = one verified domain per account, which is why a second account exists. Sends originate from `notifications@baxter.press`.
 
-### Commit timeline this session
+### Commit timeline (first session — through Slice 4)
 
 | SHA | Message |
 |---|---|
@@ -217,6 +217,8 @@ Second R2 bucket `baxter-clean` created. No CORS or token configuration needed �
 | `808b4ed` | feat(slice-4): show cover + previews on the publication page |
 
 Note: `07aa5d8` was authored with a placeholder identity because the fresh clone didn't have git config set at commit time. Future commits will use the correct `Ben Gibson <benjamin@benjamingibson.ca>` identity (global git config has since been set). The one outlier is cosmetic — content is correct.
+
+**Since (later sessions):** Slice 5 shipped (`08f1979` ceremonial submission flow + admin notification; `7ce25f0` email from-address fix). The branded `baxter.press` email sender and Supabase auth SMTP added no application code — they were external-service + env changes, recorded in docs commits `c6c6ceb` (branded sender) and `937a9fa` (auth SMTP). `main` HEAD is `937a9fa`. (Intervening per-slice docs commits — Slice 3b review, Slice 5 plan/decisions — are omitted from the table above.)
 
 ---
 
@@ -254,22 +256,19 @@ Four decisions worth taking before writing the worker. Especially the second, wh
 
 ---
 
-## 12. Recommended next steps
+## 12. Recommended next steps (archived)
 
-1. **Decide the four open questions in section 11** — especially the result-UI tone.
-2. **Open a fresh chat for Slice 3b** seeded with this report. Slice 3b is a clean milestone boundary and the result-UI design benefits from a clean context.
-3. **In that chat:** emit the Inngest event from the artifact-register API, replace the stub function body with real preflight logic, write the result UI, and verify end-to-end with the test PDFs.
-4. **Custom SMTP** can wait until shortly before public launch, but it's small and worth doing early so the rest of the email surfaces inherit a Baxter sender from the start.
+> **Archived — superseded.** This section planned the Slice 3b build (decide the four design questions, open a fresh chat, write the preflight worker + result UI). All of it shipped: Slice 3b (sections 13–14), Slice 4 (section 15), Slice 5 (section 16), the branded `baxter.press` email sender (section 17), and Supabase auth SMTP (section 18 — which closed the "Custom SMTP" item this section originally flagged). **Slices 1–5 are closed; the next milestone is Slice 6 — the admin review queue.**
 
 ---
 
-## 13. Slice 3b — shipped in code (pending production migration / deploy / smoke test)
+## 13. Slice 3b — shipped & production-verified
 
-Implemented and pushed as commit **`8b9895b`**. **Status: in code on `main`, not yet live.** Go-live is gated on migration `0003`, a deploy, and the smoke test in section 14.
+Implemented and pushed as commit **`8b9895b`**. **Status: LIVE in production** — migration `0003` applied, deployed, and the section 14 smoke test passed (all five preflight paths plus the retention sweep). The as-built design is recorded below; the earlier "pending go-live" framing has been retired now that it's verified.
 
 ### Schema — migration `0003_preflight_status.sql` (REQUIRED before/with deploy)
 
-Hand-written, consistent with `0001`/`0002`. **Must be applied to prod before or with the deploy that includes `8b9895b`** — the create action and the publication detail query reference the new columns; an un-migrated prod will error.
+Hand-written, consistent with `0001`/`0002`. **Applied to prod** during the section 14 smoke test (via the Supabase SQL editor — it had been missed before the deploy, which surfaced as a create-publication failure until applied). The create action and the publication detail query reference these columns.
 
 - `preflight_status` enum on `artifacts` — values **`pending | passed | failed`** (default `pending`). Written **server-side only** (the worker, via the service-role client); there is deliberately no client RLS UPDATE policy on artifacts, so a creator cannot set their own file to `passed` and bypass the check.
 - `publications.format_preset_id` (text) — the `@baxter/domain` preset id, so the worker resolves page-count bounds and the multiple-of-four rule without inferring from trim dimensions. Existing rows backfilled by trim dimensions.
@@ -302,7 +301,7 @@ The creator encounters situations, never internal status words.
 
 - **Typecheck green** across all five packages.
 - **Preflight harness 6/6** (`apps/web/test/preflight.verify.ts`, run with `node apps/web/test/preflight.verify.ts`): clean pass, wrong-dimensions blocker, multiple-of-four blocker, page-count-bounds blocker, missing-bleed warning, and corrupt-file graceful failure — all against the real inspector + evaluator on generated PDFs.
-- Not yet exercised against R2 / Inngest / Supabase in production — that is the section 14 smoke test.
+- Exercised against R2 / Inngest / Supabase in production and verified end-to-end (section 14).
 
 ### Known calibration gaps
 
@@ -314,7 +313,7 @@ The creator encounters situations, never internal status words.
 
 ### Pre-existing ESLint 9 config issue (separate from Slice 3b)
 
-`npm run lint` fails repo-wide: ESLint 9.39.4 is installed (already in the committed lockfile at `55ed70e`) but the packages still use the old `.eslintrc.json` format that ESLint 9 dropped. **Not caused by Slice 3b**, and production builds (which use `next build`) are unaffected. Tracked as a separate cleanup (migrate to flat config).
+`npm run lint` failed repo-wide at the time: ESLint 9.39.4 was installed (in the committed lockfile at `55ed70e`) but the packages still used the old `.eslintrc.json` format that ESLint 9 dropped. **Not caused by Slice 3b**, and production builds (which use `next build`) were unaffected. **Resolved** — migrated repo-wide to flat config (commit `aa9cd84`; see section 9, item 7).
 
 ---
 
