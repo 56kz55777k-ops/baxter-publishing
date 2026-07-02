@@ -1,4 +1,4 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2Client } from './client';
 
@@ -22,5 +22,26 @@ export async function presignedPutUrl(opts: {
   });
   return getSignedUrl(client, command, {
     expiresIn: opts.expiresInSeconds ?? 900,
+  });
+}
+
+/**
+ * Mint a time-limited GET URL for reading a private R2 object — used to let an
+ * admin download the clean, print-ready PDF from the review desk. The clean
+ * bucket has no public access; this is the only read path. Short-lived by
+ * default (5 minutes) since it's generated on demand per page view.
+ */
+export async function presignedGetUrl(opts: {
+  bucket: string;
+  key: string;
+  expiresInSeconds?: number;
+}) {
+  const client = r2Client();
+  const command = new GetObjectCommand({
+    Bucket: opts.bucket,
+    Key: opts.key,
+  });
+  return getSignedUrl(client, command, {
+    expiresIn: opts.expiresInSeconds ?? 300,
   });
 }

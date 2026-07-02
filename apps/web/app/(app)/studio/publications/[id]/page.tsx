@@ -70,7 +70,7 @@ export default async function PublicationDetailPage({
   const { data: publication } = await supabase
     .from('publications')
     .select(
-      'id, title, subtitle, description, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, cover_asset_id, price_minor, currency, edition_size, submitted_at'
+      'id, title, subtitle, description, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, cover_asset_id, price_minor, currency, edition_size, submitted_at, published_at'
     )
     .eq('id', id)
     .maybeSingle();
@@ -80,6 +80,26 @@ export default async function PublicationDetailPage({
   const status = publication.status as keyof typeof STATUS_LABEL;
   const editable = status === 'draft' || status === 'revisions';
   const currency = publication.currency ?? 'CAD';
+
+  // The editor's note (D-020/D-021) — read from the decision event for the
+  // current state. The creator may read events on their own publications (RLS).
+  let editorNote: string | null = null;
+  if (status === 'revisions' || status === 'published') {
+    const { data: ev } = await supabase
+      .from('publication_events')
+      .select('payload')
+      .eq('publication_id', id)
+      .eq('to_status', status)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const payload =
+      ev?.payload && typeof ev.payload === 'object'
+        ? (ev.payload as Record<string, unknown>)
+        : {};
+    const n = typeof payload.note === 'string' ? payload.note.trim() : '';
+    editorNote = n || null;
+  }
 
   // --- The "Submitted." poster (D-016) — the moment right after submitting ---
   if (status === 'in_review' && submitted) {
@@ -189,6 +209,35 @@ export default async function PublicationDetailPage({
           {publication.submitted_at && (
             <p className="metadata text-ink-faint mt-1">
               Submitted {formatDate(publication.submitted_at)}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Returned with a note (D-019/D-021). The editor's own words, set as a
+          letter — Editorial Voice, not a status banner. The work stays editable
+          below so the creator can revise and resubmit. */}
+      {status === 'revisions' && editorNote && (
+        <section className="mt-12 pt-10 border-t border-rule">
+          <p className="metadata text-ink-faint mb-5">From the editor</p>
+          <p className="font-serif text-lede text-ink leading-relaxed whitespace-pre-line max-w-measure">
+            {editorNote}
+          </p>
+        </section>
+      )}
+
+      {/* Published (D-021, Institutional Voice) — a plain statement of fact. */}
+      {status === 'published' && (
+        <section className="mt-12 pt-10 border-t border-rule">
+          <p className="font-serif text-body text-ink">Published</p>
+          {publication.published_at && (
+            <p className="metadata text-ink-faint mt-3">
+              Published {formatDate(publication.published_at)}
+            </p>
+          )}
+          {editorNote && (
+            <p className="font-serif text-body text-ink-soft leading-relaxed whitespace-pre-line max-w-measure mt-6">
+              {editorNote}
             </p>
           )}
         </section>

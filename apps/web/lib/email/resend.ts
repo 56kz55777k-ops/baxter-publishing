@@ -18,12 +18,22 @@ export interface AdminEmail {
   text: string;
 }
 
-/** Send a plain-text notification to the Baxter admin address. */
-export async function sendAdminEmail(email: AdminEmail): Promise<{ sent: boolean }> {
+export interface Email {
+  to: string;
+  subject: string;
+  text: string;
+}
+
+/**
+ * Send a plain-text email to an arbitrary recipient. Same no-op-without-a-key
+ * behaviour as `sendAdminEmail`. Used for creator decision emails (Slice 6),
+ * where the recipient is the creator, not the Baxter admin.
+ */
+export async function sendEmail(email: Email): Promise<{ sent: boolean }> {
   if (!RESEND_API_KEY) {
-    console.warn('sendAdminEmail: RESEND_API_KEY not set — skipping send', {
+    console.warn('sendEmail: RESEND_API_KEY not set — skipping send', {
       subject: email.subject,
-      to: ADMIN_TO,
+      to: email.to,
     });
     return { sent: false };
   }
@@ -36,7 +46,7 @@ export async function sendAdminEmail(email: AdminEmail): Promise<{ sent: boolean
     },
     body: JSON.stringify({
       from: FROM,
-      to: ADMIN_TO,
+      to: email.to,
       subject: email.subject,
       text: email.text,
     }),
@@ -46,4 +56,9 @@ export async function sendAdminEmail(email: AdminEmail): Promise<{ sent: boolean
     throw new Error(`Resend send failed (${res.status}): ${body}`);
   }
   return { sent: true };
+}
+
+/** Send a plain-text notification to the Baxter admin address. */
+export async function sendAdminEmail(email: AdminEmail): Promise<{ sent: boolean }> {
+  return sendEmail({ to: ADMIN_TO, subject: email.subject, text: email.text });
 }

@@ -46,6 +46,19 @@ The tone should feel composed, respectful, and quietly warm — not corporate, p
 
 The last one is what we're after. It treats the reader as an adult, takes the moment seriously, and still leaves a hand on the shoulder.
 
+### An editorial office, not a moderation platform
+
+Baxter is a publisher. The review process is an editor making editorial decisions — not an operator enforcing rules against violations.
+
+This distinction shapes the admin experience, the creator experience, and the copy:
+
+- The editor **decides**; they do not **moderate**, **flag**, **approve/reject**, **ban**, or **enforce**. A publication is *published* or *returned with notes* — never "accepted" or "rejected" against a policy.
+- The creator is a **contributor to a programme**, not a user whose content is under review by a system. When work is returned, it is an editor's judgement about the work, offered to help it become publishable — not a compliance failure.
+- Copy avoids the entire moderation lexicon: *violation, flagged, rejected, denied, approved, compliant, permitted, allowed, terms, enforce, appeal, strike.* Where a moderation platform would say "This content was rejected for violating our guidelines," Baxter says "Baxter isn't able to publish this edition" and the editor explains why, in their own words.
+- Even internal surfaces carry the ethos: the admin queue is an **editor's desk**, not a moderation console. Reason codes organise editorial operation; they are never framed (even internally) as rule-enforcement categories.
+
+The product should quietly reinforce, at every turn, that a creator is engaging with an independent editorial office — people who publish work they believe in — rather than a platform that polices submissions.
+
 ---
 
 ## The two questions every screen must answer

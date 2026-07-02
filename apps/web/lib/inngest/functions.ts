@@ -5,7 +5,7 @@ import { getObjectBytes, copyObject, deleteObject } from '@/lib/r2/objects';
 import { inspectPdf } from '@/lib/pdf/inspect';
 import { renderPreviewPages } from '@/lib/pdf/render';
 import { uploadImage, deleteImage } from '@/lib/cloudflare/images';
-import { sendAdminEmail } from '@/lib/email/resend';
+import { sendAdminEmail, sendEmail } from '@/lib/email/resend';
 import {
   evaluatePreflight,
   getFormatPreset,
@@ -361,4 +361,69 @@ const submittedNotify = inngest.createFunction(
   }
 );
 
-export const functions = [preflight, submittedNotify];
+/**
+ * Decision notification (Slice 6 / D-019–D-021).
+ *
+ * Triggered when an editor publishes a submission or returns it for revisions.
+ * Writes to the creator in two voices (D-021): an Institutional frame (Baxter
+ * stating what is true) around the editor's own written note (Editorial Voice).
+ * The note arrives verbatim — never templated, never assembled from reason
+ * codes (D-020). Isolated from the decision itself: the transition already
+ * committed; a send failure only retries the email.
+ *
+ * NOTE (D-017): this is a new Inngest function. After deploying it, the app must
+ * be Resynced in Inngest Cloud or it will not register — the exact failure that
+ * silently broke the Slice 5 email.
+ */
+const decidedNotify = inngest.createFunction(
+  { id: 'publication-decided-notify', retries: 3 },
+  { event: 'publication/decided' },
+  async ({ event }) => {
+    const { publicationId, decision, note } = event.data as {
+      publicationId: string;
+      decision: 'publish' | 'revise';
+      note: string | null;
+    };
+    const db = createAdminClient();
+
+    const { data: pub } = await db
+      .from('publications')
+      .select('id, title, creator_id')
+      .eq('id', publicationId)
+      .maybeSingle();
+    if (!pub) return { ok: false, reason: 'publication not found' };
+
+    const { data: creator } = await db
+      .from('users')
+      .select('email')
+      .eq('id', pub.creator_id)
+      .maybeSingle();
+    if (!creator?.email) return { ok: false, reason: 'creator email not found' };
+
+    const trimmedNote = note?.trim() || null;
+
+    // Two voices (D-021): Institutional frame, Editorial note verbatim.
+    let subject: string;
+    let text: string;
+    if (decision === 'publish') {
+      subject = `Published: ${pub.title}`;
+      text = trimmedNote
+        ? `${pub.title} is now published.\n\n${trimmedNote}`
+        : `${pub.title} is now published.`;
+    } else {
+      subject = `A note from Baxter on ${pub.title}`;
+      text = [
+        `Baxter has read ${pub.title}.`,
+        '',
+        trimmedNote ?? '',
+        '',
+        "Edit and resubmit when you're ready.",
+      ].join('\n');
+    }
+
+    const { sent } = await sendEmail({ to: creator.email, subject, text });
+    return { ok: true, emailed: sent };
+  }
+);
+
+export const functions = [preflight, submittedNotify, decidedNotify];
