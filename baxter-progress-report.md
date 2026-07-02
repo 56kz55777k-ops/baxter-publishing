@@ -1,6 +1,6 @@
 # Baxter Publishing — Progress Report
 
-**Date:** 2026-06-05 · **Updated:** 2026-06-23 — current through Slice 5, the branded `baxter.press` email sender, and Supabase auth SMTP. **Slices 1–5 are closed; next milestone is Slice 6 (admin review queue).**
+**Date:** 2026-06-05 · **Updated:** 2026-07-02 — Slice 6 (admin review queue) shipped and production-verified end to end. **Slices 1–6 are closed; next milestone is Slice 7 (marketplace shell).**
 **From:** Claude Code (paired with Ben Gibson)
 **For:** ChatGPT — review
 **Builds on:** `baxter-claude-code-handoff.md` (Perplexity Computer's handoff) and the prior progress reports.
@@ -19,6 +19,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 **Update (Slice 5):** **Slice 5 (ceremonial submission flow) is shipped and verified live in production** (commits `08f1979` + `7ce25f0`; decision `D-016`). Submission is a declaration, not a form: editing lives in the workspace, declaration on a read-only Review page with one action; `draft→in_review` via the state machine + audit event; "Submitted." poster and "Under review" state; admin notification via Inngest → Resend (now `Delivered` to `benjamin@benjamingibson.ca`). No migration. Two operational notes surfaced: Inngest sync is **manual** (no Vercel integration — `D-017`), and email currently sends from the verified `resend.torontocreatives.com` (branded `baxter.press` sender is a follow-up). Details in section 16.
 
 **Update (branded email sender):** **The branded `baxter.press` email sender is live and verified in production.** `baxter.press` is verified in a **new, dedicated Resend account** (the free tier allows one domain per account, and the existing account already held `resend.torontocreatives.com`); DKIM + SPF DNS records were added in GoDaddy; Vercel now carries the new account's `RESEND_API_KEY` and `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>`. An end-to-end production submission confirmed the admin notification **Delivered** to `benjamin@benjamingibson.ca` **from `notifications@baxter.press`**. No code change (the integration point was already in place). Details in section 17. This closes outstanding item 12.
+
+**Update (Slice 6):** **Slice 6 (admin review queue) is shipped and production-verified end to end** (commit `bd17ab1`; decisions `D-019`, `D-020`, `D-021`). The editorial desk (`/admin`, role-gated), the review page (`/admin/[id]`), the writing-first decision desk (editorial note primary; internal-only reason codes), the two decision actions (Publish / Request revisions — no reject state), the two-voice creator states + decision email, and a new `publication-decided-notify` Inngest function all shipped. **No migration** (reason codes ride in `publication_events.payload`). A full production smoke test passed: create → submit → desk → request revisions → creator sees the editor's note → resubmit → publish → creator sees "Published", with DB rows and the revision email confirmed. Two foundational principles were locked alongside the build — *the editor writes, the software records* (`D-020`) and *two voices: Institutional and Editorial* (`D-021`) — plus a fourth Constitution principle, *an editorial office, not a moderation platform*. Details in section 19.
 
 ---
 
@@ -498,3 +500,44 @@ Resolves outstanding item 2. Supabase's authentication emails (magic link, confi
 **Notes:**
 - Reuses the full-access Baxter key (operator's choice over a dedicated SMTP key) — one key now serves both the app's transactional sends and Supabase's auth SMTP.
 - The Slice 2 confirm-signup HTML template (`infrastructure/supabase/email-templates/confirm-signup.html`, pasted into Supabase) is unaffected — only the transport/sender changed. The other stock templates (magic link, recovery, etc.) now at least send from the Baxter domain; tailoring their copy to the Constitution is a separate, optional polish.
+
+---
+
+## 19. Slice 6 — Admin review queue (shipped & production-verified)
+
+The other half of the submission ceremony: an editor reads submitted work and decides; the creator learns the outcome. **Shipped as commit `bd17ab1` and verified live in production.** Decisions locked first as `D-019`/`D-020`/`D-021` (commit `954a36d`).
+
+### The locked decisions (foundational, not just Slice 6)
+
+- **`D-019` — state model unchanged.** No `approved`, no `rejected`, no migration. Two admin actions on an `in_review` publication: **Publish** (`in_review → published`) and **Request revisions** (`in_review → revisions`). Declining an edition is expressed as revisions + a written note, never a terminal reject state. Publishing is iterative, not transactional.
+- **`D-020` — the editor writes, the software records.** Editorial feedback is always hand-written by the editor; reason codes are internal-only metadata (analytics/operational), never shown to creators, never templated into copy. The review surface **prioritises writing over clicking** — the note is the primary element; codes are a quiet secondary control.
+- **`D-021` — two voices.** *Institutional Voice* states facts (calm, declarative — "Under review", "Published"); *Editorial Voice* is the editor's interpretation (the only place interpretation lives). Recorded in the Editorial Constitution; extends to all future outbound copy. A fourth Constitution principle was also added: **an editorial office, not a moderation platform** — the editor decides, never moderates/flags/rejects; the moderation lexicon is banned.
+
+### What shipped
+
+- **Reason-code vocabulary** — `packages/domain/src/reason-codes.ts`, internal-only, three groups (Production / Content and metadata / Editorial fit). No "violation" language by design.
+- **Admin gate + shell** — `apps/web/app/(admin)/layout.tsx`: role-gated ("editorial desk"). A non-admin who knows the URL gets a **404** (not a redirect), revealing nothing. `lib/auth/admin-guard.ts` re-verifies the role on every admin page and action (defense in depth — a layout is not a security boundary for server actions).
+- **The desk** — `/admin`: queue of `in_review` work, **oldest submitted first** (a queue, not a feed). Cover thumbnail, title, creator + handle, category, submitted date. Composed empty state.
+- **The review page** — `/admin/[id]`: work-led (cover + previews), quiet metadata, creator identity, a signed download link to the print-ready PDF (`presignedGetUrl` on the clean bucket), preflight notes, and the decision desk.
+- **The decision desk** (`review-desk.tsx`, client) — writing-first: a large serif note field is the primary element; reason codes are tucked into a collapsed "For Baxter's records" marked *"the creator never sees these"*. Two actions: Publish · Request revisions. Note required to return, optional to publish.
+- **The action** (`decidePublication`) — re-verifies admin, checks the pure state machine, writes status (+`published_at` on publish) and an insert-only `publication_events` row (`payload = {action, reasonCodes, note}`) via the service-role client, emits `publication/decided`.
+- **Decision email** — new `publication-decided-notify` Inngest function → two-voice creator email (Institutional frame around the editor's verbatim note). Publish: subject `Published: <title>`, body `<title> is now published.` Revision: subject `A note from Baxter on <title>`, body frames the editor's note + `Edit and resubmit when you're ready.`
+- **Creator-facing states** — workspace shows **"From the editor"** (Editorial Voice, note verbatim) on `revisions` with the work editable/resubmittable, and a quiet **"Published · <date>"** (Institutional Voice) on `published`. Reason codes never appear.
+- **No migration** (`D-019`) — reason codes + note live in the existing `publication_events.payload` jsonb.
+
+### Verification
+
+- **Typecheck, lint, `next build`** all green before deploy.
+- **Deploy** — pushed to `main`; Vercel built `bd17ab1` successfully as the live production deployment.
+- **Inngest resync (`D-017`)** — after deploy, re-registered the app; `{"modified": true}` confirmed the new `publication-decided-notify` function registered (2 → 3 functions). This is the mandatory manual step whenever a slice adds a new Inngest function.
+- **Production smoke test — PASSED end to end** (driven via the Chrome extension; DB verified in the Supabase SQL editor). Access control 404s non-admins and opens for admins; the desk lists submitted work oldest-first; the note-required guard blocks an empty return; reason codes render internal-only in three groups; **Request revisions** moved `in_review → revisions` with `payload {action: request_revisions, reasonCodes: ["page_sequence"], note}` and the creator saw the note as "From the editor" (code hidden), and the revision email **Delivered** from `notifications@baxter.press`; **resubmit** returned it to `in_review`; **Publish** (no note) moved it to `published`, set `published_at`, wrote `payload {action: publish, note: null, reasonCodes: []}`, and the creator saw the quiet "Published" state. Test data was deleted afterward (DB back to zero publications).
+
+### Notes / residuals
+
+- The **publish decision email** was not directly viewed during the smoke test: Baxter sends from the dedicated **baxter.press** Resend account, and the browser was in the **torontocreatives** account. It is the same proven `publication-decided-notify` function/account that delivered the revision email (confirmed), and the DB shows the publish decision emitted the event — so delivery is effectively certain; view it in the baxter.press account as `Published: <title>` if hard confirmation is wanted.
+- **Orphaned storage on publication delete is still not swept** (carried from Slice 4): the smoke-test publication's R2 prefix (`publications/<id>/`) and its 6 Cloudflare Images remain for manual purge. Harmless (free tier, unreferenced). A publication-deletion cleanup path is a pre-launch follow-up.
+- **Admin role is set by hand in SQL** (`update public.users set role='admin' where handle='ben-in-toronto'`) — there is no admin-granting UI in v1, by design.
+
+### Next
+
+**Slice 7 — Marketplace shell.** The public home for `published` works (which today are data-live but only visible on the creator's own `[handle]` profile). Homepage sections (hero, editor picks, new releases), the public publication page, and basic browse/search — the "most important atmosphere slice" per the Constitution. Editor's Picks (an admin-controlled flag) was deferred from Slice 6 to here.
