@@ -236,6 +236,73 @@ This is the heart of the slice (the Constitution-critical surface). The earlier 
 
 ---
 
+## D-019 · Slice 6 — publication state model: no `approved` or `rejected` state
+
+**Chosen.** The publication state machine is left exactly as shipped. Slice 6 introduces **no new states, no new enum values, no migration.** The lifecycle remains:
+
+```
+draft → in_review → published
+             ↘  revisions ↗  (editor returns work; creator edits and resubmits)
+```
+
+The admin has **two** decisions on an `in_review` publication:
+- **Publish** — `in_review → published`.
+- **Request revisions** — `in_review → revisions`, always accompanied by an editorial note.
+
+There is deliberately **no `approved` holding state** (approval *is* publishing — the two are one act) and **no `rejected` state.** When Baxter chooses not to publish an edition, the publication moves back to `revisions` with an editorial note explaining why. A permanent decline is expressed as feedback, not as a terminal machine state.
+
+**Why.** The editorial workflow should stay intentionally small and understandable. Publishing is **iterative, not transactional** — a work is either live or in conversation with the editor, never filed into a dead-end "rejected" bucket. Keeping the machine at its current four working states avoids inventing structure the business hasn't yet needed, and matches the D-016 spirit (submission is a declaration, review is a conversation). It also sidesteps the migration risk that bit Slice 3b.
+
+**Approval → marketplace.** Publish sets `published` immediately, even though the marketplace (Slice 7) doesn't exist yet. The publication is genuinely live in data; it simply has no public browse surface until Slice 7 (it can surface on the creator's own `[handle]` profile in the interim). This is a slice boundary, not a gap — no backfill needed when the marketplace lands.
+
+**What would force reconsideration.** A genuine business need to permanently turn work away *and* keep it out of the revisions loop (e.g. legal/abuse takedowns, or a curation posture where "declined" must be a durable, reportable status distinct from "in revision"). At that point a first-class `declined`/`rejected` state gets its own slice — added deliberately, with a migration, not retrofitted here.
+
+---
+
+## D-020 · Editorial feedback — the editor writes, the software records
+
+**Chosen.** A foundational separation of responsibilities that applies beyond Slice 6:
+
+- **Editorial feedback to a creator is always written manually by the editor.** It is never generated, never templated, never assembled from reason codes.
+- **Reason codes are internal-only metadata.** They are never shown to creators, never transformed into creator-facing text, and never become part of the creator experience. Their purpose is analytics, reporting, operational consistency, search/filtering, and future insight into editorial trends — nothing more.
+
+> The software records. The editor writes. Those are two different jobs.
+> The creator remembers the note. The software remembers the reason code.
+
+**Note requirements by action (V1):**
+- **Publish** — editorial note **optional** (most approvals won't carry one; publishing is its own message).
+- **Request revisions** — editorial note **required** (a revision without guidance is cruelty; the editor explains what should change).
+- **Decline an edition** (expressed as `revisions` per D-019; a future terminal decline if it ever exists) — editorial note **required** (the editor explains why Baxter isn't publishing this edition).
+
+**Admin-interface implication (binding on the build).** The review surface **prioritises writing over clicking.** The editorial note is the primary element — given real space, treated as prose, not a support-ticket field. Reason codes are a quiet, secondary metadata control (internal tags), never the centre of gravity. If a layout tradeoff arises, screen space goes to the note, not to dropdowns.
+
+**Storage.** Reason-code vocabulary lives in `@baxter/domain` (versioned in git, like format presets and preflight rules); selected code ids plus the written note are recorded in the existing `publication_events.payload` jsonb — no migration.
+
+**Why.** The creator is submitting work **to people, not to software.** Templated feedback — even well-worded — reads as automation and breaks the core illusion that matters most: that a human editor read the work. Separating the recorded metadata (codes) from the written conversation (note) lets Baxter gather operational signal without ever letting that machinery leak into what the creator reads.
+
+**What would force reconsideration.** Editorial volume so high that hand-writing every revision note becomes untenable — at which point the answer is *more editors or saved personal snippets the editor chooses to insert*, never auto-generated creator-facing copy. The principle (editor writes, software records) does not bend; only the tooling that assists the editor's writing might.
+
+---
+
+## D-021 · Two voices — Institutional Voice and Editorial Voice
+
+**Chosen.** Baxter speaks in **two distinct voices**, and the distinction is a Constitution-level principle (recorded in `docs/editorial-constitution.md`), not a Slice 6 detail.
+
+**Institutional Voice** — belongs to Baxter the platform. It communicates **facts, never opinions.** Calm, declarative, restrained, factual. Never congratulatory, apologetic, emotional, performative, or promotional. It tells the creator what is *true*.
+> "Submitted." · "Under review." · "Published." · "Baxter will review this publication within five business days."
+
+**Editorial Voice** — belongs to the editor. It is **the only place inside Baxter where interpretation exists.** It may discuss sequencing, pacing, typography, image selection, production quality, printing concerns, editorial fit, storytelling. Still restrained and composed — but unmistakably a thoughtful human editor, not customer support and not automation.
+> "The sequencing through the second half feels less resolved than the opening section. Consider whether the transition between pages twenty-two and twenty-six could be strengthened."
+> "Baxter isn't able to publish this edition. The work doesn't align with the current editorial programme. Thank you for the submission."
+
+**How they divide in the product.** System state, confirmations, notices, timing, receipts → **Institutional.** Review decisions, revision notes, decline explanations, anything carrying a human judgement about the work → **Editorial.** The existing Constitution "Never" list binds both; the Editorial Voice additionally *may* interpret, where the Institutional Voice may not.
+
+**Why.** After a creator presses *Submit for review*, the software should largely disappear — the work is sitting on an editor's desk, because that is literally what is happening. The two-voice model is what makes that true rather than theatrical: the platform states facts plainly and gets out of the way, and the one moment of interpretation sounds like a person. This reinforces the defining feeling that a creator is engaging with an **independent publisher, not a software platform** — the same way the Editorial Constitution has guided every prior slice.
+
+**What would force reconsideration.** None foreseen — this is intended as a durable, foundational characteristic. It should *extend* to future surfaces (decision emails, notifications, moderation, support, receipts) rather than be revisited; new outbound copy should be classified as Institutional or Editorial before it's written.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.

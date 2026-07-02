@@ -328,14 +328,16 @@ Following your milestone definition, here's the slice list. Each slice is ~1 day
 **Demo at end:** Walk through the full submission flow, land on the confirmation moment.
 
 ### Slice 6: Admin Review Queue (Day 6)
-- `/admin/queue` — list of submitted publications
-- Per-publication review page: previews, preflight, creator info, all metadata
-- Reason code system (controlled vocabulary) seeded
-- Actions: Approve / Request Revision / Reject
-- Creator notification email on decision
-- On approve: publication transitions to `approved`, then `published` (auto for v1)
+> **Locked by D-019, D-020, D-021** (see `decisions.md`). This section is updated to match; the original "Approve / Request Revision / Reject" + `approved` sub-state framing is superseded.
+- `/admin/*` (admin-role-gated) — queue of `in_review` publications
+- Per-publication review page: previews, preflight, creator info, all metadata — and an editorial-note field that is the primary element of the surface (writing over clicking, D-020)
+- **Two actions only (D-019): Publish · Request revisions.** No `approved` or `rejected` state; declining an edition is expressed as revisions + an editorial note. Publish sets `published` directly.
+- **Editorial note** — written by a person, in the Editorial Voice (D-021). Optional on Publish, required on Request revisions. Never templated.
+- **Reason codes** — internal-only metadata (D-020): analytics/reporting/filtering. Never shown to creators, never turned into creator-facing text. Vocabulary lives in `@baxter/domain`; selected ids + the note recorded in `publication_events.payload` (no migration).
+- Creator learns the outcome in two channels: the in-app state on their publication (Institutional Voice) and a written decision email (Editorial Voice for any note). Decision email is a NEW Inngest function → requires a manual Resync after deploy (D-017).
+- On Publish: `in_review → published` immediately. The marketplace (Slice 7) doesn't exist yet, so the work is data-live but only browsable from the creator's `[handle]` profile until then.
 
-**Demo at end:** As admin, approve a submitted publication. As creator, see it go live.
+**Demo at end:** As admin, publish a submitted publication (or return it with a written note). As creator, see it go live, or see the editor's note and resubmit.
 
 ### Slice 7: Marketplace Shell (Day 7)
 - Homepage sections: Hero, Editor Picks (admin-controlled), New Releases, Popular (stub: order by published_at for v1)

@@ -148,6 +148,26 @@ These are where the product wins or loses its tone. Each gets explicit design at
 
 The voice that runs through every string in the product.
 
+### Two voices — Institutional and Editorial
+
+Baxter speaks in two distinct voices. Every string in the product belongs to one of them. Classify before you write. *(Locked as D-021.)*
+
+**Institutional Voice** — belongs to Baxter the platform. It communicates **facts, never opinions.** Calm, declarative, restrained, factual. It states what is true and gets out of the way. It is never congratulatory, apologetic, emotional, performative, or promotional.
+
+> "Submitted." · "Under review." · "Published." · "Baxter will review this publication within five business days."
+
+This voice owns: system state, confirmations, notices, timing, receipts, error phrasing — everything the software says on its own behalf.
+
+**Editorial Voice** — belongs to the editor. It is the **only place inside Baxter where interpretation exists.** It may discuss sequencing, pacing, typography, image selection, production quality, printing concerns, editorial fit, and storytelling. It stays restrained and composed, but it unmistakably sounds like a thoughtful human editor — not customer support, and not automation.
+
+> "The sequencing through the second half feels less resolved than the opening section. Consider whether the transition between pages twenty-two and twenty-six could be strengthened."
+>
+> "Baxter isn't able to publish this edition. The work doesn't align with the current editorial programme. Thank you for the submission."
+
+This voice owns: review decisions, revision notes, decline explanations — anything carrying a human judgement about the work. It is **always written by a person, never templated or generated** (D-020).
+
+**The rule.** The "Never" list below binds both voices. The difference is interpretation: the Editorial Voice *may* interpret the work; the Institutional Voice may not — it reports only what is true. When a creator reads editorial feedback, the software should have disappeared; the work is on an editor's desk, because that is what is actually happening. New outbound copy anywhere in the product (emails, notifications, moderation, support) is classified Institutional or Editorial before it is written.
+
 ### Always
 - Plain English, short sentences
 - Present tense, declarative mood
@@ -249,8 +269,9 @@ Concretely, this doctrine adjusts a few things in the Week 1 plan:
 
 ### Slice 6 (Admin Review Queue)
 - The admin surface gets the same tonal discipline. It's the only screen where I'll allow it to look slightly more functional, but the reviewer is also part of the cultural ecosystem.
-- Reviewer notes to creators use the same voice as the rest of the product.
-- Decision emails to creators are written, not templated-feeling.
+- The review surface **prioritises writing over clicking** (D-020): the editorial note is the primary element, given real space; reason codes are quiet internal metadata, never the centre of gravity.
+- Reviewer notes to creators are the **Editorial Voice** (D-021) — written by a person, never templated or generated. Reason codes are internal-only and never surface to creators.
+- Decision emails to creators are written, not templated-feeling. Publish notes are optional; revision notes are required.
 
 ### Slice 7 (Marketplace Shell)
 - This is the most important atmosphere slice. Will likely take 1.5 days, not 1.
