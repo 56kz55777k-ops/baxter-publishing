@@ -46,6 +46,7 @@ export default async function AdminLayout({
         </Link>
         <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
           <Link href="/admin">Desk</Link>
+          <Link href="/admin/orders">Orders</Link>
           <Link href="/studio">Studio</Link>
           <form action={signOut}>
             <button

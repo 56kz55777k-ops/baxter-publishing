@@ -54,6 +54,7 @@ export default async function AppLayout({
           ) : (
             <Link href="/settings/profile">Profile</Link>
           )}
+          <Link href="/settings/payouts">Payouts</Link>
           <Link href="/settings/profile">Settings</Link>
           <form action={signOut}>
             <button

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { imageDeliveryUrl } from '@/lib/cloudflare/images';
 import { getAdminUser } from '@/lib/auth/admin-guard';
+import { stripeConfigured } from '@/lib/stripe/client';
 import { SiteHeader } from '@/components/site-header';
 import { EditorPickToggle } from './editor-pick-toggle';
 
@@ -22,7 +23,7 @@ async function loadPublication(handle: string, slug: string) {
   const supabase = await createClient();
   const { data: creator } = await supabase
     .from('users')
-    .select('id, handle, display_name')
+    .select('id, handle, display_name, stripe_charges_enabled')
     .eq('handle', handle)
     .maybeSingle();
   if (!creator) return null;
@@ -116,6 +117,19 @@ export default async function PublicationPage({
   // Admin sees a quiet Editor's Pick control; the public never does.
   const admin = await getAdminUser();
 
+  // Buyable when Stripe is live, the creator can receive payouts, there's a
+  // price, and the viewer isn't the creator (you can't buy your own work).
+  const {
+    data: { user: viewer },
+  } = await supabase.auth.getUser();
+  const buyable =
+    stripeConfigured() &&
+    Boolean(creator.stripe_charges_enabled) &&
+    publication.price_minor !== null &&
+    publication.price_minor !== undefined &&
+    viewer?.id !== creator.id;
+  const buyHref = `/${encodeURIComponent(creator.handle)}/${encodeURIComponent(publication.slug)}/buy`;
+
   return (
     <main className="min-h-screen">
       <SiteHeader />
@@ -178,8 +192,20 @@ export default async function PublicationPage({
           )}
         </section>
 
-        {/* The purchase boundary (Slice 8). One honest line, no cart, no button. */}
-        <p className="metadata text-ink-faint mt-12">Ordering opens soon.</p>
+        {/* Purchase — one decisive action, or the honest boundary if the work
+            isn't yet buyable. No cart, no urgency (D-023). */}
+        {buyable ? (
+          <div className="mt-12">
+            <Link
+              href={buyHref}
+              className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
+            >
+              Own this publication
+            </Link>
+          </div>
+        ) : (
+          <p className="metadata text-ink-faint mt-12">Ordering opens soon.</p>
+        )}
 
         {/* Previews — a quiet leafing column, low on the page. */}
         {leaves.length > 0 && (
