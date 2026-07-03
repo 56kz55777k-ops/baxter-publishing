@@ -141,6 +141,8 @@ These are where the product wins or loses its tone. Each gets explicit design at
 - Search exists but isn't the primary discovery mode
 - Hover/focus states are subtle — no scale-up, no shadow pop, no "snappy" feedback
 
+**Commerce without performance (D-023).** Baxter removes *performative* commerce, not commerce. Price appears — in the grid and on the page — but as the quietest metadata, presented like page count or edition size: information, not persuasion. A publication card is exactly four lines, in strict hierarchy — **Cover → Title → Creator → Price** — and nothing else: no badges, no "From…", no sale/discount language, no "Buy now" CTA, no urgency, no availability messaging. Price transparency builds a collector's confidence (galleries and auction houses show it quietly for exactly this reason); hiding it only adds friction. The work stays the protagonist; price simply helps the visitor understand it.
+
 **What it should feel like:** Walking the aisles of a gallery bookstore. You browse with your eyes, not your filters.
 
 ### 5. Transitions and empty states
@@ -180,6 +182,16 @@ This voice owns: system state, confirmations, notices, timing, receipts, error p
 This voice owns: review decisions, revision notes, decline explanations — anything carrying a human judgement about the work. It is **always written by a person, never templated or generated** (D-020).
 
 **The rule.** The "Never" list below binds both voices. The difference is interpretation: the Editorial Voice *may* interpret the work; the Institutional Voice may not — it reports only what is true. When a creator reads editorial feedback, the software should have disappeared; the work is on an editor's desk, because that is what is actually happening. New outbound copy anywhere in the product (emails, notifications, moderation, support) is classified Institutional or Editorial before it is written.
+
+### The three actors
+
+The two voices belong to two of Baxter's three actors. The third is the reason the other two exist. *(Locked as D-024.)*
+
+- **The Platform** — *Institutional Voice.* Factual, calm, invisible. System state, marketplace chrome, prices and specs as facts.
+- **The Editor** — *Editorial Voice.* Human judgement and curation; the only place interpretation lives. Review notes and **Editor's Picks**.
+- **The Creator** — **the protagonist.** Always the primary author. The work leads; every publication page ultimately belongs to the creator.
+
+Every surface reinforces the separation rather than blurring it. On the marketplace: **the homepage is the Platform's institutional voice**, **Editor's Picks is the Editor's judgement**, and **each publication page belongs to the Creator** (it lives at `/[handle]/[slug]`). Before designing any surface, ask: *whose voice is this, and does the creator still lead?* Blur the actors — the platform editorializing, picks reading as merchandising, the creator demoted beneath Baxter's brand — and the illusion of an independent publishing house collapses.
 
 ### Always
 - Plain English, short sentences
@@ -290,6 +302,9 @@ Concretely, this doctrine adjusts a few things in the Week 1 plan:
 - This is the most important atmosphere slice. Will likely take 1.5 days, not 1.
 - Cover sizing, grid density, and section pacing get explicit design attention.
 - The homepage does *less* than it could. That restraint is the design.
+- **The homepage is the front door** (D-022): the opening statement stays, then the work begins beneath it — understand where you are, then look at the work. Not a marketing page, not a storefront.
+- **Price is quiet metadata** (D-023): Cover → Title → Creator → Price, price the quietest line. No badges, CTAs, urgency, or sale framing anywhere.
+- **The three actors stay separate** (D-024): homepage = Platform (institutional), Editor's Picks = Editor (judgement), publication page = Creator (protagonist, at `/[handle]/[slug]`).
 
 ---
 

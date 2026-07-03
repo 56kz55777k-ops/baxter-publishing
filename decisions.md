@@ -303,6 +303,55 @@ There is deliberately **no `approved` holding state** (approval *is* publishing 
 
 ---
 
+## D-022 · Slice 7 — the marketplace front door and publication URL
+
+**Chosen.** The homepage **becomes the front door to the marketplace** — not a separate marketing page, and not an e-commerce storefront. Baxter's **opening statement remains** at the top (it establishes tone and identity); the published work simply **begins beneath it**. The sequence is deliberate: *you first understand where you are, then you begin looking at the work* — entering a quiet independent bookstore or gallery, not landing on a shop.
+
+Public publication URL is locked as **`/[handle]/[slug]`** — a work lives at an address nested under its creator.
+
+**Why.** A marketplace whose homepage hides the work behind a marketing page inverts Platform Humility; a homepage that opens as a storefront inverts Attention Respect. The opening-statement-then-work sequence holds both: identity first, then the work leads. The nested URL reinforces that **the creator is the primary author** and Baxter is the publisher/curator — the creator's name is part of the address, like a book spine, and matches the schema (`publications.slug`, unique per creator; the homepage already promises "when published, it lives at its own address").
+
+**Notes.** The current marketing prose is distilled to the held opening line; longer prose (premise, for-creators, for-readers) moves to a quiet `/about` if kept at all. Requires confirming `slug` is populated at creation (schema `notNull`).
+
+**What would force reconsideration.** A future need for a true landing/marketing page (campaigns, SEO) separate from the shelf — at which point marketing lives at its own route and `/` stays the shelf.
+
+---
+
+## D-023 · Marketplace — price is quiet metadata (remove performative commerce, not commerce)
+
+**Chosen.** Price **appears** in the publication grid — reversing the initial instinct to hide it — but only as the **quietest element** of the card. A publication card is exactly four lines, in strict visual hierarchy:
+
+1. **Cover** (the protagonist)
+2. **Title**
+3. **Creator**
+4. **Price** — quietest of all
+
+Nothing else. No badges, no "From…", no discount or sale language, no "Buy now"/CTA, no urgency, no availability messaging. Price is presented **like page count or edition size — information, not persuasion**. A visitor notices the work, then the name, then the price only if they care to look.
+
+**Why.** Collectors don't browse like impulse shoppers. Price is part of *evaluating* a work — is this within today's budget, an accessible edition, a significant purchase, worth investigating further — and hiding it creates friction, not restraint. **Price transparency is not commerce-forward design.** Galleries, luxury retail, and auction houses show prices quietly *because transparency builds confidence*. The problem was never showing price; the problem is making price **perform**. The Baxter principle: **we remove performative commerce, not commerce.** The publication stays the protagonist; price simply helps the visitor understand the work.
+
+**Applies to.** The grid/card (this decision), and consistently the publication page (price shown plainly, no cart theatre — see the Slice 7 build). The transaction itself is Slice 8; until then any purchase affordance is a single honest Institutional line, never a button pretending to work.
+
+**What would force reconsideration.** None on the principle. Presentation may refine (exact weight/placement of the price line) once real covers populate the grid, but price stays the quietest line and never gains persuasion.
+
+---
+
+## D-024 · The three actors — Platform, Editor, Creator
+
+**Chosen.** Baxter has **three distinct actors**, and the product must reinforce their separation rather than blur it. This extends the two-voice model (D-021) by naming the Creator as the third — and the protagonist.
+
+- **The Platform — Institutional Voice.** Factual, calm, invisible. States what is true and gets out of the way. Owns system state, the marketplace chrome, prices/specs as facts.
+- **The Editor — Editorial Voice.** Human judgement and curation; the only place interpretation lives. Owns review notes and **Editor's Picks**.
+- **The Creator — the protagonist.** Always the primary author. The work leads; every publication page ultimately belongs to the creator.
+
+Mapped to Slice 7 surfaces: **the homepage is Baxter's institutional voice**; **Editor's Picks represents the editor's judgement**; **every publication page ultimately belongs to the creator** (nested at `/[handle]/[slug]`, D-022). Protect that separation as each surface is built.
+
+**Why.** The whole feeling Baxter protects — engaging with an independent publishing house, not a software platform — depends on these roles staying legible. Blur them (the platform editorializing, the editor's picks reading as "staff faves" merchandising, the creator demoted beneath Baxter's brand) and the illusion collapses. Naming the actors makes every surface answerable to "whose voice is this, and does the creator still lead?"
+
+**What would force reconsideration.** None foreseen — foundational, like D-021. New surfaces should be classified by actor before they're designed.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
