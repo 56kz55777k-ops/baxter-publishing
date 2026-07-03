@@ -1,62 +1,36 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { signOut } from '../(auth)/actions';
+import { composeHome } from '@/lib/marketplace/queries';
+import { PublicationShelf } from '@/components/publication-shelf';
+import { SiteHeader } from '@/components/site-header';
 
 /**
- * Baxter — homepage.
+ * Baxter — the front door (D-022).
  *
- * The opening room of the publication.
+ * Not a marketing page, not a storefront. The opening statement establishes the
+ * room (the Platform's institutional voice, D-024); the published work begins
+ * beneath it. You understand where you are, then you begin looking at the work.
  *
- * Editorial Constitution applied:
- *   • Attention Respect — no urgency, no manipulated scarcity.
- *   • Platform Humility — Baxter sets the room. Publications, when they arrive,
- *     will overshadow it. This page is empty by design.
- *   • Composed Warmth — the room is lit, not bright. Time is named directly.
- *
- * Voice: present tense, declarative. No exclamation points. No "we".
- * No "get started". No flattery.
+ * The body is a *composition*, not a feed (D-025): `composeHome()` returns an
+ * ordered list of editorial sections and this page renders whatever it's given.
+ * Adding a seasonal selection or a featured creator later is a new section here,
+ * not a rewrite of this page.
  */
 export default async function HomePage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // The CTA is auth-aware: a signed-in creator goes straight to /studio.
-  // A signed-out visitor is routed through /sign-up. No "Get started".
   const beginHref = user ? '/studio' : '/sign-up';
-  return (
-    <main className="min-h-screen">
-      {/* Shell — Baxter wordmark + restrained navigation. */}
-      <header className="px-gutter pt-10 pb-16 flex items-baseline justify-between">
-        <Link
-          href="/"
-          aria-label="Baxter — home"
-          className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink"
-        >
-          Baxter
-        </Link>
-        <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
-          {user ? (
-            <>
-              <Link href="/studio">Studio</Link>
-              <form action={signOut}>
-                <button
-                  type="submit"
-                  className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft hover:text-ink transition-colors duration-300"
-                >
-                  Sign out
-                </button>
-              </form>
-            </>
-          ) : (
-            <Link href="/sign-in">Sign in</Link>
-          )}
-        </nav>
-      </header>
 
-      {/* Opening statement. One sentence. Held. */}
-      <section className="px-gutter pt-32 pb-40">
+  const sections = await composeHome(supabase);
+
+  return (
+    <main className="min-h-screen flex flex-col">
+      <SiteHeader />
+
+      {/* The opening statement — the room. One held line. */}
+      <section className="px-gutter pt-28 pb-32">
         <p className="metadata mb-6">A publishing house, online.</p>
         <h1 className="font-serif text-h1 md:text-display max-w-[14ch] leading-[1.02]">
           Independent publishing, made carefully.
@@ -67,89 +41,53 @@ export default async function HomePage() {
         <div className="rule" />
       </div>
 
-      {/* What Baxter is — three quiet statements. No bullets, no icons. */}
-      <section className="px-gutter py-32 grid grid-cols-1 md:grid-cols-12 gap-y-16 md:gap-x-16">
-        <div className="md:col-span-3">
-          <p className="metadata">The premise</p>
-        </div>
-        <div className="md:col-span-8 md:col-start-5">
-          <p className="font-serif text-lede text-ink max-w-measure">
-            Baxter is a curated marketplace for independent publications —
-            zines, art books, photo journals, chapbooks, monographs.
-          </p>
-          <p className="font-serif text-body text-ink-soft max-w-measure mt-8">
-            Every publication is reviewed by an editor before it appears. Print
-            files are checked against the standards a printer would expect.
-            Pricing, listings, and proofs pass through the same care a small
-            press would give them.
-          </p>
-        </div>
-      </section>
+      {/* The work fills the room — composed sections, or a written empty state. */}
+      <div className="flex-1 px-gutter py-28 space-y-32">
+        {sections.length > 0 ? (
+          sections.map((section) => (
+            <PublicationShelf
+              key={section.kind}
+              title={section.title}
+              href={section.href}
+              cards={section.cards}
+            />
+          ))
+        ) : (
+          <section>
+            <p className="font-serif text-lede text-ink-soft max-w-measure">
+              The first publications are being prepared. Work appears here as it
+              is published.
+            </p>
+          </section>
+        )}
+      </div>
 
       <div className="px-gutter">
         <div className="rule" />
       </div>
 
-      {/* For creators. Plain English. Time named directly. */}
-      <section className="px-gutter py-32 grid grid-cols-1 md:grid-cols-12 gap-y-16 md:gap-x-16">
-        <div className="md:col-span-3">
-          <p className="metadata">For creators</p>
-        </div>
-        <div className="md:col-span-8 md:col-start-5">
-          <h2 className="font-serif text-h2 max-w-[22ch] text-ink">
-            A small press, available to one person.
-          </h2>
-          <p className="font-serif text-body text-ink-soft max-w-measure mt-10">
-            Upload a print-ready PDF or build directly in the editor. Set the
-            format, price, and an edition size if there is one. Submit it for
-            review. Reviewed within five business days.
+      {/* Closing band — quiet. A door for creators, a line about Baxter. */}
+      <footer className="px-gutter py-20 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink">
+            Baxter
           </p>
-          <p className="font-serif text-body text-ink-soft max-w-measure mt-6">
-            When the publication is published, it lives at its own address.
-            Orders, fulfillment, and payouts run through Baxter.
-          </p>
-          <div className="mt-12">
-            <Link
-              href={beginHref}
-              className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
-            >
-              Begin a publication
-            </Link>
-          </div>
+          <p className="metadata mt-3">Toronto · est. 2026</p>
         </div>
-      </section>
-
-      <div className="px-gutter">
-        <div className="rule" />
-      </div>
-
-      {/* For readers. */}
-      <section className="px-gutter py-32 grid grid-cols-1 md:grid-cols-12 gap-y-16 md:gap-x-16">
-        <div className="md:col-span-3">
-          <p className="metadata">For readers</p>
-        </div>
-        <div className="md:col-span-8 md:col-start-5">
-          <h2 className="font-serif text-h2 max-w-[22ch] text-ink">
-            Held to a standard, before it reaches the shelf.
-          </h2>
-          <p className="font-serif text-body text-ink-soft max-w-measure mt-10">
-            Every publication on Baxter has been reviewed. Editions are
-            tracked. Reviews are written by buyers, after the publication has
-            arrived.
-          </p>
-        </div>
-      </section>
-
-      <div className="px-gutter">
-        <div className="rule" />
-      </div>
-
-      {/* Footer. Minimal. The room is closing. */}
-      <footer className="px-gutter py-20">
-        <p className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink">
-          Baxter
-        </p>
-        <p className="metadata mt-3">Toronto · est. 2026</p>
+        <nav className="font-shell text-[0.75rem] tracking-[0.08em] uppercase text-ink-soft flex items-baseline gap-10">
+          <Link
+            href="/about"
+            className="hover:text-ink transition-colors duration-300"
+          >
+            About
+          </Link>
+          <Link
+            href={beginHref}
+            className="text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
+          >
+            Begin a publication
+          </Link>
+        </nav>
       </footer>
     </main>
   );

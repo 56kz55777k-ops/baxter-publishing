@@ -1,7 +1,9 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/follow-button';
+import { PublicationShelf } from '@/components/publication-shelf';
+import { getCreatorPublished } from '@/lib/marketplace/queries';
 import { signOut } from '../(auth)/actions';
 
 /**
@@ -95,6 +97,9 @@ export default async function ProfilePage({
     month: 'long',
   });
 
+  // The creator's published works (D-024 — this room belongs to them).
+  const publications = await getCreatorPublished(supabase, profile.id);
+
   return (
     <main className="min-h-screen flex flex-col">
       <header className="px-gutter pt-10 pb-16 flex items-baseline justify-between">
@@ -173,16 +178,16 @@ export default async function ProfilePage({
 
         <div className="rule mt-32" />
 
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-y-12 md:gap-x-16 py-20">
-          <div className="md:col-span-3">
-            <p className="metadata">Publications</p>
-          </div>
-          <div className="md:col-span-8 md:col-start-5">
+        <section className="py-20">
+          <p className="metadata mb-10">Publications</p>
+          {publications.length > 0 ? (
+            <PublicationShelf cards={publications} />
+          ) : (
             <p className="font-serif text-body text-ink-faint max-w-measure">
               No publications yet. When this creator releases work, it appears
               here.
             </p>
-          </div>
+          )}
         </section>
       </article>
     </main>

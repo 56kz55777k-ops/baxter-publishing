@@ -119,6 +119,9 @@ export const publications = pgTable(
     coverAssetId: uuid('cover_asset_id'),                // FK declared below to avoid cycle
     publishedAt: timestamp('published_at', { withTimezone: true }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    /** Editor's Pick timeline (D-023/D-025): the time an editor selected this
+     *  work. Null = not picked. A timestamp, not a flag, so Picks is a timeline. */
+    editorPickAt: timestamp('editor_pick_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
