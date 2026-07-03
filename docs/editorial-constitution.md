@@ -26,6 +26,8 @@ Baxter does not manipulate urgency, attention, or behaviour through:
 
 The platform respects creator attention, reader attention, and the slower rhythm of publishing culture. Where a dark pattern would increase a metric, the metric loses.
 
+**No fictional signals (D-025).** Baxter never surfaces a signal it cannot honestly measure. A "Popular" or "Trending" section is not built until it means something objectively *earned* — real orders or behaviour — never a rename of "recent," "featured," or "selected." Recency and curation are honest and may be shown; popularity without data behind it is a fabricated signal, and the Constitution does not permit it.
+
 ### Platform Humility
 
 Baxter exists to support publications, not overshadow them.
@@ -142,6 +144,8 @@ These are where the product wins or loses its tone. Each gets explicit design at
 - Hover/focus states are subtle — no scale-up, no shadow pop, no "snappy" feedback
 
 **Commerce without performance (D-023).** Baxter removes *performative* commerce, not commerce. Price appears — in the grid and on the page — but as the quietest metadata, presented like page count or edition size: information, not persuasion. A publication card is exactly four lines, in strict hierarchy — **Cover → Title → Creator → Price** — and nothing else: no badges, no "From…", no sale/discount language, no "Buy now" CTA, no urgency, no availability messaging. Price transparency builds a collector's confidence (galleries and auction houses show it quietly for exactly this reason); hiding it only adds friction. The work stays the protagonist; price simply helps the visitor understand it.
+
+**Browse before search (D-025).** A small catalogue should invite *browsing* — discovery, which is Baxter's job as curator — not *searching*, which presumes the visitor already knows what they want. Search arrives only when the catalogue grows too large to browse comfortably. Until then, discovery is composed (Editor's Picks, New Releases, category), not queried.
 
 **What it should feel like:** Walking the aisles of a gallery bookstore. You browse with your eyes, not your filters.
 

@@ -352,6 +352,24 @@ Mapped to Slice 7 surfaces: **the homepage is Baxter's institutional voice**; **
 
 ---
 
+## D-025 · The homepage is a curated composition, not a feed
+
+**Chosen.** The homepage is understood — and architected — as an **editorial composition ("an issue")**, not a chronological listing of published works. It is a *composed*, ordered set of **sections**, each an editorial act with its own source and heading, not a single query rendered as a grid.
+
+Slice 7 ships two sections (**Editor's Picks**, **New Releases**) beneath the opening statement, plus a quiet "All publications" link. But the architecture treats the page as `opening statement → [ordered sections] → footer`, where a section is a typed block (`kind`, heading, works/content). Future sections — seasonal selections, essays, featured creators, collections — slot in as new kinds and new renderers **without** restructuring the page or assuming chronology.
+
+**Concretely (the seam to preserve):** a `composeHome()`-style function returns an ordered `HomeSection[]`; the page maps over it and renders each via a section component; a shared card/grid renders any work-bearing section. No code path may hardcode "the homepage = published-ordered-by-date." Editor's Picks is sourced by `editor_pick_at desc` (D-023 storage), which is a **timeline**, not a flag — it already supports future "Recently selected / Current / Past picks" views with no schema change.
+
+**Two principles this locks in (Constitution):**
+- **No fictional signals.** Baxter never surfaces a signal it cannot honestly measure. "Popular" is not built until it means something objectively *earned* (real orders/behaviour) — never a rename of "recent," "featured," or "selected." Recency and curation are honest; popularity-without-data is not.
+- **Browse before search.** A small catalogue should invite *browsing* (discovery — Baxter's job), not *searching* (which presumes the visitor already knows what they want). Search arrives only when the catalogue is too large to browse comfortably. Until then, don't optimise for the wrong behaviour.
+
+**Why.** Baxter is a publishing house; a publishing house composes issues, it doesn't paginate a feed. Building the homepage as a generic chronological list now would bake in an assumption that every future editorial section would have to fight. The composition seam is cheap today and keeps the door open to the editorial surfaces Baxter is clearly heading toward.
+
+**What would force reconsideration.** None on the principle. The set of section *kinds* grows over time; the composition model is the durable part.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
