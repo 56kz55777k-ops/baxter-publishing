@@ -1,6 +1,6 @@
 # Baxter Publishing — Progress Report
 
-**Date:** 2026-06-05 · **Updated:** 2026-07-02 — Slice 6 (admin review queue) shipped and production-verified end to end. **Slices 1–6 are closed; next milestone is Slice 7 (marketplace shell).**
+**Date:** 2026-06-05 · **Updated:** 2026-07-02 — Slice 7 (marketplace shell) shipped and production-verified end to end. **Slices 1–7 are closed; next milestone is Slice 8 (Stripe Connect + test order).**
 **From:** Claude Code (paired with Ben Gibson)
 **For:** ChatGPT — review
 **Builds on:** `baxter-claude-code-handoff.md` (Perplexity Computer's handoff) and the prior progress reports.
@@ -21,6 +21,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 **Update (branded email sender):** **The branded `baxter.press` email sender is live and verified in production.** `baxter.press` is verified in a **new, dedicated Resend account** (the free tier allows one domain per account, and the existing account already held `resend.torontocreatives.com`); DKIM + SPF DNS records were added in GoDaddy; Vercel now carries the new account's `RESEND_API_KEY` and `RESEND_FROM_ADDRESS=Baxter <notifications@baxter.press>`. An end-to-end production submission confirmed the admin notification **Delivered** to `benjamin@benjamingibson.ca` **from `notifications@baxter.press`**. No code change (the integration point was already in place). Details in section 17. This closes outstanding item 12.
 
 **Update (Slice 6):** **Slice 6 (admin review queue) is shipped and production-verified end to end** (commit `bd17ab1`; decisions `D-019`, `D-020`, `D-021`). The editorial desk (`/admin`, role-gated), the review page (`/admin/[id]`), the writing-first decision desk (editorial note primary; internal-only reason codes), the two decision actions (Publish / Request revisions — no reject state), the two-voice creator states + decision email, and a new `publication-decided-notify` Inngest function all shipped. **No migration** (reason codes ride in `publication_events.payload`). A full production smoke test passed: create → submit → desk → request revisions → creator sees the editor's note → resubmit → publish → creator sees "Published", with DB rows and the revision email confirmed. Two foundational principles were locked alongside the build — *the editor writes, the software records* (`D-020`) and *two voices: Institutional and Editorial* (`D-021`) — plus a fourth Constitution principle, *an editorial office, not a moderation platform*. Details in section 19.
+
+**Update (Slice 7):** **Slice 7 (marketplace shell) is shipped and production-verified end to end** (commit `8bd0a4e`; decisions `D-022`–`D-025`). The homepage is now the marketplace **front door** (opening statement, then the work beneath it); the public publication page lives at **`/[handle]/[slug]`**; browse is at `/publications` with a quiet category filter and no search; the creator profile lists real published works; and Editor's Picks is set by an admin-only toggle. **Migration `0004`** adds `editor_pick_at` (a timeline, not a flag). The homepage is architected as a **composition** (`composeHome()` → ordered typed sections), not a chronological feed. A full production smoke test passed: publish a work → it appears in New Releases with the Cover→Title→Creator→Price card, its `/[handle]/[slug]` page renders (price plain, "Ordering opens soon", no cart), `/publications` filters by category, the profile lists it, and the Editor's Pick toggle moves it into an Editor's Picks section on the homepage. Foundational principles locked: *the marketplace front door* (`D-022`), *price is quiet metadata — remove performative commerce, not commerce* (`D-023`), *the three actors — Platform / Editor / Creator* (`D-024`), and *the homepage is a curated composition, not a feed* (`D-025`; also locks "no fictional signals" and "browse before search"). The one test publication ("Slice 7 Test") is intentionally left live and Editor's-Picked so the marketplace has a real work for demos. Details in section 20.
 
 ---
 
@@ -541,3 +543,45 @@ The other half of the submission ceremony: an editor reads submitted work and de
 ### Next
 
 **Slice 7 — Marketplace shell.** The public home for `published` works (which today are data-live but only visible on the creator's own `[handle]` profile). Homepage sections (hero, editor picks, new releases), the public publication page, and basic browse/search — the "most important atmosphere slice" per the Constitution. Editor's Picks (an admin-controlled flag) was deferred from Slice 6 to here.
+
+---
+
+## 20. Slice 7 — Marketplace shell (shipped & production-verified)
+
+The public home for `published` works — Baxter's front door. **Shipped as commit `8bd0a4e` and verified live in production.** Decisions locked first as `D-022`–`D-025` (commits `2039d18`, `6202f40`).
+
+### The locked decisions (foundational, product-wide)
+
+- **`D-022` — the front door.** The homepage *becomes* the marketplace (not a marketing page, not a storefront): the opening statement stays, then the work begins beneath it. Publication URL locked as **`/[handle]/[slug]`** (the creator is the primary author; their name is the address).
+- **`D-023` — price is quiet metadata.** Price appears in the grid and on the page, but as the *quietest* element. A card is exactly **Cover → Title → Creator → Price**, nothing else — no badges, CTAs, urgency, or sale framing. Principle: *remove performative commerce, not commerce.*
+- **`D-024` — the three actors.** Platform (Institutional Voice — the homepage/chrome), Editor (Editorial Voice — Editor's Picks), Creator (protagonist — the publication page). Surfaces keep them separate.
+- **`D-025` — the homepage is a curated composition, not a feed.** Architected as an ordered list of typed sections (`composeHome()`), so future sections (seasonal, essays, featured creators, collections) slot in without assuming chronology. Also locks *no fictional signals* (Popular only when objectively earned) and *browse before search*.
+
+### What shipped
+
+- **Migration `0004`:** `editor_pick_at timestamptz` on publications (D-023 storage — a timeline, not a flag; partial index for the Picks shelf). Additive/idempotent; applied to prod before deploy.
+- **`lib/marketplace/queries.ts`:** the public read layer (anon/RLS — published works, their assets, and users are all publicly readable) + the `composeHome()` seam (D-025). `getEditorsPicks` / `getNewReleases` / `getAllPublished` / `getCreatorPublished`, with bulk cover/creator resolution.
+- **`PublicationShelf` + `PublicationCard`:** Cover → Title → Creator → Price, price the quietest line; natural cover aspect (no cropping), subtle hover, 3-across. Reused by homepage, browse, and profile.
+- **Homepage front door** (`(marketing)/page.tsx`): opening statement retained, then the composed sections (Editor's Picks → New Releases) or a written empty state. Marketing prose relocated to a new `/about`.
+- **`/[handle]/[slug]` publication page:** cover-dominant museum-catalogue page; the creator is the byline/protagonist (links to their room); quiet specs; price plain; **"Ordering opens soon."** (no cart, no disabled button); previews low. Admin-only Editor's Pick toggle (`editor-pick-toggle.tsx` + `toggleEditorPick` action, service-role, admin re-verified).
+- **`/publications` browse:** all works + a quiet inline category filter (not a sidebar); **no search** (D-025 browse-before-search).
+- **Creator profile** now lists real published works (was a placeholder). Shared `SiteHeader` across public surfaces.
+- **No new Inngest function** — so no D-017 resync was needed this slice.
+
+### Verification
+
+- **Typecheck, lint, `next build`** all green (also cleared a stale pre-existing lint warning).
+- **Migration** applied via the Supabase SQL editor and verified (`has_column = 1`, `has_index = 1`) *before* deploy.
+- **Deploy** — pushed to `main`; Vercel built `8bd0a4e` successfully as the live production deployment.
+- **Production smoke test — PASSED end to end** (driven via the Chrome extension). Front door renders (opening statement + empty state, then work); a published work ("Slice 7 Test") appeared in **New Releases** with the correct card hierarchy and price ($18.00 CAD) as the quietest line; the **`/[handle]/[slug]`** page rendered cover-dominant with the byline, quiet specs, plain price, "Ordering opens soon.", and low previews; **`/publications`** filtered correctly (Zine showed the work, Photobook showed the empty state); the **creator profile** listed the work; and the **Editor's Pick toggle** flipped to "Remove…" and grew an **Editor's Picks** section above New Releases on the homepage (the composeHome seam, live).
+
+### Notes / residuals
+
+- **The test publication is intentionally left live.** "Slice 7 Test" (`95abeb38-…`, slug `slice-7-test-27a569ef`, by `@ben-in-toronto`, $18.00) remains published and Editor's-Picked so the marketplace shows a real work for demos. It uses the synthetic clean-A5 fixture as its cover.
+- **Reserved handles.** `/publications` and `/about` are concrete route segments that win over the `[handle]` dynamic route; no creator should be allowed to claim those handles (not enforced yet — minor pre-launch follow-up).
+- **Popular / search deliberately omitted** (D-025) until there's real signal / catalogue size.
+- **Reviews** remain deferred (table exists; UI later).
+
+### Next
+
+**Slice 8 — Stripe Connect + test order.** Turn the "Ordering opens soon." boundary into a real transaction: creator Stripe Connect onboarding, buyer checkout with `application_fee_amount` for the platform cut, order creation on the payment webhook, and the order appearing in an OMS. This is where the purchase affordance on the publication page becomes live.
