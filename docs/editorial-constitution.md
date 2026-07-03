@@ -61,6 +61,12 @@ This distinction shapes the admin experience, the creator experience, and the co
 
 The product should quietly reinforce, at every turn, that a creator is engaging with an independent editorial office — people who publish work they believe in — rather than a platform that polices submissions.
 
+### One screen, one question
+
+Every major Baxter surface answers a single primary question. Studio: *what am I making?* Review: *is this ready?* The editorial desk: *what should happen to this work?* The marketplace: *what deserves my attention?* This simplicity is part of Baxter's identity, and it holds through commerce: the publication page asks *would you like to own this?*, checkout asks *how will you pay?*, the order page answers *what happens next?*
+
+Use it as a design test: **if a screen starts answering several questions at once, it is becoming *software* rather than *publishing*.** Split it, or cut what doesn't serve the one question. A surface that does less, more clearly, is the more Baxter surface.
+
 ---
 
 ## The two questions every screen must answer

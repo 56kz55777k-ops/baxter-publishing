@@ -370,6 +370,28 @@ Slice 7 ships two sections (**Editor's Picks**, **New Releases**) beneath the op
 
 ---
 
+## D-026 · Payments — held funds via separate charges and transfers
+
+**Chosen.** The buyer's PaymentIntent is charged to **Baxter's platform account** with **no** `transfer_data`/`application_fee_amount`. Funds are held in Baxter's balance from `paid` through `in_fulfillment`; the creator's payout (`creatorPayoutMinor = total − platformFee`) is a **separate Stripe Transfer** created at **fulfilment** (Slice 9), recorded in `orders.stripe_transfer_id`. Baxter keeps `platformFeeMinor`.
+
+**Why.** This is what the shipped schema and order state machine already encode: a nullable `stripe_transfer_id` *separate* from `stripe_payment_intent_id`, `platformFeeMinor`, the held-funds transitions, and `fundsHeld()` ("Baxter holds funds from paid through in_fulfillment; release the transfer when the creator marks fulfilled"). The implementation plan's Slice 8 line mentioning `application_fee_amount` describes a **destination charge**, which transfers to the creator *at payment time* — that would break held funds (a creator could be paid before fulfilling, and pre-fulfilment cancellations would require clawing funds back). The schema is the source of truth; the plan line is superseded. This is a plan-vs-schema reconciliation, not a blocking conflict (the schema told us exactly what to build).
+
+**Implications for Slice 9.** Fulfilment creates the Transfer (needs the connected account's `transfers` capability, requested at onboarding); post-fulfilment refunds require reversing that transfer; the connected account never touches the buyer's card.
+
+**What would force reconsideration.** A need for instant creator payout (no holding period) or Stripe-managed negative-balance protection → revisit destination charges, at the cost of the held-funds guarantees.
+
+---
+
+## D-027 · Checkout is Baxter-hosted (Payment Element), one question per screen
+
+**Chosen.** Checkout is **Baxter-hosted** using the **Stripe Payment Element** (embedded), not Stripe's hosted Checkout page. The buy flow is split so each screen answers exactly one question: the **publication page** asks *"would you like to own this?"* (the "Own this publication" action), **checkout** asks *"how will you pay?"* (address + Payment Element), and the **order page** answers *"what happens next?"*.
+
+**Why.** Keeping payment inside Baxter preserves the publishing atmosphere at the most commerce-exposed moment, rather than bouncing to a Stripe-branded page. It also lets the one-question-per-screen discipline (see the Constitution) hold through commerce. The Payment Element keeps card data in Stripe's iframe (SAQ-A scope) while Baxter controls layout and voice, styled to the Baxter palette. Commerce is present but never performs (D-023): no cart, no upsell, no urgency, no disabled-button theatre.
+
+**What would force reconsideration.** PCI/compliance needs that favour full redirect, or a payment-method mix the Payment Element can't present well → reconsider hosted Checkout (still restrained, but Stripe-branded).
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
