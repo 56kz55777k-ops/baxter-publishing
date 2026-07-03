@@ -374,6 +374,16 @@ Following your milestone definition, here's the slice list. Each slice is ~1 day
 
 ---
 
+## Future work — Milestone 2: Native Publishing
+
+**Deferred until the business loop is complete.** Creating publications *inside* Baxter — rather than uploading finished files — is intentionally out of Milestone 1. It is scoped separately in **`baxter-milestone2-editor-scope.md`**, which remains the single source of truth. The milestone is named **Native Publishing**: the canvas editor is its first expression, and it will grow to include templates, layout systems, typography, asset management, collaboration, version history, and AI-assisted publishing.
+
+**Depth vs. breadth (an architectural observation).** Everything through Slice 10 expands *depth* — each slice extends one continuous publishing workflow: upload → preflight → previews → submission → editorial review → marketplace → purchasing → fulfilment. Milestone 2 changes direction: it expands *breadth*, introducing a **second way of creating publications**. That distinction is worth preserving, because it explains why we deliberately complete the publishing business before beginning native publishing.
+
+**Strategic sequencing (intentional and locked).** Milestone 1 first — complete the publishing business (Slice 8 → Slice 9 → Slice 10). Only after that work is complete do we begin Milestone 2 — Native Publishing. The reasoning: once Slices 8–10 are done, Baxter is already a functioning publishing platform, so native publishing becomes an **enhancement to a proven platform** rather than a **prerequisite for one**.
+
+---
+
 ## 6. Risk spikes (run in parallel with above)
 
 These don't block the business-loop milestone but need to be running so we have answers by end of Week 2.

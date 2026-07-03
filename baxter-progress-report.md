@@ -585,3 +585,5 @@ The public home for `published` works — Baxter's front door. **Shipped as comm
 ### Next
 
 **Slice 8 — Stripe Connect + test order.** Turn the "Ordering opens soon." boundary into a real transaction: creator Stripe Connect onboarding, buyer checkout with `application_fee_amount` for the platform cut, order creation on the payment webhook, and the order appearing in an OMS. This is where the purchase affordance on the publication page becomes live.
+
+Beyond the business loop (Slices 8–10), the next major milestone — **Milestone 2: Native Publishing** (the in-app editor and creation workflows) — is now scoped and documented in `baxter-milestone2-editor-scope.md`.

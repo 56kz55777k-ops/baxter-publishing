@@ -1,14 +1,16 @@
-# Baxter — Milestone 2: The Publication Editor (scoping note)
+# Baxter — Milestone 2: Native Publishing (scoping note)
 
 **Date:** 2026-07-02
 **From:** Claude Code (paired with Ben Gibson)
-**Status:** **Scoping only — not scheduled, not committed to build.** This captures the editor as the next major body of work *after* the business loop (Slices 8–10) closes, so the shape and the open questions are on record before we commit.
+**Status:** **Scoping only — not scheduled, not committed to build.** This captures the canvas editor as the next major body of work *after* the business loop (Slices 8–10) closes, so the shape and the open questions are on record before we commit.
+
+> **The milestone is *Native Publishing*, not just "the editor."** Native publishing means creating publications *inside* Baxter rather than uploading finished files. The **canvas editor is its first expression** — and over time the milestone is likely to grow to include document templates, layout systems, typography, asset management, collaborative editing, version history, AI-assisted publishing, and further creation workflows. "Editor" was too narrow a name; "Native Publishing" captures the long-term direction while remaining accurate today. This note scopes the canvas editor as the entry point into that milestone. *(The filename retains "editor" for link stability; the milestone's name is Native Publishing.)*
 
 ---
 
 ## 1. What this is
 
-The **publication editor** is the in-app surface where a creator *builds a publication directly* — page by page, placing text and images on a canvas at the chosen trim size — instead of uploading a print-ready PDF. It is the "**or build directly in the editor**" half of the promise already on the homepage/about page.
+The **canvas editor** — the first capability of Native Publishing — is the in-app surface where a creator *builds a publication directly*: page by page, placing text and images on a canvas at the chosen trim size, instead of uploading a print-ready PDF. It is the "**or build directly in the editor**" half of the promise already on the homepage/about page.
 
 It is **not** one of the ten business-loop slices, by original design (implementation plan §7: *"Studio editor as a real product surface — guarded `/studio/editor` route stub only"*; plan intro: *"Editor work happens in parallel as a guarded prototype route"*). It is the **single largest unbuilt surface** in Baxter, and it carries **two unresolved technical decisions**. Hence its own milestone.
 
@@ -83,6 +85,6 @@ After M2.4, an editor-built publication flows through submission → review → 
 
 ## 8. Status and next step
 
-**Not scheduled, not committed.** This note exists so the editor is captured as the next major body of work after the business loop, with its shape and open questions on record.
+**Not scheduled, not committed.** This note exists so Milestone 2 — Native Publishing (beginning with the canvas editor) is captured as the next major body of work after the business loop, with its shape and open questions on record.
 
 **Next concrete step, when we get here:** run **Spike C** (Konva/canvas feel) and **Spike B** (canvas → print-ready PDF), then convert this note into a proper design-questions brief and a firm slice plan — the same way Slices 6 and 7 were designed before they were built.
