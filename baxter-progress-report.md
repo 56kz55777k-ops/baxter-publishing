@@ -1,6 +1,6 @@
 # Baxter Publishing — Progress Report
 
-**Date:** 2026-06-05 · **Updated:** 2026-07-02 — Slice 7 (marketplace shell) shipped and production-verified end to end. **Slices 1–7 are closed; next milestone is Slice 8 (Stripe Connect + test order).**
+**Date:** 2026-06-05 · **Updated:** 2026-07-04 — Slice 8 (Stripe Connect + first purchase) shipped and production-verified end to end (a real test order paid, funds held). **Slices 1–8 are closed; next milestone is Slice 9 (OMS + fulfilment + commerce emails).**
 **From:** Claude Code (paired with Ben Gibson)
 **For:** ChatGPT — review
 **Builds on:** `baxter-claude-code-handoff.md` (Perplexity Computer's handoff) and the prior progress reports.
@@ -23,6 +23,8 @@ Production is healthy. Slice 2 is fully closed and verified end-to-end. Slice 3a
 **Update (Slice 6):** **Slice 6 (admin review queue) is shipped and production-verified end to end** (commit `bd17ab1`; decisions `D-019`, `D-020`, `D-021`). The editorial desk (`/admin`, role-gated), the review page (`/admin/[id]`), the writing-first decision desk (editorial note primary; internal-only reason codes), the two decision actions (Publish / Request revisions — no reject state), the two-voice creator states + decision email, and a new `publication-decided-notify` Inngest function all shipped. **No migration** (reason codes ride in `publication_events.payload`). A full production smoke test passed: create → submit → desk → request revisions → creator sees the editor's note → resubmit → publish → creator sees "Published", with DB rows and the revision email confirmed. Two foundational principles were locked alongside the build — *the editor writes, the software records* (`D-020`) and *two voices: Institutional and Editorial* (`D-021`) — plus a fourth Constitution principle, *an editorial office, not a moderation platform*. Details in section 19.
 
 **Update (Slice 7):** **Slice 7 (marketplace shell) is shipped and production-verified end to end** (commit `8bd0a4e`; decisions `D-022`–`D-025`). The homepage is now the marketplace **front door** (opening statement, then the work beneath it); the public publication page lives at **`/[handle]/[slug]`**; browse is at `/publications` with a quiet category filter and no search; the creator profile lists real published works; and Editor's Picks is set by an admin-only toggle. **Migration `0004`** adds `editor_pick_at` (a timeline, not a flag). The homepage is architected as a **composition** (`composeHome()` → ordered typed sections), not a chronological feed. A full production smoke test passed: publish a work → it appears in New Releases with the Cover→Title→Creator→Price card, its `/[handle]/[slug]` page renders (price plain, "Ordering opens soon", no cart), `/publications` filters by category, the profile lists it, and the Editor's Pick toggle moves it into an Editor's Picks section on the homepage. Foundational principles locked: *the marketplace front door* (`D-022`), *price is quiet metadata — remove performative commerce, not commerce* (`D-023`), *the three actors — Platform / Editor / Creator* (`D-024`), and *the homepage is a curated composition, not a feed* (`D-025`; also locks "no fictional signals" and "browse before search"). The one test publication ("Slice 7 Test") is intentionally left live and Editor's-Picked so the marketplace has a real work for demos. Details in section 20.
+
+**Update (Slice 8):** **Slice 8 (Stripe Connect + first purchase) is shipped and production-verified end to end** (commits `ee60a61` build, `9bbb9db` fix; decisions `D-026`, `D-027`). Creator payout onboarding (Connect Express) at `/settings/payouts`; the publication page shows "Own this publication" when the creator is payout-ready and the viewer isn't the creator; a Baxter-hosted Stripe **Payment Element** checkout; a **held-funds** PaymentIntent on the platform account (`D-026` — no destination charge/`application_fee`; the creator payout is a separate transfer at fulfilment in Slice 9); the `payment_intent.succeeded` webhook creates the order (`paid`) + audit event; buyer confirmation at `/orders/[id]`; a minimal `/admin/orders` ledger. **No migration** (the orders tables already existed). Stripe set up in the Toronto Creatives test account (Connect enabled, webhook "Baxter Publishing" for `payment_intent.succeeded` + `account.updated`, four Vercel env vars). A full production smoke test **passed**: onboarding → buyable → checkout → **$18 test purchase** → webhook order `paid` → buyer "Thank you." page → `/admin/orders` → **funds held** (net $17.03 in the platform balance, no transfer to the creator). **One real bug caught and fixed** (`9bbb9db`): payout readiness was gated on `charges_enabled`, which is always false for a transfers-only connected account — now gated on the **transfers capability**. Details in section 21.
 
 ---
 
@@ -584,6 +586,42 @@ The public home for `published` works — Baxter's front door. **Shipped as comm
 
 ### Next
 
-**Slice 8 — Stripe Connect + test order.** Turn the "Ordering opens soon." boundary into a real transaction: creator Stripe Connect onboarding, buyer checkout with `application_fee_amount` for the platform cut, order creation on the payment webhook, and the order appearing in an OMS. This is where the purchase affordance on the publication page becomes live.
+**Slice 8 — Stripe Connect + first purchase.** *(Now shipped — see section 21.)*
 
 Beyond the business loop (Slices 8–10), the next major milestone — **Milestone 2: Native Publishing** (the in-app editor and creation workflows) — is now scoped and documented in `baxter-milestone2-editor-scope.md`.
+
+---
+
+## 21. Slice 8 — Stripe Connect + first purchase (shipped & production-verified)
+
+Turns the "Ordering opens soon." boundary into a real transaction. **Shipped as commit `ee60a61` (+ fix `9bbb9db`) and verified live in production** — a real $18 test order was paid, recorded, and the funds held. Decisions `D-026`/`D-027` (commit `b1e714c`). **No migration** (the `orders`/`order_events` tables already existed).
+
+### The money model (D-026 — held funds via separate charges and transfers)
+The buyer's PaymentIntent is charged to **Baxter's platform account** with no `transfer_data`/`application_fee`; funds are **held** in Baxter's balance. The creator's payout (`total − platform fee`) is a **separate Stripe Transfer created at fulfilment** (Slice 9), recorded in `orders.stripe_transfer_id`. This matches the shipped schema + order state machine (`fundsHeld()`), and supersedes the plan's `application_fee_amount` (destination-charge) line, which would transfer at payment time and break held funds. Checkout is Baxter-hosted with the Stripe **Payment Element** (`D-027`), one question per screen.
+
+### What shipped
+- **Pricing** — `packages/domain/src/pricing.ts` (`computeOrderAmounts`: integer minor units; fee on subtotal; `creatorPayoutMinor = total − fee`).
+- **Stripe lib** — `apps/web/lib/stripe/client.ts` (lazy, env-driven; degrades gracefully without keys).
+- **Creator onboarding** — `/settings/payouts` ("Can Baxter pay you?"): creates an Express account with the `transfers` capability, mints an Account Link, syncs payout readiness. `stripe_*` written via service role.
+- **Purchase affordance** — the publication page shows **"Own this publication"** when Stripe is live, the creator is payout-ready, there's a price, and the viewer isn't the creator; otherwise "Ordering opens soon."
+- **Checkout** — `/[handle]/[slug]/buy` ("How will you pay?"): the held-funds PaymentIntent, Payment Element in Baxter's palette, optional shipping address for print. No cart, no urgency (`D-023`).
+- **Webhook** — `/api/stripe/webhook`: `payment_intent.succeeded` → create order (`paid`) + `order_events`, idempotent; `account.updated` → sync creator payout readiness.
+- **Buyer order pages** — `/orders/confirm` (return resolver) → `/orders/[id]` ("What happens next?"). Minimal `/admin/orders` ledger. Nav links for Payouts and Orders.
+- **Deps** — `@stripe/stripe-js` + `@stripe/react-stripe-js` (React 19). No new Inngest function (no D-017 resync this slice).
+
+### Stripe provisioning (test mode)
+Set up in the **Toronto Creatives** account, test/sandbox: Connect enabled; webhook **"Baxter Publishing"** → `/api/stripe/webhook` for `payment_intent.succeeded` + `account.updated`, API version **2026-06-24.dahlia** (the account default `2015-10-16` predates PaymentIntents and would have sent broken payloads); four Vercel env vars (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PLATFORM_FEE_BPS=1000`). Checklist: `baxter-slice8-stripe-setup.md`.
+
+### Verification (production smoke test)
+Passed end to end (driven via the Chrome extension; DB + Stripe confirmed): creator onboarding → payouts "set up" → publication buyable to a second account (`benjamin@benjamingibson.ca`) but not to the creator → checkout → **$18 test purchase** (`4242…`) → `payment_intent.succeeded` → order created **`paid`** (subtotal 1800, total 1800, **platform_fee 180**, shipping address captured, `order_events` pending→paid via `stripe_webhook`) → buyer "Thank you." page → `/admin/orders` lists it → Stripe shows the charge **Succeeded**, **net $17.03 held in the platform balance, no transfer to the connected account**.
+
+**Bug found & fixed (`9bbb9db`).** Payout readiness was gated on `charges_enabled && payouts_enabled`, but a transfers-only connected account (our model) never has `charges_enabled` — so onboarding completed yet Baxter read "not finished." Now gated on `capabilities.transfers === 'active'` (payouts page + `account.updated` webhook).
+
+### Notes / residuals
+- **Test data intentionally left live** for Slice 9 to build against: the `$18` order (ref `61694821`, buyer `benjamin@benjamingibson.ca`) and the creator's Express connected account.
+- **Stripe MCP is live-mode**; the test-mode order was verified in the Stripe **test** dashboard instead.
+- **Commerce emails and the order-detail/fulfilment surface are Slice 9** (see below) — nothing emails yet.
+
+### Next
+
+**Slice 9 — OMS + fulfilment + commerce emails.** The order-detail page (`/admin/orders/[id]`) with a downloadable print-ready PDF and the clickable state machine (`paid → in_fulfillment → fulfilled`); the **Transfer** at fulfilment that releases the held funds (the creator's $16.20 payout); and the commerce email set (buyer confirmation/receipt, creator "you made a sale", and the admin **production package** — signed print file + specs + delivery address — for any print order, including creators' own test prints). New Inngest functions → **D-017 resync** applies. Scoped in `baxter-slice9-design-questions.md`.
