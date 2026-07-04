@@ -446,6 +446,29 @@ Grounded in POD base+per-page formulas (KDP ≈ $1.00 + $0.012/pg; colour ≈ $0
 
 ---
 
+## D-030 · Shipping — a separate logistics system, live via an aggregator, pass-through
+
+**Chosen.** Shipping is a **third, distinct system**, cleanly separated from production (D-029) and commerce. Three responsibilities:
+- **Production** (`estimateProduction`, `@baxter/domain`, pure): print cost, margin, earnings, retail — **and the physical parcel** (estimated weight + dimensions, derived from trim/pages/paper/cover/binding).
+- **Commerce** (checkout/orders/Stripe): `total = retail + shipping`; held funds; the fulfilment transfer.
+- **Logistics** (a `ShippingProvider` abstraction): **live** carrier quotes at checkout.
+
+Rulings:
+- **No placeholder shipping tiers.** Shipping is quoted **live** from real carrier rates, never estimated by Baxter. Carriers already compute postage perfectly; a Baxter shipping estimator would be code with a built-in expiry date.
+- **A `ShippingProvider` interface from day one** (minimal first implementation is fine): `quoteShipping({ from, to, parcel }) → [{ carrier, service, amountMinor, currency, estimatedDeliveryDays }]`. The checkout consumes the interface; only the provider changes.
+- **Target an aggregator — EasyPost** (Shippo fallback), not a direct Canada Post/UPS integration. Baxter is a platform and will support many carriers (Canada Post, UPS, Purolator, FedEx, DHL, international) behind one API — the same reasoning as Stripe over Visa. EasyPost: one API, 100+ carriers incl. Canada Post; rating takes from/to addresses + parcel weight (oz) + dims (in), so the provider adapts the estimator's metric weight/dims.
+- **Computed at checkout, after the address.** Retail shows on the publication page; once the buyer enters the delivery address, the provider returns live quotes and the chosen rate is added to the total. The estimator's `estimatedWeight`/`parcelDimensions` are the inputs.
+- **Pass-through — Baxter earns nothing on postage.** `shipping = the carrier's actual rate`, no markup, no handling fee. A fulfilment fee, if ever, is a separate future conversation.
+- **Origin** = the printer's ship-from address (MGS Toronto when formalised; a configured Toronto origin until then). Env-driven (`EASYPOST_API_KEY`), degrades gracefully without a key (like Stripe/Resend).
+
+**Why.** Print cost is Baxter's to model (it owns production); shipping is the carriers' to compute (they own the rate tables). Keeping them separate — and quoting live rather than faking tiers — means the checkout is carrier-agnostic forever: adding UPS/Purolator/FedEx later is a provider change, not a checkout change. Pass-through postage keeps logistics transparent and separate from Baxter's production revenue (extends D-028: Baxter earns by manufacturing, *and not from postage either*).
+
+**Implications.** Checkout becomes **address-first**: collect the delivery address → quote shipping → finalise `total = retail + shipping` → charge. The Stripe PaymentIntent amount is set/updated *after* the shipping quote (Slice 8 created it upfront for retail-only). Needs an EasyPost account/key + a ship-from origin before going live in production.
+
+**What would force reconsideration.** The printer drop-ships and bundles postage into its invoice → use the printer's shipping rate behind the same `ShippingProvider` interface (a different provider). Moving off EasyPost → swap the provider; checkout unchanged.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.

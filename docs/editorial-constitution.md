@@ -75,6 +75,8 @@ A retail price is built up from production, in the open: **print cost + Baxter's
 
 This shapes the language and the surfaces: the creator is never asked "what should this cost?" — only *"how much would you like to earn from each sale?"* ("**Your earnings per copy**"). Baxter shows the full breakdown rather than concealing its cut, because transparency *is* the position. And a creator perfecting their own work (a test print) pays production cost only — no margin — because Baxter earns when creators *sell*, not when they *proof*.
 
+**And Baxter earns nothing from postage.** Shipping is pass-through: the buyer pays the carrier's actual rate, quoted live at checkout, with no markup and no hidden handling fee (D-030). Production, commerce, and logistics stay three separate systems — Baxter's revenue is the production margin alone. (A fulfilment fee, if it ever exists, would be its own explicit, transparent line — never a quiet skim on postage.)
+
 ---
 
 ## The two questions every screen must answer

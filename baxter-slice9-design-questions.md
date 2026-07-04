@@ -17,7 +17,9 @@ Ben locked the pricing foundation with four adjustments; recorded as **D-028** (
 3. **Expanded, transparent pricing breakdown** for creators — show how retail is built (print cost → Baxter production → your earnings → estimated retail); transparency *is* the position (Decision 0c).
 4. **Creator test prints charged at production cost only** (print + shipping) — **no earnings, no Baxter margin.** Baxter earns when creators sell, not when they proof (Decision 1).
 
-Still open (proceeding on the brief's leans unless redirected): the exact placeholder **rate values** (0e — accepted as placeholders, tune to MGS later), email copy (I'll draft), and the remaining fulfilment confirmations.
+**Shipping locked separately (D-030).** Shipping is a **third, distinct system** (logistics), not part of production economics and **not** a Baxter estimator. Built **live from day one** behind a `ShippingProvider` abstraction targeting an **aggregator (EasyPost)**; quoted at checkout after the address; **pass-through** (Baxter earns nothing on postage). The production estimator additionally outputs **estimated weight + parcel dimensions**, which feed the shipping quote. No placeholder tiers. See "Shipping (logistics)" below.
+
+Still open (proceeding on the brief's leans unless redirected): the exact placeholder **print-rate values** (0e — accepted as placeholders, tune to MGS later), email copy (I'll draft), and the remaining fulfilment confirmations. **New dependency:** an EasyPost account/key + a ship-from origin (like the Stripe setup) before shipping goes live.
 
 ---
 
@@ -75,10 +77,13 @@ Largely **locked by Ben**; the open parts are the rate values, the data model, a
 
 **0b — The estimator as the single source of truth (LOCKED architecture).** One service in `@baxter/domain` that every surface consumes — publication page, checkout, orders, admin fulfilment, creator workspace, emails, Stripe transfers, analytics. **No duplicated math anywhere.**
 ```
-estimatePrintCost(spec) → { printCostMinor, baxterMarginMinor, creatorEarningsMinor, retailMinor, breakdown }
-// spec = { formatPresetId, pageCount, colour: 'mono'|'colour', binding, paperStock, quantity=1, creatorEarningsMinor }
+estimateProduction(spec) → {
+  printCostMinor, baxterMarginMinor, creatorEarningsMinor, retailMinor, breakdown,
+  estimatedWeightGrams, parcelDimensionsMm: { length, width, height }
+}
+// spec = { formatPresetId, pageCount, interior: 'mono'|'colour', binding, paperStock, quantity=1, creatorEarningsMinor, marginRate }
 ```
-It resolves binding + paper + default colour from the format preset, computes `printCost = base + pageCount × perPageRate` from a **configurable rate card**, adds the margin, adds the creator's earnings, returns the full breakdown. Pure, testable, versioned in git.
+It resolves binding + paper from the format preset and the explicit `interior`, computes `printCost = base + pageCount × perPageRate` from a **configurable rate card**, adds the (configurable) margin and the creator's earnings, returns the full breakdown — **and derives the physical parcel** (weight from paper gsm × trim area × sheets + cover; dimensions from trim size + spine thickness from page count × caliper). Pure, testable, versioned in git. Renamed from Slice 8's `estimatePrintCost`/`computeOrderAmounts`. The weight + dimensions are what the **shipping** system consumes (D-030) — production owns the *parcel*, logistics owns the *postage*.
 
 **0c — Naming (LOCKED).** "**Your earnings per copy**" everywhere the creator sees it. The creator workspace shows:
 ```
@@ -105,6 +110,22 @@ Estimated retail       $31.00
 Sanity checks: 8pp mono zine → **$2.82**; 32pp colour magazine → **$10.04**; 60pp colour photobook → **$30.70**; ~$10-print book + 30% + $18 → **$31 retail**. Grounded in: POD base+per-page formulas (KDP ≈ $1.00 + $0.012/pg; colour ≈ $0.04–0.08/pg), local short-run $2.50–9/copy, coated/square premiums. **Confirm or tune these** (esp. once MGS quotes real stocks).
 
 **What would force reconsideration:** MGS's real rate card (swap the numbers, same estimator); volume tiers (add a quantity curve to the estimator later); a format needing per-order spec overrides.
+
+---
+
+### Decision 0.5 — Shipping (logistics) *(LOCKED — D-030)*
+
+Shipping is a **third system**, separate from production and commerce, and quoted **live** — never estimated by Baxter, never placeholder tiers.
+
+- **`ShippingProvider` abstraction from day one:** `quoteShipping({ from, to, parcel }) → [{ carrier, service, amountMinor, currency, estimatedDeliveryDays }]`. Checkout consumes the interface; the provider is swappable.
+- **First (and initially only) provider: EasyPost** (`apps/web/lib/shipping/easypost.ts`) — one API, 100+ carriers incl. Canada Post/Purolator/UPS/FedEx. Env-driven (`EASYPOST_API_KEY`), degrades gracefully without a key. Adapts the estimator's metric weight/dims → EasyPost's oz/in.
+- **Inputs:** `from` = the ship-from origin (configured Toronto origin; MGS when formalised); `to` = the buyer's delivery address; `parcel` = the estimator's `estimatedWeightGrams` + `parcelDimensionsMm`.
+- **Pass-through:** `shipping_minor` = the carrier's actual rate — no markup, no handling fee. Baxter earns nothing on postage.
+- **Checkout flow change (address-first):** collect the delivery address → `quoteShipping` → present the rate(s) → `total = retail + shipping` → charge. The Stripe **PaymentIntent amount is set/updated *after* the quote** (Slice 8 created it upfront for retail-only). This fits one-question-per-screen: *"Where should it ship?"* (address → live quote) then *"How will you pay?"*.
+
+**Open sub-questions:** (a) if multiple rates come back, show the **cheapest** by default, or let the buyer choose a service/speed? *Lean: cheapest by default for v1, with room to offer choices later.* (b) The ship-from origin string for v1 (a Toronto origin until MGS is set) — you provide. (c) Digital-only orders skip shipping entirely (no parcel).
+
+**Dependency (like Stripe):** an EasyPost account + `EASYPOST_API_KEY` in Vercel, and the origin address, before shipping goes live. Until then the provider no-ops and checkout can fall back to $0/"shipping unavailable" in test.
 
 ---
 
