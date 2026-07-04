@@ -117,7 +117,9 @@ export async function POST(req: Request) {
 
     if (event.type === 'account.updated') {
       const account = event.data.object as Stripe.Account;
-      const ready = Boolean(account.charges_enabled && account.payouts_enabled);
+      // Transfers-only connected account (D-026): gate on the transfers
+      // capability, not charges_enabled (which stays false for this model).
+      const ready = account.capabilities?.transfers === 'active';
       await db
         .from('users')
         .update({

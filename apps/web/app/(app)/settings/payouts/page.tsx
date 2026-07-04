@@ -38,7 +38,10 @@ export default async function PayoutsPage() {
   if (accountId && stripeConfigured()) {
     try {
       const account = await stripe().accounts.retrieve(accountId);
-      const ready = Boolean(account.charges_enabled && account.payouts_enabled);
+      // Held-funds model (D-026): the connected account is transfers-only (it
+      // never processes charges), so `charges_enabled` stays false. Readiness =
+      // the transfers capability is active (Baxter can pay out their share).
+      const ready = account.capabilities?.transfers === 'active';
       if (ready !== chargesEnabled) {
         await createAdminClient()
           .from('users')
