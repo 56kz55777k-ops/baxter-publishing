@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdminUser } from '@/lib/auth/admin-guard';
@@ -69,25 +70,27 @@ export default async function AdminOrdersPage() {
       ) : (
         <ul className="mt-14 space-y-px">
           {rows.map((o) => (
-            <li
-              key={o.id}
-              className="grid grid-cols-[1fr_auto_auto] items-baseline gap-6 py-5 border-t border-rule"
-            >
-              <span>
-                <span className="font-serif text-body text-ink block">
-                  {titleById.get(o.publication_id) ?? 'Untitled'}
+            <li key={o.id} className="border-t border-rule">
+              <Link
+                href={`/admin/orders/${o.id}`}
+                className="grid grid-cols-[1fr_auto_auto] items-baseline gap-6 py-5 group"
+              >
+                <span>
+                  <span className="font-serif text-body text-ink block group-hover:text-accent transition-colors duration-300">
+                    {titleById.get(o.publication_id) ?? 'Untitled'}
+                  </span>
+                  <span className="metadata text-ink-faint mt-1 block">
+                    {nameById.get(o.buyer_id) ?? 'Buyer'} → {nameById.get(o.creator_id) ?? 'Creator'}
+                  </span>
                 </span>
-                <span className="metadata text-ink-faint mt-1 block">
-                  {nameById.get(o.buyer_id) ?? 'Buyer'} → {nameById.get(o.creator_id) ?? 'Creator'}
+                <span className="metadata text-ink-faint">{STATUS_LABEL[o.status] ?? o.status}</span>
+                <span className="text-ink text-[0.9rem] tabular-nums text-right">
+                  {money(o.total_minor, o.currency ?? 'CAD')}
+                  <span className="metadata text-ink-faint block mt-1">
+                    {formatDate(o.created_at)}
+                  </span>
                 </span>
-              </span>
-              <span className="metadata text-ink-faint">{STATUS_LABEL[o.status] ?? o.status}</span>
-              <span className="text-ink text-[0.9rem] tabular-nums text-right">
-                {money(o.total_minor, o.currency ?? 'CAD')}
-                <span className="metadata text-ink-faint block mt-1">
-                  {formatDate(o.created_at)}
-                </span>
-              </span>
+              </Link>
             </li>
           ))}
         </ul>

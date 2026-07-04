@@ -122,6 +122,9 @@ export const publications = pgTable(
     /** Editor's Pick timeline (D-023/D-025): the time an editor selected this
      *  work. Null = not picked. A timestamp, not a flag, so Picks is a timeline. */
     editorPickAt: timestamp('editor_pick_at', { withTimezone: true }),
+    /** Interior print (D-029): 'mono' | 'colour'. Explicit, never inferred —
+     *  authoritative for the print estimator and the printer. */
+    interior: text('interior'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -201,11 +204,24 @@ export const orders = pgTable(
     shippingMinor: integer('shipping_minor').notNull().default(0),
     taxMinor: integer('tax_minor').notNull().default(0),
     totalMinor: integer('total_minor').notNull(),
+    /** Order economics snapshot (D-029), immutable at purchase.
+     *  print_cost_minor: Baxter's cost to the printer.
+     *  platform_fee_minor: REPURPOSED as the Baxter production margin.
+     *  creator_earnings_minor: the creator's take, transferred at fulfilment. */
+    printCostMinor: integer('print_cost_minor').notNull().default(0),
     platformFeeMinor: integer('platform_fee_minor').notNull(),
+    creatorEarningsMinor: integer('creator_earnings_minor').notNull().default(0),
+    /** A creator's own proof copy (D-029): cost-only, no margin, no transfer. */
+    isTestPrint: boolean('is_test_print').notNull().default(false),
     currency: text('currency').notNull().default('CAD'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     stripeTransferId: text('stripe_transfer_id'),
     shippingAddress: jsonb('shipping_address'),
+    /** Selected live carrier service (D-030), captured at checkout. Null until
+     *  EasyPost is enabled; postage cost itself lives in shipping_minor. */
+    shippingCarrier: text('shipping_carrier'),
+    shippingService: text('shipping_service'),
+    shippingEstimatedDelivery: text('shipping_estimated_delivery'),
     fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

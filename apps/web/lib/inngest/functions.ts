@@ -6,6 +6,8 @@ import { inspectPdf } from '@/lib/pdf/inspect';
 import { renderPreviewPages } from '@/lib/pdf/render';
 import { uploadImage, deleteImage } from '@/lib/cloudflare/images';
 import { sendAdminEmail, sendEmail } from '@/lib/email/resend';
+import { presignedGetUrl } from '@/lib/r2/presigned';
+import { loadOrderDetail } from '@/lib/orders/detail';
 import {
   evaluatePreflight,
   getFormatPreset,
@@ -426,4 +428,155 @@ const decidedNotify = inngest.createFunction(
   }
 );
 
-export const functions = [preflight, submittedNotify, decidedNotify];
+/**
+ * Order commerce notifications (Slice 9).
+ *
+ * Triggered by `order/paid` from the Stripe webhook. Sends the three commerce
+ * emails a paid order produces: the buyer's receipt, the creator's sale notice
+ * (skipped for a proof — the creator sold nothing to themselves), and the
+ * admin's production package — the print-ready file plus every spec MGS needs
+ * and the delivery address. Emails are best-effort: a failed send retries but
+ * never un-books the order.
+ */
+const orderPaidNotify = inngest.createFunction(
+  { id: 'order-paid-notify', retries: 3 },
+  { event: 'order/paid' },
+  async ({ event }) => {
+    const { orderId } = event.data as { orderId: string };
+    const db = createAdminClient();
+
+    const detail = await loadOrderDetail(db, orderId);
+    if (!detail) return { ok: false, reason: 'order not found' };
+
+    const { order, publication, buyer, creator, estimate, address } = detail;
+    const cur = order.currency;
+    const money = (minor: number) => `$${(minor / 100).toFixed(2)} ${cur}`;
+
+    // Selected carrier service (D-030), if captured. One shared line for all
+    // three emails; empty until EasyPost is enabled.
+    const shippingLine = order.shippingCarrier
+      ? `${order.shippingCarrier} · ${order.shippingService}${
+          order.shippingEstimatedDelivery
+            ? ` · ${order.shippingEstimatedDelivery}`
+            : ''
+        } — ${money(order.shippingMinor)}`
+      : null;
+
+    // Buyer receipt — Institutional voice, a plain confirmation.
+    let buyerEmailed = false;
+    if (buyer.email) {
+      const subject = order.isTestPrint
+        ? `Your proof copy — ${publication.title}`
+        : `Your Baxter order — ${publication.title}`;
+      const text = [
+        order.isTestPrint
+          ? `Your proof copy of ${publication.title} is confirmed.`
+          : `Thank you. Your copy of ${publication.title} by ${creator.name} is confirmed.`,
+        '',
+        `Total ${money(order.totalMinor)}`,
+        ...(shippingLine ? [`Shipping: ${shippingLine}`] : []),
+        'Baxter will send it into production and ship it to the address you provided.',
+      ].join('\n');
+      const { sent } = await sendEmail({ to: buyer.email, subject, text });
+      buyerEmailed = sent;
+    }
+
+    // Creator sale — skipped for a proof (no earnings, no sale).
+    let creatorEmailed = false;
+    if (!order.isTestPrint && creator.email) {
+      const subject = `Your work sold — ${publication.title}`;
+      const text = [
+        `${publication.title} sold a copy.`,
+        '',
+        `Your earnings: ${money(order.creatorEarningsMinor)}.`,
+        'They will be released when the order is fulfilled.',
+      ].join('\n');
+      const { sent } = await sendEmail({ to: creator.email, subject, text });
+      creatorEmailed = sent;
+    }
+
+    // Admin production package — the print-ready file + full specs + address.
+    let fileUrl: string | null = null;
+    if (detail.fileKey) {
+      try {
+        fileUrl = await presignedGetUrl({
+          bucket: detail.fileBucket ?? CLEAN_BUCKET,
+          key: detail.fileKey,
+          // A generous window so the desk can act on the email at leisure.
+          expiresInSeconds: 60 * 60 * 24 * 3,
+        });
+      } catch (e) {
+        console.error('orderPaidNotify: presign failed', {
+          orderId,
+          error: String(e),
+        });
+      }
+    }
+
+    const addr = address?.address ?? null;
+    const addressLines = addr
+      ? [
+          address?.name ?? '',
+          addr.line1 ?? '',
+          addr.line2 ?? '',
+          [addr.city, addr.state, addr.postal_code].filter(Boolean).join(', '),
+          addr.country ?? '',
+          address?.phone ? `Tel: ${address.phone}` : '',
+        ].filter(Boolean)
+      : ['No delivery address captured.'];
+
+    const specLines = estimate
+      ? [
+          `Quantity: ${order.quantity}`,
+          `Interior: ${publication.interior === 'mono' ? 'Black & white' : publication.interior === 'colour' ? 'Colour' : '—'}`,
+          `Pages: ${publication.pageCount ?? '—'}`,
+          `Trim: ${publication.trimWidthMm ?? '—'} × ${publication.trimHeightMm ?? '—'} mm`,
+          `Binding: ${estimate.binding}`,
+          `Paper: ${estimate.paper}`,
+          `Est. weight: ${estimate.estimatedWeightGrams} g`,
+          `Est. parcel: ${estimate.parcelDimensionsMm.length} × ${estimate.parcelDimensionsMm.width} × ${estimate.parcelDimensionsMm.height} mm`,
+        ]
+      : ['Specifications unavailable (page count or interior not set).'];
+
+    const adminSubject = order.isTestPrint
+      ? `Proof to print: ${publication.title} · ${order.quantity}`
+      : `Order to print: ${publication.title} · ${order.quantity}`;
+    const adminText = [
+      `${publication.title} by ${creator.name}`,
+      order.isTestPrint ? '(Creator proof — production cost only.)' : '',
+      '',
+      'SPECIFICATIONS',
+      ...specLines,
+      '',
+      'DELIVER TO',
+      ...addressLines,
+      ...(shippingLine ? ['', `Shipping: ${shippingLine}`] : []),
+      '',
+      'PRINT FILE',
+      fileUrl ?? 'No print-ready file attached.',
+      '',
+      'ECONOMICS',
+      `Printing & production: ${money(order.printCostMinor)}`,
+      `Baxter production margin: ${money(order.baxterMarginMinor)}`,
+      `Creator earnings: ${money(order.creatorEarningsMinor)}`,
+      `Shipping: ${money(order.shippingMinor)}`,
+      `Total charged: ${money(order.totalMinor)}`,
+    ]
+      .filter((l) => l !== null && l !== undefined)
+      .join('\n');
+
+    const { sent: adminEmailed } = await sendAdminEmail({
+      subject: adminSubject,
+      text: adminText,
+    });
+
+    return { ok: true, buyerEmailed, creatorEmailed, adminEmailed };
+  }
+);
+
+export const functions = [
+  preflight,
+  submittedNotify,
+  decidedNotify,
+  orderPaidNotify,
+];

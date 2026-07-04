@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { estimateProduction, type Interior } from '@baxter/domain';
 import { saveMarketplace } from './actions';
 
 type Props = {
@@ -13,7 +14,20 @@ type Props = {
     edition: string;
   };
   currency: string;
+  /** Inputs to the production estimator (D-029) for the live retail breakdown.
+   *  pageCount/interior are null until the file is uploaded and the interior
+   *  declared — the breakdown waits for them rather than guessing. */
+  estimatorInput: {
+    formatPresetId: string;
+    pageCount: number | null;
+    interior: Interior | null;
+    marginBps: number;
+  };
 };
+
+function money(minor: number, currency: string): string {
+  return `$${(minor / 100).toFixed(2)} ${currency}`;
+}
 
 const labelClass = 'metadata text-ink-faint';
 const inputClass =
@@ -24,12 +38,36 @@ const inputClass =
  * not on the submission/review surface. Quiet, hairline-bordered fields; one
  * Save action; no autosave.
  */
-export function MarketplaceSection({ publicationId, initial, currency }: Props) {
+export function MarketplaceSection({
+  publicationId,
+  initial,
+  currency,
+  estimatorInput,
+}: Props) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // Live retail breakdown (D-029). "Your earnings per copy" is the only figure
+  // the creator sets; Baxter builds retail up from production so the creator can
+  // see exactly how the price is formed — print cost, Baxter's margin, and their
+  // earnings. Waits until the file is uploaded (page count) and the interior is
+  // declared, since both drive the print cost.
+  const breakdown = useMemo(() => {
+    const { formatPresetId, pageCount, interior, marginBps } = estimatorInput;
+    if (!formatPresetId || !pageCount || !interior) return null;
+    const earnings = Math.round(Number.parseFloat(values.price || '0') * 100);
+    if (!Number.isFinite(earnings) || earnings < 0) return null;
+    return estimateProduction({
+      formatPresetId,
+      pageCount,
+      interior,
+      creatorEarningsMinor: earnings,
+      marginBps,
+    });
+  }, [estimatorInput, values.price]);
 
   function set<K extends keyof typeof values>(key: K, v: string) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -81,7 +119,7 @@ export function MarketplaceSection({ publicationId, initial, currency }: Props) 
       <div className="grid grid-cols-2 gap-8">
         <div>
           <label className={labelClass} htmlFor="mk-price">
-            Price ({currency})
+            Your earnings per copy ({currency})
           </label>
           <input
             id="mk-price"
@@ -105,6 +143,50 @@ export function MarketplaceSection({ publicationId, initial, currency }: Props) 
             placeholder="Open edition"
           />
         </div>
+      </div>
+
+      {/* Transparent retail breakdown (D-029). Baxter earns by manufacturing,
+          not by taxing the creator — so the arithmetic is shown in full. */}
+      <div className="border-t border-rule pt-6">
+        <p className="metadata text-ink-faint mb-4">How the price is formed</p>
+        {breakdown ? (
+          <dl className="space-y-2.5 text-[0.9rem]">
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-soft">Printing &amp; production</dt>
+              <dd className="text-ink tabular-nums">
+                {money(breakdown.printCostMinor, currency)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-soft">Baxter production margin</dt>
+              <dd className="text-ink tabular-nums">
+                {money(breakdown.baxterMarginMinor, currency)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-soft">Your earnings</dt>
+              <dd className="text-ink tabular-nums">
+                {money(breakdown.creatorEarningsMinor, currency)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between border-t border-rule pt-2.5 mt-1">
+              <dt className="font-serif text-ink">Retail price</dt>
+              <dd className="font-serif text-ink tabular-nums">
+                {money(breakdown.retailMinor, currency)}
+              </dd>
+            </div>
+            <p className="metadata text-ink-faint pt-3 leading-relaxed">
+              {breakdown.binding} · {breakdown.paper}. Shipping is calculated
+              live at checkout and passed through at cost.
+            </p>
+          </dl>
+        ) : (
+          <p className="text-[0.9rem] text-ink-faint leading-relaxed">
+            The full breakdown — printing, Baxter&rsquo;s margin, and your
+            earnings — appears once the interior is set and the file is uploaded
+            (so the page count is known).
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-6">

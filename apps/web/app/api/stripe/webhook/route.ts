@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/client';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { inngest } from '@/lib/inngest/client';
 
 // Stripe signature verification needs the raw body + Node crypto.
 export const runtime = 'nodejs';
@@ -86,10 +87,18 @@ export async function POST(req: Request) {
           shipping_minor: toInt(m.shipping_minor),
           tax_minor: toInt(m.tax_minor),
           total_minor: toInt(m.total_minor, pi.amount),
+          print_cost_minor: toInt(m.print_cost_minor),
           platform_fee_minor: toInt(m.platform_fee_minor),
+          creator_earnings_minor: toInt(m.creator_earnings_minor),
+          is_test_print: m.is_test_print === 'true',
           currency: m.currency ?? (pi.currency ?? 'cad').toUpperCase(),
           stripe_payment_intent_id: pi.id,
           shipping_address: shipping,
+          // Selected carrier service (D-030), carried on the intent once EasyPost
+          // is live; null until then.
+          shipping_carrier: m.shipping_carrier ?? null,
+          shipping_service: m.shipping_service ?? null,
+          shipping_estimated_delivery: m.shipping_estimated_delivery ?? null,
         })
         .select('id')
         .single();
@@ -111,6 +120,21 @@ export async function POST(req: Request) {
         actor_id: null, // system (Stripe)
         payload: { via: 'stripe_webhook', payment_intent: pi.id },
       });
+
+      // Fan out the commerce notifications (buyer receipt, creator sale, admin
+      // production package). Async so a slow email never blocks the webhook ACK;
+      // a send failure never un-books the paid order.
+      try {
+        await inngest.send({
+          name: 'order/paid',
+          data: { orderId: order.id },
+        });
+      } catch (sendErr) {
+        console.error('stripe webhook: order/paid emit failed', {
+          orderId: order.id,
+          error: String(sendErr),
+        });
+      }
 
       return new Response('ok', { status: 200 });
     }

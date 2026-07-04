@@ -13,6 +13,33 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { imageDeliveryUrl } from '@/lib/cloudflare/images';
+import { estimateProduction } from '@baxter/domain';
+import { productionMarginBps } from '@/lib/production/config';
+
+/**
+ * A card's price is the retail a buyer pays — built from production (D-029),
+ * not the creator's stored earnings figure. Null when the work can't yet be
+ * priced (no page count or undeclared interior), in which case the card simply
+ * omits the price (D-023: price is the quietest metadata).
+ */
+function retailMinor(r: PubRow): number | null {
+  if (
+    !r.format_preset_id ||
+    !r.page_count ||
+    (r.interior !== 'mono' && r.interior !== 'colour') ||
+    r.price_minor === null ||
+    r.price_minor === undefined
+  ) {
+    return null;
+  }
+  return estimateProduction({
+    formatPresetId: r.format_preset_id,
+    pageCount: r.page_count,
+    interior: r.interior,
+    creatorEarningsMinor: r.price_minor,
+    marginBps: productionMarginBps(),
+  }).retailMinor;
+}
 
 /** The four things a card shows, in hierarchy order (D-023). */
 export interface PublicationCard {
@@ -42,7 +69,7 @@ export interface HomeSection {
 
 // Columns every card needs. Kept in one place so all listing queries agree.
 const CARD_COLUMNS =
-  'id, title, slug, creator_id, cover_asset_id, price_minor, currency, published_at, editor_pick_at';
+  'id, title, slug, creator_id, cover_asset_id, format_preset_id, interior, page_count, price_minor, currency, published_at, editor_pick_at';
 
 interface PubRow {
   id: string;
@@ -50,6 +77,9 @@ interface PubRow {
   slug: string;
   creator_id: string;
   cover_asset_id: string | null;
+  format_preset_id: string | null;
+  interior: string | null;
+  page_count: number | null;
   price_minor: number | null;
   currency: string | null;
 }
@@ -107,7 +137,7 @@ async function toCards(
       creatorName: creator.name,
       href: `/${encodeURIComponent(creator.handle)}/${encodeURIComponent(r.slug)}`,
       coverUrl: coverExternal ? imageDeliveryUrl(coverExternal, 'grid') : null,
-      priceMinor: r.price_minor,
+      priceMinor: retailMinor(r),
       currency: r.currency ?? 'CAD',
     });
   }

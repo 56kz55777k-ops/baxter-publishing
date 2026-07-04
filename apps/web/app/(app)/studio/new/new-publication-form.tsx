@@ -53,6 +53,34 @@ export function NewPublicationForm() {
         ))}
       </fieldset>
 
+      <fieldset className="flex flex-col gap-4" disabled={pending}>
+        <legend className="metadata mb-2">Interior</legend>
+        <p className="text-[0.85rem] text-ink-faint -mt-2 mb-1">
+          How the pages are printed. This sets the production cost, so it is
+          declared here rather than guessed from the file.
+        </p>
+        {[
+          { value: 'mono', name: 'Black & white', note: 'Text, line art, monochrome photography' },
+          { value: 'colour', name: 'Colour', note: 'Full-colour interior throughout' },
+        ].map((opt) => (
+          <label key={opt.value} className="flex items-baseline gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="interior"
+              value={opt.value}
+              required
+              className="accent-ink mt-1"
+            />
+            <span>
+              <span className="font-serif text-body text-ink">{opt.name}</span>
+              <span className="block text-[0.85rem] text-ink-faint mt-1">
+                {opt.note}
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
       <label className="flex flex-col gap-2">
         <span className="metadata">Category</span>
         <select

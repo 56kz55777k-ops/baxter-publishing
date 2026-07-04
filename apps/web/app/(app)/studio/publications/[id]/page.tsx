@@ -11,6 +11,7 @@ import {
   type PreflightIssueView,
 } from './artifact-section';
 import { MarketplaceSection } from './marketplace-section';
+import { productionMarginBps } from '@/lib/production/config';
 
 /** Defensive readers for the loosely-typed preflight jsonb. */
 function asIssues(value: unknown): PreflightIssueView[] {
@@ -70,7 +71,7 @@ export default async function PublicationDetailPage({
   const { data: publication } = await supabase
     .from('publications')
     .select(
-      'id, title, subtitle, description, category, format, status, page_count, trim_width_mm, trim_height_mm, creator_id, cover_asset_id, price_minor, currency, edition_size, submitted_at, published_at'
+      'id, title, subtitle, description, category, format, format_preset_id, interior, status, page_count, trim_width_mm, trim_height_mm, creator_id, cover_asset_id, price_minor, currency, edition_size, submitted_at, published_at'
     )
     .eq('id', id)
     .maybeSingle();
@@ -255,6 +256,15 @@ export default async function PublicationDetailPage({
           {publication.trim_width_mm} × {publication.trim_height_mm} mm
         </p>
 
+        <p className="metadata text-ink-faint">Interior</p>
+        <p className="text-ink">
+          {publication.interior === 'mono'
+            ? 'Black & white'
+            : publication.interior === 'colour'
+              ? 'Colour'
+              : '—'}
+        </p>
+
         <p className="metadata text-ink-faint">Page count</p>
         <p className="text-ink">{publication.page_count ?? '—'}</p>
       </section>
@@ -266,6 +276,16 @@ export default async function PublicationDetailPage({
           <MarketplaceSection
             publicationId={publication.id}
             currency={currency}
+            estimatorInput={{
+              formatPresetId: publication.format_preset_id ?? '',
+              pageCount: publication.page_count ?? null,
+              interior:
+                publication.interior === 'mono' ||
+                publication.interior === 'colour'
+                  ? publication.interior
+                  : null,
+              marginBps: productionMarginBps(),
+            }}
             initial={{
               subtitle: publication.subtitle ?? '',
               description: publication.description ?? '',

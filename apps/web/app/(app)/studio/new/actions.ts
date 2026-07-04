@@ -7,6 +7,7 @@ import {
   getFormatPreset,
   isPublicationCategory,
   type PublicationCategory,
+  type Interior,
 } from '@baxter/domain';
 
 export type CreatePublicationState =
@@ -34,6 +35,7 @@ export async function createPublication(
   const title = String(formData.get('title') ?? '').trim();
   const formatPresetId = String(formData.get('formatPresetId') ?? '');
   const categoryRaw = String(formData.get('category') ?? '');
+  const interiorRaw = String(formData.get('interior') ?? '');
 
   if (!title) {
     return { status: 'error', message: 'A title is required.' };
@@ -55,6 +57,11 @@ export async function createPublication(
   }
   const category: PublicationCategory = categoryRaw;
 
+  if (interiorRaw !== 'mono' && interiorRaw !== 'colour') {
+    return { status: 'error', message: 'Choose how the interior is printed.' };
+  }
+  const interior: Interior = interiorRaw;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -72,6 +79,7 @@ export async function createPublication(
       slug,
       title,
       category,
+      interior,
       format: 'print',
       format_preset_id: preset.id,
       // page_count is filled in by the preflight worker after upload, when the

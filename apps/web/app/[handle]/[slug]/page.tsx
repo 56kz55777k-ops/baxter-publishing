@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 import { imageDeliveryUrl } from '@/lib/cloudflare/images';
 import { getAdminUser } from '@/lib/auth/admin-guard';
 import { stripeConfigured } from '@/lib/stripe/client';
+import { productionMarginBps } from '@/lib/production/config';
+import { shippingConfigured } from '@/lib/shipping';
+import { estimateProduction } from '@baxter/domain';
 import { SiteHeader } from '@/components/site-header';
 import { EditorPickToggle } from './editor-pick-toggle';
 
@@ -31,7 +34,7 @@ async function loadPublication(handle: string, slug: string) {
   const { data: publication } = await supabase
     .from('publications')
     .select(
-      'id, title, subtitle, description, category, format, page_count, edition_size, price_minor, currency, cover_asset_id, slug, status, editor_pick_at'
+      'id, title, subtitle, description, category, format, format_preset_id, interior, page_count, edition_size, price_minor, currency, cover_asset_id, slug, status, editor_pick_at'
     )
     .eq('creator_id', creator.id)
     .eq('slug', slug)
@@ -84,8 +87,31 @@ export default async function PublicationPage({
   const { supabase, creator, publication } = loaded;
 
   const currency = publication.currency ?? 'CAD';
-  const price = formatPrice(publication.price_minor, currency);
   const formatLabel = FORMAT_LABEL[publication.format] ?? publication.format;
+
+  // Retail is built up from production (D-029): the buyer sees the finished
+  // price, never the creator's earnings figure. Needs the file's page count and
+  // the declared interior; without them the work isn't yet orderable.
+  const interior =
+    publication.interior === 'mono' || publication.interior === 'colour'
+      ? publication.interior
+      : null;
+  const canPrice =
+    Boolean(publication.format_preset_id) &&
+    Boolean(publication.page_count) &&
+    interior !== null &&
+    publication.price_minor !== null &&
+    publication.price_minor !== undefined;
+  const estimate = canPrice
+    ? estimateProduction({
+        formatPresetId: publication.format_preset_id as string,
+        pageCount: publication.page_count as number,
+        interior: interior as 'mono' | 'colour',
+        creatorEarningsMinor: publication.price_minor as number,
+        marginBps: productionMarginBps(),
+      })
+    : null;
+  const price = estimate ? formatPrice(estimate.retailMinor, currency) : null;
 
   // Imagery — cover + preview pages (public Cloudflare Images).
   const hashReady = Boolean(process.env.CLOUDFLARE_IMAGES_ACCOUNT_HASH);
@@ -122,12 +148,24 @@ export default async function PublicationPage({
   const {
     data: { user: viewer },
   } = await supabase.auth.getUser();
+  // A printed work also needs live shipping to be orderable (D-030) — without a
+  // carrier rate it can't be priced, so we don't offer a link that dead-ends.
+  const needsShipping = publication.format !== 'digital';
+  const shippingReady = !needsShipping || shippingConfigured();
   const buyable =
     stripeConfigured() &&
     Boolean(creator.stripe_charges_enabled) &&
-    publication.price_minor !== null &&
-    publication.price_minor !== undefined &&
+    estimate !== null &&
+    shippingReady &&
     viewer?.id !== creator.id;
+  // The creator can order a proof of their own work at production cost (D-029) —
+  // a test print, not a purchase. Shown in place of the buy affordance.
+  const canProof =
+    stripeConfigured() &&
+    Boolean(creator.stripe_charges_enabled) &&
+    estimate !== null &&
+    shippingReady &&
+    viewer?.id === creator.id;
   const buyHref = `/${encodeURIComponent(creator.handle)}/${encodeURIComponent(publication.slug)}/buy`;
 
   return (
@@ -202,6 +240,18 @@ export default async function PublicationPage({
             >
               Own this publication
             </Link>
+          </div>
+        ) : canProof ? (
+          <div className="mt-12">
+            <Link
+              href={`${buyHref}?proof=1`}
+              className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
+            >
+              Order a proof copy
+            </Link>
+            <p className="metadata text-ink-faint mt-3">
+              At production cost. No margin, no earnings.
+            </p>
           </div>
         ) : (
           <p className="metadata text-ink-faint mt-12">Ordering opens soon.</p>
