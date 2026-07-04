@@ -8,6 +8,19 @@
 
 ---
 
+## STATUS — pricing model LOCKED (2026-07-04)
+
+Ben locked the pricing foundation with four adjustments; recorded as **D-028** (pricing — production not commission) and **D-029** (the estimator service), with the Constitution updated. The four adjustments, folded into the decisions below:
+
+1. **Production margin is configurable** — starts at 30%, consumed from config, never hard-coded (Decision 0a).
+2. **Interior (B&W / Colour) is an explicit publication property** — set by the creator, authoritative for the estimator *and* the printer; never inferred from format. Needs a `publications.interior` migration + a creation-form field (Decision 0d / 0b).
+3. **Expanded, transparent pricing breakdown** for creators — show how retail is built (print cost → Baxter production → your earnings → estimated retail); transparency *is* the position (Decision 0c).
+4. **Creator test prints charged at production cost only** (print + shipping) — **no earnings, no Baxter margin.** Baxter earns when creators sell, not when they proof (Decision 1).
+
+Still open (proceeding on the brief's leans unless redirected): the exact placeholder **rate values** (0e — accepted as placeholders, tune to MGS later), email copy (I'll draft), and the remaining fulfilment confirmations.
+
+---
+
 ## 0. The reframe (read first)
 
 Ben has reframed Baxter's economics, and it changes the order of everything below. **Baxter is a publishing and print-production platform, not a marketplace that taxes creators.** Baxter earns because it *manufactures books* — not by taking a cut of the creator's margin. The current model (creator sets retail, Baxter skims 10%) is replaced by:
@@ -58,7 +71,7 @@ New Inngest functions ship → **D-017 manual resync** after deploy. And the pri
 
 Largely **locked by Ben**; the open parts are the rate values, the data model, and the "estimated" UX. Sub-parts:
 
-**0a — The model (LOCKED).** `retail = printCost + baxterMargin + creatorEarnings`, where `baxterMargin = round(0.30 × printCost)`. The **30% production margin replaces the 10% platform fee entirely** — Baxter's only revenue is the production margin. The creator sets **earnings per copy**; retail is computed and shown to them for approval.
+**0a — The model (LOCKED).** `retail = printCost + baxterMargin + creatorEarnings`, where `baxterMargin = round(marginRate × printCost)` and **`marginRate` is configurable** (starts at 30%, consumed from config — never hard-coded). The production margin **replaces the 10% platform fee entirely** — Baxter's only revenue is the production margin. The creator sets **earnings per copy**; retail is computed and shown to them for approval.
 
 **0b — The estimator as the single source of truth (LOCKED architecture).** One service in `@baxter/domain` that every surface consumes — publication page, checkout, orders, admin fulfilment, creator workspace, emails, Stripe transfers, analytics. **No duplicated math anywhere.**
 ```
@@ -77,7 +90,7 @@ Estimated retail       $31.00
 ```
 
 **0d — Data model (open — my proposal).** Snapshot the breakdown onto each order at purchase time (immutable), because rate cards change:
-- **`publications`:** reinterpret `price_minor` as **creator earnings per copy** (relabel UI; no rename needed for v1), and add a **`colour_mode`** (`mono`/`colour`) — or default it per format for v1 and add the field later. *Lean: default colour per format for v1 (zine → mono, magazine/photobook → colour); no publications migration yet.*
+- **`publications`:** reinterpret `price_minor` as **creator earnings per copy** (relabel UI), and **add `interior`** (`mono`/`colour`) as an explicit creator-set property (LOCKED — never inferred from format). *This means a publications migration + an interior field on the creation form.*
 - **`orders`:** add **`print_cost_minor`** and **`creator_earnings_minor`**; repurpose **`platform_fee_minor` → the Baxter production margin**; `total_minor` = retail. *This is the one migration Slice 9 needs.* (`unit_price_minor`/`subtotal_minor` can hold earnings×qty for continuity.)
 - The **transfer at fulfilment = `creator_earnings_minor`** (not "total − fee"); Baxter keeps the margin and pays the printer the print cost.
 
@@ -99,7 +112,7 @@ Sanity checks: 8pp mono zine → **$2.82**; 32pp colour magazine → **$10.04**;
 
 Allow a creator to buy their own *published* work as a **test print / proof** (relax the block in both places). The money model under the royalty scheme:
 
-*Lean:* a test print is **print cost + Baxter margin, no creator earnings, no transfer** (you can't pay yourself). Detected by `buyer_id == creator_id`; the order is flagged **"Test print"**; `creator_earnings = 0`, so retail = `printCost + margin` (e.g. the $10 book → **$13**). The admin still gets the production package (the point is to make the proof). **Sub-question:** keep the 30% Baxter margin on a creator's own proof, or waive it (charge at cost, ~$10)? *Lean: keep the margin — Baxter still manufactures it — but I can waive it if you'd rather proofs be at-cost.*
+**LOCKED (adjustment 4):** a test print is charged at **production cost only — print cost + shipping, no Baxter margin, no creator earnings, no transfer.** Detected by `buyer_id == creator_id`; the order is flagged **"Test print"**; `baxter_margin = 0`, `creator_earnings = 0`, so retail = `printCost + shipping` (the $10 book → **$10** + shipping). The admin still gets the production package (the point is to make the proof). Baxter earns when creators *sell*, not when they *proof* (D-028).
 
 ---
 

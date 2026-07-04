@@ -392,6 +392,60 @@ Slice 7 ships two sections (**Editor's Picks**, **New Releases**) beneath the op
 
 ---
 
+## D-028 · Pricing — Baxter earns by manufacturing, not by commission
+
+**Chosen.** Baxter's revenue model is reframed. Baxter is a **publishing and print-production platform**, not a marketplace that taxes creators. The flat 10% platform fee (Slice 8) is **removed entirely**. Retail is built up from production:
+
+```
+Retail = Print cost  +  Baxter production margin  +  Creator earnings per copy
+```
+
+- **Baxter production margin** = a **configurable** percentage of print cost (starts at **30%**, consumed from config — never hard-coded). This is Baxter's only revenue: it is earned on manufacturing, not skimmed from the creator.
+- **Creator earnings per copy** — what the creator sets. They never think in retail price; they answer one question: *"How much would you like to earn from each sale?"* The retail price is **computed** and shown to them for approval, and is **never stored on the publication** (it's derived; it moves if rates change).
+- **Naming:** "**Your earnings per copy**" — plain English, not "royalty" (publishing jargon). A creator instinctively knows what "$18 per copy" means.
+- **Transparency:** the creator sees the **full breakdown** (estimated print cost → Baxter production → your earnings → estimated retail), because transparency is the point — Baxter earns visibly through production, never through hidden commission.
+- **Creator test prints are charged at production cost only** (print + shipping) — **no creator earnings and no Baxter production margin.** Baxter earns when creators *sell* books, not when they're perfecting them (D-030 covers the mechanics).
+
+**Money flow (Stripe architecture unchanged — D-026 held funds).** The buyer pays retail (held on the platform account). At fulfilment, Baxter transfers **the creator's earnings** to their connected account (not "total − fee"), keeps the **production margin** as revenue, and pays the printer the **print cost** out of the held balance. One payment, held, transfer at fulfilment — exactly as built; only the *amounts* change.
+
+**Why.** A commission model ("we take 10% of what you set") frames Baxter as extracting from artists and — critically — never covers the cost of actually printing, so Baxter would lose money fulfilling. Building retail up from production instead means the **buyer pays for production**, the **creator keeps 100% of their earnings**, and **Baxter profits from the service it genuinely provides** (manufacturing books). It is a healthier long-term identity and it is economically correct for print-on-demand.
+
+**What would force reconsideration.** A future non-print (purely digital) product where there's nothing to manufacture — that needs its own revenue treatment (a digital-delivery fee or a different split), decided when it arrives.
+
+---
+
+## D-029 · The print estimator — one service, the single source of truth
+
+**Chosen.** All print economics live in **exactly one place**: a pure `estimatePrintCost()` service in `@baxter/domain`. Every surface — publication page, checkout, orders, admin fulfilment, creator workspace, emails, Stripe transfers, analytics — **consumes** it. There is **no duplicated pricing math anywhere.**
+
+```
+estimatePrintCost({ formatPresetId, pageCount, interior, binding, paperStock, quantity, creatorEarningsMinor })
+  → { printCostMinor, baxterMarginMinor, creatorEarningsMinor, retailMinor, breakdown }
+```
+
+- **Interior (Black & White / Colour) is an EXPLICIT publication property** — set by the creator at creation, stored on the publication, and authoritative for both the estimator and the printer. It is **never inferred** from the publication's format/type (a photobook can be B&W; a zine can be colour). (Migration: add `interior` to publications; add the field to the creation form.)
+- **Binding + paper stock** resolve from the format preset defaults (D-028's rate card) — with room for a per-order admin override later.
+- **The rate card is configurable data** — placeholder CAD short-run values now (see below), swapped wholesale for **MGS Marketing Toronto**'s real rate sheet later, with no code change to the estimator or its consumers.
+- **The estimate is never a promise.** Every surface reads **"Estimated production cost."** The printer's invoice remains the source of truth.
+
+**Placeholder rate card (CAD, per copy, on-demand/short-run — calibrate to MGS).** `printCost = base + pageCount × perPageRate`:
+
+| Format | Binding | Default paper | Base | Per page (mono / colour) |
+|---|---|---|---|---|
+| A5 Zine | Saddle-stitch | 80lb uncoated text · 100lb cover | $2.50 | $0.04 / $0.20 |
+| A4 Magazine | Saddle-stitch | 100lb coated text · 120lb cover | $3.00 | $0.06 / $0.22 |
+| Square Photobook 210 | Perfect-bound | 100lb coated art · 12pt cover | $5.50 | $0.10 / $0.42 |
+
+Grounded in POD base+per-page formulas (KDP ≈ $1.00 + $0.012/pg; colour ≈ $0.04–0.08/pg) and local short-run rates ($2.50–9/copy; coated/square premiums). Sanity: 8pp mono zine → $2.82; 32pp colour magazine → $10.04; 60pp colour photobook → $30.70.
+
+**Data model.** `publications`: reinterpret `price_minor` as **creator earnings per copy** + add **`interior`**. `orders` (snapshot at purchase, immutable): add **`print_cost_minor`** and **`creator_earnings_minor`**; repurpose **`platform_fee_minor` → Baxter production margin**; `total_minor` = retail. The fulfilment transfer amount is `creator_earnings_minor`.
+
+**Why.** Print economics touch a dozen surfaces; if any of them re-derived the math, they would drift. One service means the publication page, the receipt, the admin package, and the Stripe transfer can never disagree, and recalibrating to the real printer is a one-file change. Making interior explicit (not inferred) guarantees the estimator and the printer always have authoritative data.
+
+**What would force reconsideration.** Volume/quantity tiers (add a quantity curve to the estimator); a printer whose pricing isn't base+per-page (re-model inside the one service — consumers unaffected).
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.

@@ -67,6 +67,14 @@ Every major Baxter surface answers a single primary question. Studio: *what am I
 
 Use it as a design test: **if a screen starts answering several questions at once, it is becoming *software* rather than *publishing*.** Split it, or cut what doesn't serve the one question. A surface that does less, more clearly, is the more Baxter surface.
 
+### Baxter earns by manufacturing, not by taxing creators
+
+Baxter is a publishing and print-production platform — it makes money because it *manufactures books*, not because it takes a cut of what artists earn. *(Locked as D-028.)*
+
+A retail price is built up from production, in the open: **print cost + Baxter's production margin + the creator's earnings per copy**. The buyer pays for production; the creator keeps 100% of their earnings; Baxter's margin is visible and earned on the service it actually provides. There is no hidden commission and no fee skimmed from the creator's side.
+
+This shapes the language and the surfaces: the creator is never asked "what should this cost?" — only *"how much would you like to earn from each sale?"* ("**Your earnings per copy**"). Baxter shows the full breakdown rather than concealing its cut, because transparency *is* the position. And a creator perfecting their own work (a test print) pays production cost only — no margin — because Baxter earns when creators *sell*, not when they *proof*.
+
 ---
 
 ## The two questions every screen must answer
