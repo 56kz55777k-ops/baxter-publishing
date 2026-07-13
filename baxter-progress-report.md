@@ -1,6 +1,6 @@
 # Baxter Publishing — Progress Report
 
-**Date:** 2026-06-05 · **Updated:** 2026-07-04 — Slice 8 (Stripe Connect + first purchase) shipped and production-verified end to end (a real test order paid, funds held). **Slices 1–8 are closed; next milestone is Slice 9 (OMS + fulfilment + commerce emails).**
+**Date:** 2026-06-05 · **Updated:** 2026-07-13 — Slice 9 (production economics + OMS + fulfilment + commerce emails) built, deployed, and **non-shipping smoke test passed** end to end (commits `eaead4d` build, `47e8b16` fulfilment-actor fix). Retail is built up from production (print + configurable Baxter margin + creator earnings); shipping is a separate live system behind a `ShippingProvider` abstraction, **fail-safe gated until EasyPost is enabled**. **Slices 1–9 are closed** (shipping quote wiring + live-send email verification deferred to the EasyPost follow-up). *(Prior: Slice 8 shipped 2026-07-04 — a real test order paid, funds held.)*
 **From:** Claude Code (paired with Ben Gibson)
 **For:** ChatGPT — review
 **Builds on:** `baxter-claude-code-handoff.md` (Perplexity Computer's handoff) and the prior progress reports.
@@ -624,4 +624,46 @@ Passed end to end (driven via the Chrome extension; DB + Stripe confirmed): crea
 
 ### Next
 
-**Slice 9 — OMS + fulfilment + commerce emails.** The order-detail page (`/admin/orders/[id]`) with a downloadable print-ready PDF and the clickable state machine (`paid → in_fulfillment → fulfilled`); the **Transfer** at fulfilment that releases the held funds (the creator's $16.20 payout); and the commerce email set (buyer confirmation/receipt, creator "you made a sale", and the admin **production package** — signed print file + specs + delivery address — for any print order, including creators' own test prints). New Inngest functions → **D-017 resync** applies. Scoped in `baxter-slice9-design-questions.md`.
+**Slice 9 — OMS + fulfilment + commerce emails.** *(Now shipped — see section 22.)* The order-detail page (`/admin/orders/[id]`) with a downloadable print-ready PDF and the clickable state machine (`paid → in_fulfillment → fulfilled`); the **Transfer** at fulfilment that releases the held funds; and the commerce email set (buyer confirmation/receipt, creator "you made a sale", and the admin **production package** — signed print file + specs + delivery address — for any print order, including creators' own test prints). New Inngest functions → **D-017 resync** applies. Scoped in `baxter-slice9-design-questions.md`.
+
+---
+
+## 22. Slice 9 — Production economics + OMS + fulfilment + commerce emails (built & non-shipping-verified)
+
+Built and deployed as commit **`eaead4d`**, with a one-line follow-up fix **`47e8b16`** (below). **Status: LIVE in production; non-shipping smoke test PASSED.** The live creator-earnings **transfer** and the **live-send** of commerce emails are the only pieces deferred — both require a correctly-priced order with live shipping, which is the dedicated EasyPost follow-up.
+
+### What shipped
+
+- **Print economics as the single source of truth (`D-029`).** `estimateProduction()` in `@baxter/domain` builds retail up from production: `retail = print cost + Baxter production margin + creator earnings`, and also returns estimated parcel **weight + dimensions**. The margin is **configurable** (`PRODUCTION_MARGIN_BPS`, default 30%), never hard-coded. **Baxter earns by manufacturing, not by taxing creators; and nothing from postage.**
+- **Interior is explicit (`D-029`).** Black & white / Colour is declared on `/studio/new` (drives print cost), never inferred from format.
+- **"Your earnings per copy."** The creator sets their earnings; the workspace shows a transparent breakdown (print, Baxter margin, earnings, retail). Buyers everywhere (publication page, marketplace grid, checkout) see the **retail**, never the earnings figure.
+- **Test prints.** A creator can order a proof of their own work at **production cost only** — no margin, no earnings, no payout transfer (`is_test_print`).
+- **OMS.** `/admin/orders/[id]` is the production package: specs (interior, pages, trim, binding, paper, est. weight, est. parcel), delivery address, a signed print-ready PDF link, full economics, and the fulfilment control. At **`fulfilled`**, the held creator earnings are released via a **separate Stripe Transfer** (skipped for proofs), stamping `stripe_transfer_id`/`fulfilled_at`.
+- **Commerce emails.** `order/paid` (emitted by the Stripe webhook) fans out three emails via a new `order-paid-notify` Inngest function: buyer receipt, creator "your work sold" (skipped for proofs), and the admin **production package** (signed file + specs + address). Inngest **resynced** (`D-017`) — the app shows **4 functions** with `order-paid-notify → order/paid` registered.
+- **Shipping as a separate live system (`D-030`).** A `ShippingProvider` abstraction with an EasyPost implementation behind a clean integration point; postage is pass-through (Baxter earns nothing). **Fail-safe:** with no `EASYPOST_API_KEY`, live shipping reports unavailable, physical checkout **creates no PaymentIntent**, and the buyer sees a calm Institutional "ordering is briefly unavailable" screen — *a paused sale over a wrong total.* Selected carrier service (carrier / service / cost / estimated delivery) is **persisted on every order** (migration `0006`) for reconciliation, support, and fulfilment; shown on the buyer receipt, admin order page, and admin production email when present.
+
+### Migrations (applied to prod)
+
+- **`0005_pricing_model.sql`** — `publications.interior` (existing rows backfilled to the **fail-safe `colour`** — overpricing a mono book is recoverable; underpricing a colour book as mono is not); `orders.print_cost_minor` / `creator_earnings_minor` / `is_test_print`; `platform_fee_minor` **repurposed** as the Baxter margin.
+- **`0006_shipping_details.sql`** — `orders.shipping_carrier` / `shipping_service` / `shipping_estimated_delivery` (null until EasyPost is enabled).
+
+Both additive and idempotent. Applied via the Supabase SQL editor.
+
+### Non-shipping smoke test — PASSED (driven via the Chrome extension, admin account `ben-in-toronto`)
+
+- **Retail computes correctly.** "Slice 7 Test" (8pp A5, backfilled to colour) shows **$23.33 CAD** = print $4.10 + 30% margin $1.23 + the creator's **$18.00** earnings. The buyer sees retail; the earnings figure is never exposed.
+- **Shipping gate behaved correctly.** With no EasyPost key, the publication page shows "Ordering opens soon" (no buy link), and direct `/buy` renders the calm "Ordering is briefly unavailable" Institutional screen.
+- **No PaymentIntent is created without live shipping.** The gate's early `return` fires before the Stripe call is ever reached — the calm screen rendering *is* the proof no intent was created.
+- **Admin production package rendered correctly.** `/admin/orders/[id]` showed full specs (Colour, 8pp, 148×210mm, Saddle-stitch, 80lb/100lb, **61 g**, **210×148×4 mm** parcel), the delivery address (Ben Buyer, Toronto), the economics ($18.00 total), and the signed print-ready PDF link.
+- **Fulfilment actor bug found and fixed.** The order state machine allowed `paid → in_fulfillment` for `creator`/`system` only — so the admin desk could Cancel but not begin fulfilment (`in_fulfillment → fulfilled` already included admin, so the actor list was simply incomplete). Fixed in **`47e8b16`** by adding `admin` to `paid → in_fulfillment`, consistent with the "Baxter manufactures and ships" model. Re-verified live: the desk moved the test order **`paid → in_fulfillment`**.
+- **Commerce emails are wired and Inngest-resynced**, but **live-send verification remains deferred** until the first EasyPost-enabled paid order (Option A — no temporary shipping stub). `RESEND_API_KEY` is present in Vercel Production (from the existing Baxter email setup); a real send is gated behind a paid order.
+
+### Test data
+
+The `$18` order (ref `61694821`) is intentionally left in **`in_fulfillment`** as Slice 9 test data. It predates the new economics model (print cost $0, creator earnings $0, margin $1.80 from the old model), so it is **not** advanced to `fulfilled` — doing so would not exercise a real transfer, and its economics aren't representative. The first correctly-priced EasyPost order is where `fulfilled` + the live transfer get verified.
+
+### Deferred to the EasyPost follow-up
+
+1. Wire the live cheapest-rate quote into checkout (add `EASYPOST_API_KEY` + ship-from origin, redeploy). No checkout rewrite — the provider abstraction is already in place.
+2. Verify a full **paid → fulfilled → creator-earnings transfer** cycle on a correctly-priced order.
+3. Confirm the three commerce emails actually **send** (buyer receipt, creator sale, admin production package).
