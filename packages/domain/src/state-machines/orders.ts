@@ -26,7 +26,9 @@ const TRANSITIONS: Record<
     { to: 'cancelled', by: ['buyer', 'system', 'admin'] },
   ],
   paid: [
-    { to: 'in_fulfillment', by: ['creator', 'system'] },
+    // Baxter manufactures and ships (D-029), so the desk begins fulfilment.
+    // 'creator'/'system' retained for compatibility; 'admin' is the desk.
+    { to: 'in_fulfillment', by: ['creator', 'system', 'admin'] },
     { to: 'cancelled', by: ['admin', 'buyer'] }, // pre-shipment cancel
   ],
   in_fulfillment: [
