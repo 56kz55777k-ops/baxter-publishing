@@ -5,22 +5,23 @@
  * rows — Front cover, spreads, Back cover — click to navigate. Thumbnails,
  * page management and reordering belong to later slices (I).
  */
+import { memo } from 'react';
 import type { UnitOfView } from '@baxter/domain';
-import { useEditorUi } from './state/editor-ui-context';
 
 function pageRange(nums: readonly number[]): string {
   if (nums.length === 1) return String(nums[0]);
   return `${nums[0]}–${nums[nums.length - 1]}`;
 }
 
-export function UnitList({
+export const UnitList = memo(function UnitList({
   units,
+  unitIndex,
   onNavigate,
 }: {
   units: UnitOfView[];
+  unitIndex: number;
   onNavigate: (index: number) => void;
 }) {
-  const ui = useEditorUi();
   return (
     <nav
       aria-label="Pages"
@@ -29,7 +30,7 @@ export function UnitList({
       <p className="metadata text-ink-faint px-5 mb-3">Pages</p>
       <ul>
         {units.map((u, i) => {
-          const current = i === ui.unitIndex;
+          const current = i === unitIndex;
           return (
             <li key={u.pageNumbers[0]}>
               <button
@@ -52,4 +53,4 @@ export function UnitList({
       </ul>
     </nav>
   );
-}
+});

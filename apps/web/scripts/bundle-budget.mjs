@@ -91,7 +91,6 @@ const editorOnly = [...editorChunks].filter((f) => !nonEditorChunks.has(f) && !s
 // dynamically imported island chunk, which the manifests do not attribute to
 // a route. Sweep every emitted chunk instead: Konva must appear ONLY in
 // chunks that are neither shared nor attributed to a non-editor route.
-const allListed = new Set([...sharedJs, ...nonEditorChunks, ...editorChunks]);
 const konvaLeaks = [];
 let konvaSeen = false;
 const chunkDir = path.join(NEXT_DIR, 'static', 'chunks');

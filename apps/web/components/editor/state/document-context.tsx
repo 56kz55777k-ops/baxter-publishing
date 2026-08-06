@@ -6,7 +6,7 @@
  * EditorUiContext so viewport/tool churn never re-renders document consumers
  * and vice versa.
  */
-import { createContext, useContext, useMemo, useReducer, useState, type Dispatch, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useState, type Dispatch, type ReactNode } from 'react';
 import type { EditorDoc } from '@baxter/domain';
 import {
   documentReducer,
@@ -28,9 +28,12 @@ export function DocumentProvider({
   children: ReactNode;
 }) {
   const [clientId] = useState(() => crypto.randomUUID());
+  // useReducer reads its initial argument exactly once, on mount — mount-time
+  // props are the authority for the page's life (ADR-003); no memo needed.
   const [state, dispatch] = useReducer(
     documentReducer,
-    useMemo(() => initialDocumentState({ doc, revision, clientId }), [doc, revision, clientId])
+    { doc, revision, clientId },
+    initialDocumentState
   );
   return (
     <StateContext.Provider value={state}>

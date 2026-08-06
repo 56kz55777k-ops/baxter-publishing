@@ -10,15 +10,17 @@
  * reload; nothing is silently kept or thrown away (blueprint §2.6).
  */
 import Link from 'next/link';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { getFormatPreset, newRectElement } from '@baxter/domain';
 import { fitPageView, fitUnitView, hundredView, unitGeometry } from './geometry';
+import { SaveStateChip } from './SaveStateChip';
 import { SpreadStage } from './SpreadStage';
 import { StatusBar } from './StatusBar';
 import { UnitList } from './UnitList';
+import { useEditorKeyboard } from './use-editor-keyboard';
 import { useDocumentDispatch, useDocumentState } from './state/document-context';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
-import { selectDirty, selectReadOnly, selectSaveLabel, selectUnits } from './state/selectors';
+import { selectReadOnly, selectUnits } from './state/selectors';
 import { useAutosave } from './state/use-autosave';
 
 export function EditorShell({ publication }: { publication: { id: string; title: string } }) {
@@ -27,6 +29,7 @@ export function EditorShell({ publication }: { publication: { id: string; title:
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
   useAutosave(publication.id, state, dispatch);
+  const { spaceHeld } = useEditorKeyboard(uiDispatch);
 
   const units = selectUnits(state.doc);
   const preset = getFormatPreset(state.doc.meta.formatPresetId)!;
@@ -39,19 +42,34 @@ export function EditorShell({ publication }: { publication: { id: string; title:
   const geom = useMemo(() => unitGeometry(unit, preset, layout), [unit, preset, layout]);
   const viewportRef = useRef({ w: 0, h: 0 });
   const readOnly = selectReadOnly(state);
-  const dirty = selectDirty(state);
 
-  function viewport() {
+  const viewport = useCallback(() => {
     return viewportRef.current.w > 0 ? viewportRef.current : { w: 1200, h: 800 };
-  }
+  }, []);
 
-  function navigate(index: number) {
-    const target = units[index];
-    if (!target) return;
-    const g = unitGeometry(target, preset, layout);
+  const navigate = useCallback(
+    (index: number) => {
+      const target = units[index];
+      if (!target) return;
+      const g = unitGeometry(target, preset, layout);
+      const { w, h } = viewport();
+      uiDispatch({ type: 'SET_UNIT', index, view: fitUnitView(g, w, h) });
+    },
+    [units, preset, layout, viewport, uiDispatch]
+  );
+
+  const onFitPage = useCallback(() => {
     const { w, h } = viewport();
-    uiDispatch({ type: 'SET_UNIT', index, view: fitUnitView(g, w, h) });
-  }
+    uiDispatch({ type: 'SET_VIEW', view: fitPageView(geom, w, h) });
+  }, [geom, viewport, uiDispatch]);
+  const onFitSpread = useCallback(() => {
+    const { w, h } = viewport();
+    uiDispatch({ type: 'SET_VIEW', view: fitUnitView(geom, w, h) });
+  }, [geom, viewport, uiDispatch]);
+  const onHundred = useCallback(() => {
+    const { w, h } = viewport();
+    uiDispatch({ type: 'SET_VIEW', view: hundredView(geom, w, h) });
+  }, [geom, viewport, uiDispatch]);
 
   // Dev-only commit handle for Slice A verification (no editing UI exists
   // yet). Dead-code-eliminated from production builds by the NODE_ENV check.
@@ -83,16 +101,7 @@ export function EditorShell({ publication }: { publication: { id: string; title:
           ← Workspace
         </Link>
         <h1 className="min-w-0 flex-1 truncate font-serif text-body">{publication.title}</h1>
-        <p className="flex items-center gap-2 text-caption text-ink-faint" data-testid="save-state">
-          <span
-            aria-hidden
-            className={
-              'inline-block h-1.5 w-1.5 rounded-full ' +
-              (readOnly ? 'bg-accent' : dirty || state.savePhase !== 'idle' ? 'bg-accent/70' : 'bg-ink-faint/40')
-            }
-          />
-          {selectSaveLabel(state)}
-        </p>
+        <SaveStateChip />
       </header>
 
       {readOnly && (
@@ -117,26 +126,17 @@ export function EditorShell({ publication }: { publication: { id: string; title:
       )}
 
       <div className="flex min-h-0 flex-1">
-        <UnitList units={units} onNavigate={navigate} />
+        <UnitList units={units} unitIndex={unitIndex} onNavigate={navigate} />
         <main className={'min-w-0 flex-1 ' + (readOnly ? 'pointer-events-none' : '')} aria-disabled={readOnly}>
-          <SpreadStage geom={geom} viewportRef={viewportRef} />
+          <SpreadStage geom={geom} viewportRef={viewportRef} spaceHeld={spaceHeld} />
         </main>
       </div>
 
       <StatusBar
         spreadFitLabel={unit.pages.length === 2 ? 'Fit spread' : 'Fit page'}
-        onFitPage={() => {
-          const { w, h } = viewport();
-          uiDispatch({ type: 'SET_VIEW', view: fitPageView(geom, w, h) });
-        }}
-        onFitSpread={() => {
-          const { w, h } = viewport();
-          uiDispatch({ type: 'SET_VIEW', view: fitUnitView(geom, w, h) });
-        }}
-        onHundred={() => {
-          const { w, h } = viewport();
-          uiDispatch({ type: 'SET_VIEW', view: hundredView(geom, w, h) });
-        }}
+        onFitPage={onFitPage}
+        onFitSpread={onFitSpread}
+        onHundred={onHundred}
       />
     </div>
   );

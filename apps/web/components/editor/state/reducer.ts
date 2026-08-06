@@ -47,7 +47,6 @@ export interface DocumentState {
 }
 
 export type DocumentAction =
-  | { type: 'INIT'; doc: EditorDoc; revision: number; clientId: string }
   | { type: 'COMMIT'; nextDoc: EditorDoc; selection: readonly string[]; label: string }
   | { type: 'SAVE_STARTED' }
   | { type: 'SAVED'; revision: number; sentDoc: EditorDoc }
@@ -78,9 +77,6 @@ function isTerminal(phase: SavePhase): boolean {
 
 export function documentReducer(state: DocumentState, action: DocumentAction): DocumentState {
   switch (action.type) {
-    case 'INIT':
-      return initialDocumentState(action);
-
     case 'COMMIT': {
       if (isTerminal(state.savePhase)) return state; // read-only: edits stand down
       if (action.nextDoc === state.doc) return state; // no-op commits create nothing

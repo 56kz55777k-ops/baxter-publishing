@@ -18,7 +18,9 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch } from 'react';
 import { AutosaveScheduler, type AutosaveOutcome } from './autosave-core';
+import { createCommitObserver } from './commit-observer';
 import type { DocumentAction, DocumentState } from './reducer';
+import { buildSavePayload } from './save-payload';
 import { selectDirty, selectReadOnly } from './selectors';
 
 const KEEPALIVE_MAX_BYTES = 60_000;
@@ -32,6 +34,7 @@ export function useAutosave(
   stateRef.current = state;
   const mountedRef = useRef(true);
   const schedulerRef = useRef<AutosaveScheduler | null>(null);
+  const observerRef = useRef<((s: DocumentState) => void) | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -46,8 +49,9 @@ export function useAutosave(
         const baseRevision = s.revision;
         if (mountedRef.current) dispatch({ type: 'SAVE_STARTED' });
         performance.mark('baxter:editor:save-start');
-        // Serialization happens exactly once, here, at the network boundary.
-        const body = JSON.stringify({ doc: sentDoc, baseRevision, clientId: s.clientId });
+        // Serialization happens exactly once, here, at the network boundary,
+        // through the single envelope builder (hardening item 2).
+        const body = buildSavePayload({ doc: sentDoc, revision: baseRevision, clientId: s.clientId });
         try {
           const res = await fetch(`/api/editor/${publicationId}`, {
             method: 'PUT',
@@ -91,19 +95,20 @@ export function useAutosave(
 
     const scheduler = new AutosaveScheduler(driver);
     schedulerRef.current = scheduler;
+    observerRef.current = createCommitObserver(stateRef.current.doc, () => scheduler.noteCommit());
     return () => {
       mountedRef.current = false;
       scheduler.dispose(); // in-flight saves are not aborted
       schedulerRef.current = null;
+      observerRef.current = null;
     };
   }, [publicationId, dispatch]);
 
-  // Every accepted commit nudges the scheduler (INIT/SAVED leave doc ===
-  // savedDoc, so a clean state schedules nothing).
+  // Commits — document-reference changes — nudge the scheduler. Save-machine
+  // transitions keep the same doc reference and are ignored by construction
+  // (hardening item 4; see commit-observer.ts).
   useEffect(() => {
-    if (selectDirty(state) && !selectReadOnly(state)) {
-      schedulerRef.current?.noteCommit();
-    }
+    observerRef.current?.(state);
   }, [state]);
 
   // Navigation-away guard + bounded keepalive courtesy (amendment A5).
@@ -114,7 +119,7 @@ export function useAutosave(
       if (!unsafe) return;
       e.preventDefault();
       e.returnValue = '';
-      const body = JSON.stringify({ doc: s.doc, baseRevision: s.revision, clientId: s.clientId });
+      const body = buildSavePayload(s); // same envelope, same builder (item 2)
       if (body.length < KEEPALIVE_MAX_BYTES) {
         void fetch(`/api/editor/${publicationId}`, {
           method: 'PUT',

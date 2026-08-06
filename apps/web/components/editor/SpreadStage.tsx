@@ -2,40 +2,45 @@
 
 /**
  * The editor surface (Slice A): the current unit rendered at preset trim with
- * bleed/trim/margin/safe guides, plus viewport interaction — wheel pan,
- * pointer-centred zoom, Space/Hand drag-pan (contract #27). No elements yet.
+ * bleed/trim/margin/safe guides, plus stage-local viewport interaction —
+ * wheel pan, pointer-centred zoom, Space/Hand drag-pan (contract #27).
+ * No elements yet.
+ *
+ * Ownership boundaries (hardening pass):
+ * - Keyboard lives in the shell's useEditorKeyboard — this component only
+ *   CONSUMES `spaceHeld`. Pointer-gesture state (panning) stays here, with
+ *   its own window-blur cancellation: blur must end an in-flight drag.
+ * - Viewport measurement lives in useViewportMeasure (ADR-001: synchronous
+ *   initial measure; observer for subsequent changes only).
  *
  * Cursor ownership (contract #21, approved architecture): ONE resolver writes
  * the cursor to this OUTER wrapper element, pre-paint. Konva's inner content
  * element stays untouched — when the Transformer arrives (Slice D) its anchor
  * cursors own the inner element and win by CSS containment. No other writer
  * is permitted, in any slice.
- *
- * Auto-fit: first measure and every viewport resize refit the current unit
- * (contract #27 — auto-fit on navigation and window resize, never on mode
- * toggles). Navigation fits are dispatched by the shell with SET_UNIT.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Group, Layer, Stage } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { fitUnitView, panBy, zoomAt, type UnitGeometry } from './geometry';
 import { StageGuides } from './StageGuides';
+import { useViewportMeasure, type ViewportSize } from './use-viewport-measure';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
 
 const PASTEBOARD = '#eae7e0';
 
-export function SpreadStage({
+export const SpreadStage = memo(function SpreadStage({
   geom,
   viewportRef,
+  spaceHeld,
 }: {
   geom: UnitGeometry;
-  viewportRef: React.MutableRefObject<{ w: number; h: number }>;
+  viewportRef: React.MutableRefObject<ViewportSize>;
+  spaceHeld: boolean;
 }) {
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [spaceHeld, setSpaceHeld] = useState(false);
   const [panning, setPanning] = useState(false);
   const panOrigin = useRef<{ sx: number; sy: number; vx: number; vy: number; scale: number } | null>(null);
   const geomRef = useRef(geom);
@@ -44,31 +49,9 @@ export function SpreadStage({
   viewRef.current = ui.view;
   const firstDrawDone = useRef(false);
 
-  // --- viewport measurement -------------------------------------------------
-  // Synchronous initial measure + ResizeObserver for subsequent changes.
-  // The initial measurement MUST NOT depend on observer delivery: RO callbacks
-  // ride the rendering-frame pipeline, and a page loaded in a hidden tab runs
-  // no frames — the observation queues and never delivers until the tab is
-  // shown (production stage incident, 2026-08-03). Layout, by contrast, is
-  // computed on demand: getBoundingClientRect() returns real dimensions even
-  // while hidden, so measuring synchronously mounts the stage unconditionally.
-  useLayoutEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      const next = { w: Math.round(r.width), h: Math.round(r.height) };
-      if (next.w === 0 || next.h === 0) return; // never enter zero dimensions
-      viewportRef.current = next;
-      setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [viewportRef]);
+  const size = useViewportMeasure(wrapRef, viewportRef);
 
-  // First measure + window resizes: fit the current unit. Unit NAVIGATION
+  // First measure + viewport resizes: fit the current unit. Unit NAVIGATION
   // fits arrive via SET_UNIT from the shell; commits never refit.
   useEffect(() => {
     if (size.w === 0 || size.h === 0) return;
@@ -94,47 +77,8 @@ export function SpreadStage({
     el.style.cursor = panning ? 'grabbing' : spaceHeld || ui.tool === 'hand' ? 'grab' : 'default';
   }, [panning, spaceHeld, ui.tool]);
 
-  // --- keyboard: Space momentary hand, V/H tools (contract #26 typing guard) -
-  useEffect(() => {
-    function isTyping(target: EventTarget | null): boolean {
-      const el = target as HTMLElement | null;
-      if (!el) return false;
-      return (
-        el.tagName === 'INPUT' ||
-        el.tagName === 'TEXTAREA' ||
-        el.tagName === 'SELECT' ||
-        el.isContentEditable
-      );
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (isTyping(e.target)) return;
-      if (e.key === ' ') {
-        e.preventDefault();
-        setSpaceHeld(true);
-      } else if (e.key === 'v' || e.key === 'V') {
-        uiDispatch({ type: 'SET_TOOL', tool: 'select' });
-      } else if (e.key === 'h' || e.key === 'H') {
-        uiDispatch({ type: 'SET_TOOL', tool: 'hand' });
-      }
-    }
-    function onKeyUp(e: KeyboardEvent) {
-      if (e.key === ' ') setSpaceHeld(false);
-    }
-    function onBlur() {
-      setSpaceHeld(false); // window blur clears modifier state (contract #26)
-      setPanning(false);
-    }
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, [uiDispatch]);
-
-  // --- pan gesture (window-level while active, the spike's architecture) -----
+  // --- pan gesture (window-level while active, the spike's architecture).
+  // Blur cancels an in-flight drag — a gesture concern, so it lives here.
   useEffect(() => {
     if (!panning) return;
     function onMove(ev: MouseEvent) {
@@ -148,11 +92,16 @@ export function SpreadStage({
     function onUp() {
       setPanning(false);
     }
+    function onBlur() {
+      setPanning(false);
+    }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onBlur);
     };
   }, [panning, uiDispatch]);
 
@@ -203,4 +152,4 @@ export function SpreadStage({
       )}
     </div>
   );
-}
+});

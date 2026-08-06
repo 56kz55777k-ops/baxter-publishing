@@ -41,6 +41,57 @@ const SaveBody = z.object({
   clientId: z.string().uuid(),
 });
 
+/**
+ * Bounded body read (hardening item 3). The limit is enforced on the bytes
+ * actually consumed from the stream — a Content-Length header is honoured as
+ * a fast-path reject when truthfully large, but its absence or dishonesty
+ * (chunked delivery) cannot bypass the cap: reading stops and the request is
+ * refused the moment the running total crosses MAX_BODY_BYTES. Oversized
+ * input (413) is distinguished from malformed JSON (400).
+ */
+const MAX_BODY_BYTES = 1_000_000;
+
+type BoundedRead =
+  | { ok: true; json: unknown }
+  | { ok: false; reason: 'too-large' | 'malformed' };
+
+async function readBoundedJson(req: NextRequest): Promise<BoundedRead> {
+  const declared = Number(req.headers.get('content-length') ?? '');
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return { ok: false, reason: 'too-large' };
+  }
+  const body = req.body;
+  if (!body) return { ok: false, reason: 'malformed' };
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel();
+        return { ok: false, reason: 'too-large' };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, reason: 'malformed' };
+  }
+  try {
+    const buf = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      buf.set(c, offset);
+      offset += c.byteLength;
+    }
+    return { ok: true, json: JSON.parse(new TextDecoder().decode(buf)) };
+  } catch {
+    return { ok: false, reason: 'malformed' };
+  }
+}
+
 type AuthedContext = {
   supabase: Awaited<ReturnType<typeof createClient>>;
   userId: string;
@@ -127,8 +178,17 @@ export async function PUT(
   const ctx = await authorize(publicationId);
   if (ctx instanceof NextResponse) return ctx;
 
-  const raw = await req.json().catch(() => null);
-  const body = SaveBody.safeParse(raw);
+  const read = await readBoundedJson(req);
+  if (!read.ok) {
+    if (read.reason === 'too-large') {
+      return NextResponse.json(
+        { message: 'That save is too large for a single request.' },
+        { status: 413 }
+      );
+    }
+    return NextResponse.json({ message: 'The request could not be read.' }, { status: 400 });
+  }
+  const body = SaveBody.safeParse(read.json);
   if (!body.success) {
     return NextResponse.json({ message: 'Missing fields.' }, { status: 400 });
   }

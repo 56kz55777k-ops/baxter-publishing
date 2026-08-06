@@ -50,6 +50,7 @@ export default defineConfig({
   },
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+    setupFiles: ['test/setup.ts'],
     environment: 'node',
     // The preflight verifier predates vitest and runs as a plain node script.
     exclude: ['**/node_modules/**', 'test/preflight.verify.ts'],

@@ -4,6 +4,7 @@
  * Bottom strip: tools (Select/Hand), fit controls, zoom readout.
  * View-only controls stay live in read-only states — looking is not editing.
  */
+import { memo } from 'react';
 import { zoomOf } from './geometry';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
 
@@ -33,7 +34,7 @@ function BarButton({
   );
 }
 
-export function StatusBar({
+export const StatusBar = memo(function StatusBar({
   onFitPage,
   onFitSpread,
   onHundred,
@@ -69,4 +70,4 @@ export function StatusBar({
       <span className="metadata text-ink-faint ml-3 w-12 text-right tabular-nums">{zoomPct}%</span>
     </div>
   );
-}
+});

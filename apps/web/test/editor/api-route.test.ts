@@ -319,6 +319,62 @@ describe('PUT /api/editor/[id] — revision-guarded save', () => {
     expect(((await resA2.json()) as { revision: number }).revision).toBe(2);
   });
 
+  it('413: oversized body with a truthful Content-Length is rejected before parsing', async () => {
+    await POST(postReq(), { params });
+    const big = new NextRequest(`http://test.local/api/editor/${PUB_ID}`, {
+      method: 'PUT',
+      body: 'x'.repeat(1_100_000), // undici sets an honest Content-Length
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PUT(big, { params });
+    expect(res.status).toBe(413);
+  });
+
+  it('413: oversized chunked body WITHOUT Content-Length is stopped at the byte bound', async () => {
+    await POST(postReq(), { params });
+    const chunk = new Uint8Array(64 * 1024).fill(120); // 'x'
+    let sent = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent > 1_200_000) {
+          controller.close();
+          return;
+        }
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const big = new NextRequest(`http://test.local/api/editor/${PUB_ID}`, {
+      method: 'PUT',
+      body: stream,
+      duplex: 'half',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(big.headers.get('content-length')).toBeNull(); // the guard cannot rely on the header
+    const res = await PUT(big, { params });
+    expect(res.status).toBe(413);
+  });
+
+  it('400: malformed JSON below the limit is handled separately from oversized input', async () => {
+    await POST(postReq(), { params });
+    const bad = new NextRequest(`http://test.local/api/editor/${PUB_ID}`, {
+      method: 'PUT',
+      body: '{"doc": <not json>',
+      headers: { 'content-type': 'application/json' },
+    });
+    const res = await PUT(bad, { params });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toMatch(/could not be read/);
+  });
+
+  it('a valid body just below the limit still saves normally', async () => {
+    await POST(postReq(), { params });
+    const res = await PUT(putReq({ doc: validDoc(), baseRevision: 0, clientId: CLIENT_A }), {
+      params,
+    });
+    expect(res.status).toBe(200);
+  });
+
   it('stale base after several saves conflicts with the CURRENT server revision', async () => {
     await POST(postReq(), { params });
     await PUT(putReq({ doc: validDoc(), baseRevision: 0, clientId: CLIENT_A }), { params });

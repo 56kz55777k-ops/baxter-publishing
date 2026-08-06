@@ -481,9 +481,26 @@ Rulings:
 
 ---
 
+## D-032 — Production availability: the Supabase auto-pause incident and the operations accounts
+
+**What happened (operational record, 2026-08-03).** During Slice A verification, production sign-in failed with a network-class error rather than an auth error. Investigation in the Supabase dashboard found the production project `baxter-publishing` (ref `qnqbkihndxppommgfrxd`) **paused** — Supabase pauses free-plan projects after inactivity — with usage at zero for the billing cycle. The deployed site had been serving shell pages with silently failing data for an unknown period (last deploy-era activity ~Jul 13). Identity was proven operationally, not assumed: with a deliberately wrong login, production returned the generic failure while paused and flipped to "That email and password do not match" at the exact moment the project was resumed; `/publications` began rendering data again at the same moment. Ben resumed the project; the outage ended.
+
+**Where things live (as observed in this session, no ownership claims beyond observation).** Supabase: project `baxter-publishing` under org "56kz55777k-ops's Org" (a second org, "Toronto Creatives", holds the unrelated `tea-squared-trade-portal`). GitHub: `56kz55777k-ops/baxter-publishing` (public), `gh` authenticated as `56kz55777k-ops`. Vercel: the PR integration reports deployments under team `benjamin-baxter`, project `baxter-publishing-web`. GitHub Actions: workflow registered and active, but the account creates no runs across qualifying events — the pattern of an account-level Actions verification hold; visible only in the GitHub UI.
+
+**Chosen.** Record the incident and the account map; treat "production must not silently pause again" as a REQUIRED outcome with the mechanism an **open decision for Ben**: upgrade the Supabase project to Pro (removes auto-pause), or add an uptime probe against a data-backed endpoint (e.g. a scheduled check that `/publications` renders rows), or both.
+
+**Why.** A paused database behind a healthy-looking static shell is the worst failure shape: no error page, no alert, quietly empty. Discovery was accidental (a slice verification), not operational.
+
+**Implications.** Until the open decision is made, any quiet week can pause production again. The GitHub Actions hold also blocks hosted CI (local battery + Vercel checks remain the working gates).
+
+**What would force reconsideration.** Moving off the free plan resolves the pause class entirely; consolidating the split Vercel/GitHub identities would simplify the account map but is Ben's call, not an engineering requirement.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Editor margins for A4 + square presets** — 15/6 and 14/6 shipped PROVISIONAL in `formats.ts` (D-031); confirm or revise at the Slice A review.
+- **Production availability mechanism** — Supabase Pro vs uptime probe vs both (D-032). Ben decides.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
 - **DIN licensing** — when to pull DM Sans and license real DIN. After Slice 4 ship.
 - **Preview lifecycle on publication delete** — orphaned Cloudflare images / clean-bucket objects aren't swept on publication deletion (only on re-render). Add a cleanup path if it matters pre-launch.

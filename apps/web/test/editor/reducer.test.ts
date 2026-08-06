@@ -26,7 +26,7 @@ function withElementOnPage(doc: EditorDoc, pageIndex: number): EditorDoc {
 }
 
 describe('documentReducer — transaction log semantics (contract #24, amendment A1)', () => {
-  it('INIT hydrates with savedDoc === doc (clean), empty history', () => {
+  it('initial state hydrates with savedDoc === doc (clean), empty history', () => {
     const s = freshState();
     expect(s.doc).toBe(s.savedDoc);
     expect(selectDirty(s)).toBe(false);
