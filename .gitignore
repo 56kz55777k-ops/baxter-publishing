@@ -47,3 +47,4 @@ next-env.d.ts
 .vscode/
 .idea/
 .env.e2e.local
+test-results/
