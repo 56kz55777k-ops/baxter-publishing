@@ -314,6 +314,33 @@ export const follows = pgTable(
 );
 
 /* -------------------------------------------------------------------------- */
+/* Editor documents (Native Publishing)                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One row per publication: the in-app editor's scene graph.
+ *
+ * Documentation of migration 0007 (hand-written SQL, applied via the Supabase
+ * SQL editor — Drizzle does not manage this table's DDL or RLS). The `doc`
+ * jsonb is validated by `@baxter/domain` (editor/document.ts) before every
+ * write; `schema_version` mirrors doc.schemaVersion, derived server-side.
+ * `revision` is the optimistic-concurrency counter: saves are conditional
+ * (`WHERE revision = base`) and increment it; a zero-row update is a 409.
+ */
+export const editorDocuments = pgTable('editor_documents', {
+  publicationId: uuid('publication_id')
+    .primaryKey()
+    .references(() => publications.id, { onDelete: 'cascade' }),
+  doc: jsonb('doc').notNull(),
+  schemaVersion: integer('schema_version').notNull().default(1),
+  revision: integer('revision').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  /** Diagnostics only ({ lastClientId, lastSavedAt }); never authority. */
+  autosaveState: jsonb('autosave_state'),
+});
+
+/* -------------------------------------------------------------------------- */
 /* Relations                                                                   */
 /* -------------------------------------------------------------------------- */
 

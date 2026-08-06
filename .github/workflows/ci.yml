@@ -1,0 +1,30 @@
+# CI — introduced with Native Publishing Slice A (blueprint amendment A3).
+# Typecheck, lint, unit tests, production build, bundle budget. The public
+# env values are placeholders: nothing here talks to a live service; the
+# build only needs the variables to exist.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'slice-*']
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx tsc -p apps/web/tsconfig.test.json
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+      - run: npm run budget -w @baxter/web

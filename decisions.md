@@ -469,9 +469,21 @@ Rulings:
 
 ---
 
+## D-031 — Editor document persistence: `editor_documents` + integer-revision concurrency
+
+**Chosen.** Native Publishing documents live in a new `editor_documents` table (migration 0007, hand-written per house convention): one row per publication — `doc` jsonb (the scene graph, self-describing via an internal `schemaVersion`), a `schema_version` column mirror derived server-side, an integer `revision` for optimistic concurrency, DB-stamped `updated_at`, `updated_by`, and diagnostics-only `autosave_state`. Saves are conditional (`UPDATE … WHERE revision = base`); zero rows updated is a 409 carrying the server revision — **first write wins, the loser is told immediately and goes read-only until reload. Never last-write-wins, no merge, no CRDT.** RLS mirrors `publications_update_own_draft` exactly (creators write only in draft/revisions; no client DELETE; admin via the guarded service-role pattern). The doc shape is validated by zod in `@baxter/domain` (`editor/document.ts`) on every server write and on every client load; migrations are forward-only and unknown versions are rejected, never guessed. Format presets gained editor `layout` defaults (margin/safe): **zine_a5 12/5 (the Spike C v2 accepted values); A4 15/6 and square 14/6 are PROVISIONAL pending Ben's confirmation.**
+
+**Why.** The `publications` row is contended (marketplace saves, admin status transitions, audit events) and carries no concurrency column; a separate table isolates a high-frequency autosave stream, owns its revision, and stays additive. jsonb (not a column on publications, not R2 JSON) keeps RLS, queryability, and atomic conditional writes. Two tabs are trivially easy to open — the revision guard makes the failure loud and calm instead of silently destructive.
+
+**Implications.** The editor route (`/studio/editor/[id]`, `(editor)` route group, lazy `ssr:false` island) is the only consumer; Konva lives in the island chunk only, enforced by `apps/web/scripts/bundle-budget.mjs` in CI (shared First-Load may grow ≤1 kB over the recorded pre-editor baseline). The drizzle schema documents the table; the journal stays untouched.
+
+**What would force reconsideration.** Real collaborative editing (per-op sync) — a different architecture, explicitly out of scope; or fleet-migration pain at scale pushing `schemaVersion` handling from load-time to batch jobs.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
-- **Editor canvas** — Konva/react-konva proven against a single-page layout. Spike C.
+- **Editor margins for A4 + square presets** — 15/6 and 14/6 shipped PROVISIONAL in `formats.ts` (D-031); confirm or revise at the Slice A review.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
 - **DIN licensing** — when to pull DM Sans and license real DIN. After Slice 4 ship.
 - **Preview lifecycle on publication delete** — orphaned Cloudflare images / clean-bucket objects aren't swept on publication deletion (only on re-render). Add a cleanup path if it matters pre-launch.

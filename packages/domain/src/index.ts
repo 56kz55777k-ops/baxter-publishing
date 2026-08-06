@@ -5,3 +5,8 @@ export * from './preflight';
 export * from './reason-codes';
 export * from './pricing';
 export * from './production';
+export * from './units';
+export * from './editor/document';
+export * from './editor/factories';
+export * from './editor/units-of-view';
+export * from './editor/init';

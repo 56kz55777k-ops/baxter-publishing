@@ -8,6 +8,9 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
     "@baxter/eslint-config": "*",
     "eslint": "^9.15.0",
