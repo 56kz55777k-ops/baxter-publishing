@@ -1,0 +1,11 @@
+{
+  "baselineSharedBytes": 350315,
+  "baselineFiles": [
+    "static/chunks/webpack-31f4a1aaf4ac3850.js",
+    "static/chunks/87c73c54-24122e7b92478d00.js",
+    "static/chunks/18-4ce5efc64451836b.js",
+    "static/chunks/main-app-aa918f325257401b.js"
+  ],
+  "capturedFrom": "pre-Slice-A baseline build opnOROK7KxkfhRjeWaIAQ (2026-08-03, main @ f10fad0, placeholder public env)",
+  "method": "sum of on-disk byte sizes of build-manifest.json rootMainFiles (.js), uncompressed"
+}

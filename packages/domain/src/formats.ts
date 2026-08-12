@@ -22,6 +22,24 @@ export interface PublicationFormatPreset {
    * blocking checks; bleed/DPI feed non-blocking warnings.
    */
   rules: FormatPrintRules;
+  /**
+   * Editor layout defaults consumed by Native Publishing (Slice A+): new
+   * documents freeze resolved copies of these into their own meta, so
+   * changing a preset later never reflows existing documents.
+   *
+   * zine_a5 carries the Spike C v2 accepted values (12/5). The A4 and
+   * square values are PROVISIONAL — proposed in the Slice A blueprint,
+   * awaiting Ben's confirmation at the Slice A review; do not treat them
+   * as settled product decisions (see D-031).
+   */
+  layout: FormatLayoutDefaults;
+}
+
+export interface FormatLayoutDefaults {
+  /** Default page margin, mm in from trim. Margin guides + future snap targets. */
+  marginMm: number;
+  /** Default safe area, mm in from trim — keep important content inside. */
+  safeMm: number;
 }
 
 export interface FormatPrintRules {
@@ -54,6 +72,7 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: 3,
       minImageDpi: 300,
     },
+    layout: { marginMm: 12, safeMm: 5 },
   },
   {
     id: 'magazine_a4',
@@ -69,6 +88,8 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: 3,
       minImageDpi: 300,
     },
+    // PROVISIONAL — confirm at Slice A review (D-031).
+    layout: { marginMm: 15, safeMm: 6 },
   },
   {
     id: 'photobook_square_210',
@@ -85,6 +106,8 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: 3,
       minImageDpi: 300,
     },
+    // PROVISIONAL — confirm at Slice A review (D-031).
+    layout: { marginMm: 14, safeMm: 6 },
   },
 ] as const;
 

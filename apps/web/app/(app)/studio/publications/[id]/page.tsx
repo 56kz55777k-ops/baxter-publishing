@@ -269,6 +269,27 @@ export default async function PublicationDetailPage({
         <p className="text-ink">{publication.page_count ?? '—'}</p>
       </section>
 
+      {/* Native Publishing (Slice A). Discovery is flag-gated; access is
+          ownership + status gated at the editor route itself. Server-only env
+          deliberately (no NEXT_PUBLIC_ prefix): public vars are inlined at
+          build time everywhere, which would freeze the flag into the artifact;
+          this check runs on the server at request time and toggles per
+          environment without a rebuild. */}
+      {editable && process.env.NATIVE_PUBLISHING === '1' && (
+        <section className="mt-20 pt-10 border-t border-rule">
+          <p className="metadata mb-6">Compose</p>
+          <Link
+            href={`/studio/editor/${publication.id}`}
+            className="font-serif text-body text-accent underline underline-offset-4 decoration-1 hover:text-ink transition-colors duration-400 ease-gentle"
+          >
+            Open in the editor
+          </Link>
+          <p className="metadata text-ink-faint mt-3">
+            Compose this publication inside Baxter.
+          </p>
+        </section>
+      )}
+
       {/* Marketplace — editable in the workspace; read-only otherwise. */}
       <section className="mt-20 pt-10 border-t border-rule">
         <p className="metadata mb-6">Marketplace</p>

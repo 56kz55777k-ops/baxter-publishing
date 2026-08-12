@@ -46,3 +46,5 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+.env.e2e.local
+test-results/

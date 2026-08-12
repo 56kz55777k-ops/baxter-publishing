@@ -2,7 +2,7 @@
   "name": "baxter",
   "private": true,
   "version": "0.1.0",
-  "description": "Baxter Publishing — a curated independent publishing marketplace.",
+  "description": "Baxter Publishing \u2014 a curated independent publishing marketplace.",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,7 +12,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
