@@ -497,9 +497,39 @@ Rulings:
 
 ---
 
+## D-033 — Publication bleed: ⅛ inch (3.175 mm) per applicable edge, profile-owned, safe kept separate
+
+**Status: ACCEPTED by Ben, 2026-08-19**, as implemented and verified (typecheck, lint, 111 unit tests, preflight harness 6/6, production build, bundle budget — zero shared-bundle impact, no schema or persistence change).
+
+**Chosen.** The "quarter-inch bleed" reported from Baxter's printing partners is formally interpreted as **¼ inch added to each full page dimension** — i.e. **⅛ in / 0.125 in / 3.175 mm / 9 pt of bleed per applicable edge**, measured outward from trim. The rejected reading is ~~0.25 in / 6.35 mm per edge~~. A 6 × 9 in page bleeding on all four edges occupies **6.25 × 9.25 in**. `0.25 in` is never encoded as a per-edge value.
+
+All three format presets and the inngest generic-rules fallback move from `bleedMm: 3` to `3.175`, derived in code from `GENERIC_PUBLICATION_BLEED_IN = 0.125` so the imperial origin stays visible (`0.125 × 25.4 === 3.175` and `0.125 × 72 === 9` are both exact in IEEE-754 — 25.4/8 and 72/8 are exact binary scalings).
+
+**Unit rule, binding.** 3 mm and 3.175 mm are industry synonyms in prose — Adobe itself writes *"0.125 inches (3 mm)"* — but they are 0.175 mm apart and must never be silently substituted. The generic profile uses the exact imperial-derived 3.175 mm; a future printer profile must remain able to state a true 3.0 mm requirement. `bleedMm` stays a plain number for exactly that reason.
+
+**Why.** An independent adversarial verification of the print-geometry research surveyed 13 book, magazine and publication printers from primary spec pages (Bookmobile, Friesens, Sheridan, Sheridan Random Lake, Mixam, Lulu, Amazon KDP, IngramSpark/Lightning Source, PrintNinja, Smartpress, BookBaby, Blurb, 48 Hour Books, Gorham). Findings: **0.125 in / ~3 mm per edge is dominant; no surveyed book or magazine specification required 0.25 in per edge** (the only 0.25-in-per-edge bleed found anywhere was Smartpress large-format signage). Where "0.25 inch" appears in publication literature it means **total dimensional increase** (Lulu: *"Page size must be 0.25 in larger in both width and height — a 6 × 9 in book requires a PDF with pages sized 6.25 × 9.25 in"*) or the **internal safe area** (Sheridan, Mixam, KDP cover, IngramSpark cover). Ben confirmed the total-dimensional interpretation was the intended premise.
+
+**Architectural consequences recorded now, built later.**
+- **Bleed is per-edge geometry, not permanently a scalar.** It is scalar today only because every current preset bleeds symmetrically on four edges. Publication workflows forbid gutter bleed — IngramSpark: *"Please do not add bleed to the bind (gutter) edge"*; Gorham: *"Toner in the gutter will compromise the binding adhesive. We will remove your gutter bleeds before printing."* Conversion to `{top,right,bottom,left}` needs **no migration**: bleed is derived from the preset and never persisted into `editor_documents.doc` (D-031 froze only margin/safe). Deferred until output profiles exist — building it now would be speculative infrastructure with no consumer.
+- **Bleed is profile-owned.** Bleed, gutter rule, safe insets, page-count-dependent gutter, printer marks and PDF/X target belong to a future output/publication profile, not to a universal Baxter constant. Not built in this amendment.
+- **Safe stays independent of bleed.** Bleed = artwork coverage outside trim; safe = protection of critical content inside trim. Neither derives from the other. Safe values are unchanged by this decision; the A4/square margin/safe ruling remains open (D-031).
+- **Trim remains the finished page.** Bleed, safe and margin are never called trim.
+- **The two-bleed proposal is withdrawn.** There is no "minimum bleed reference" nested inside a larger Baxter bleed; 3.175 mm is the generic profile's actual bleed.
+
+**Future PDF/export invariants (recorded, not implemented).** TrimBox = exact finished page; prefer TrimBox over ArtBox and never emit both under PDF/X (they are mutually exclusive). BleedBox = the actual authored bleed extent, per-edge capable; never emit artwork beyond the declared BleedBox, and never declare bleed that intended bleeding content fails to fill. **MediaBox is a hard invariant: it must contain everything intended to survive production, including BleedBox and any marks/slug allowance** — Esko's rule is *"Information outside the MediaBox is never used"*, and ISO 32000 permits content outside MediaBox to be discarded. CropBox is omitted or set equal to MediaBox (GWG 2022 R0003: *"the CropBox shall coincide with the MediaBox… or by omitting the CropBox"*); it is never an independent production-geometry control. Printer marks are profile-dependent and default off — POD houses (IngramSpark, KDP, Lulu, Blurb, BookBaby, PrintNinja, Gorham) explicitly reject embedded marks.
+
+**Future preflight architecture (recorded, not implemented).** Two independent families. **(A) Bleed coverage, per edge:** intended full-bleed edge below the profile requirement → FAIL; bleed on an edge the profile forbids → FAIL; BleedBox declaring a region intended bleeding content does not fill → FAIL; artwork beyond the declared BleedBox → FAIL. The **active profile owns the threshold**; 3.175 mm is not hard-coded through preflight, it is merely what the default profile specifies. **(B) Critical-content safety:** entirely separate, and must be able to become per-edge, asymmetric, gutter-aware and page-count-aware (KDP's gutter runs 0.375 in → 0.875 in with page count).
+
+**Implications.** The editor's bleed rectangle grows 0.175 mm per edge — 0.595 px at the 3.4 px/mm base, 4.76 px at 8×. Because bleed is derived rather than frozen, **existing documents pick the new value up on next open**; that is the intended consequence of D-031's deliberate choice not to persist trim/bleed. Preflight behaviour is unchanged: its bleed check gates on `rules.bleedMm > 0`, never on the magnitude. No schema, migration, persistence or API change. Shared First-Load JS unchanged (measured: identical 342.3 kB before and after).
+
+**What would force reconsideration.** A named printing partner stating 0.25 in *per edge* in writing — then the generic profile value changes, but the per-edge/total distinction recorded here still holds. A printer requiring a true 3.0 mm — expressible today, and the reason `bleedMm` was not made a fixed constant. The arrival of real output profiles — at which point bleed becomes per-edge and profile-owned as described above.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
-- **Editor margins for A4 + square presets** — 15/6 and 14/6 shipped PROVISIONAL in `formats.ts` (D-031); confirm or revise at the Slice A review.
+- **Editor margins for A4 + square presets** — 15/6 and 14/6 shipped PROVISIONAL in `formats.ts` (D-031); confirm or revise at the Slice A review. Unaffected by D-033.
+- **Per-edge bleed + output profiles** — D-033 records that bleed must become `{top,right,bottom,left}` and profile-owned (gutter bleed is forbidden by IngramSpark/KDP/Gorham). Deferred until a profile actually needs it; migration-free whenever taken, since bleed is derived, never persisted.
 - **Production availability mechanism** — Supabase Pro vs uptime probe vs both (D-032). Ben decides.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
 - **DIN licensing** — when to pull DM Sans and license real DIN. After Slice 4 ship.

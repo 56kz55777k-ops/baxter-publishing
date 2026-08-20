@@ -18,7 +18,10 @@
 import { PDFDocument, PDFName, StandardFonts, rgb } from 'pdf-lib';
 import { inspectPdf } from '../lib/pdf/inspect.ts';
 import { evaluatePreflight } from '../../../packages/domain/src/preflight.ts';
-import { getFormatPreset } from '../../../packages/domain/src/formats.ts';
+import {
+  GENERIC_PUBLICATION_BLEED_MM,
+  getFormatPreset,
+} from '../../../packages/domain/src/formats.ts';
 
 const MM = 72 / 25.4;
 const A5 = getFormatPreset('zine_a5')!;
@@ -63,22 +66,22 @@ async function run() {
     {
       name: 'clean A5 (8pp, bleed)',
       expect: 'passed',
-      bytes: await makePdf({ pages: 8, trimWmm: 148, trimHmm: 210, bleedMm: 3 }),
+      bytes: await makePdf({ pages: 8, trimWmm: 148, trimHmm: 210, bleedMm: GENERIC_PUBLICATION_BLEED_MM }),
     },
     {
       name: 'wrong dimensions (A4 in A5)',
       expect: 'failed',
-      bytes: await makePdf({ pages: 8, trimWmm: 210, trimHmm: 297, bleedMm: 3 }),
+      bytes: await makePdf({ pages: 8, trimWmm: 210, trimHmm: 297, bleedMm: GENERIC_PUBLICATION_BLEED_MM }),
     },
     {
       name: 'not multiple of four (7pp)',
       expect: 'failed',
-      bytes: await makePdf({ pages: 7, trimWmm: 148, trimHmm: 210, bleedMm: 3 }),
+      bytes: await makePdf({ pages: 7, trimWmm: 148, trimHmm: 210, bleedMm: GENERIC_PUBLICATION_BLEED_MM }),
     },
     {
       name: 'below min pages (2pp)',
       expect: 'failed',
-      bytes: await makePdf({ pages: 2, trimWmm: 148, trimHmm: 210, bleedMm: 3 }),
+      bytes: await makePdf({ pages: 2, trimWmm: 148, trimHmm: 210, bleedMm: GENERIC_PUBLICATION_BLEED_MM }),
     },
     {
       name: 'no bleed (8pp)',

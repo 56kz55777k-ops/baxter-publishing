@@ -31,7 +31,7 @@ describe('viewport geometry — contract #27 (0.15–8× of 3.4 px/mm, pointer-c
     const spread = unitGeometry(units[1]!, preset, layout);
     expect(spread.widthMm).toBe(296);
     expect(spread.pageOffsetsMm).toEqual([0, 148]);
-    expect(spread.bleedMm).toBe(3);
+    expect(spread.bleedMm).toBe(3.175);
     expect(spread.marginMm).toBe(12);
     expect(spread.safeMm).toBe(5);
   });
