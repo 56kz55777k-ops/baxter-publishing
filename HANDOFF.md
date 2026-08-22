@@ -1,7 +1,7 @@
 # Baxter — Project Handoff (Detailed)
 
 **For:** Ben's review, and any new Claude Code session continuing this work.
-**Written:** 2026-07-18 · **This revision:** 2026-08-17 (post-merge synchronization: PR #1 merged 2026-08-12; hosted CI's first run green; work dates as recorded per section).
+**Written:** 2026-07-18 · **This revision:** 2026-08-19 — session-resume backup (D-033 branch pushed and PR #2 opened for review; resume point in §0.4 and §11). Previous revisions: 2026-08-19 D-033 + Blueprint Amendment 2; 2026-08-17 post-merge synchronization (PR #1 merged 2026-08-12, hosted CI's first run green). Work dates as recorded per section.
 **Working with:** Ben Gibson (Benjamin Gibson), Creative Director / co-owner, Toronto Creatives (`info@torontocreatives.com`).
 **This handoff lives in three places** — canonical: `~/Desktop/baxter-spikes/HANDOFF.md`; copies: `~/Desktop/baxter-app/HANDOFF.md` and the Vault `handoffs/2026-07-18_baxter-native-publishing-spike-c2_HANDOFF.md`. **Re-propagate the canonical copy to the other two whenever it changes** (byte-identical; verify with matching `shasum`).
 
@@ -13,7 +13,11 @@
 
 2. **Milestone 2 (Native Publishing, the in-app editor): Slice A is BUILT, LIVE-VERIFIED, ENGINEERING-REVIEWED, and HARDENED.** The interaction prototype (Spike C v2) completed all 13 review passes and is now a *behavioural specification, not code*. The production foundation — versioned document persistence, revision-guarded autosave, the lazy Konva editor island, preset-derived documents, the empty spread surface with pan/zoom/fit/navigation, conflict and closed-window handling, tests/CI/bundle protection — is implemented in the real repo, verified against the production database in real Chrome, then hardened through an accepted engineering review. **[PR #1](https://github.com/56kz55777k-ops/baxter-publishing/pull/1) is MERGED (2026-08-12): merge commit `7826384e41b2c6ce7d4f9a131711b2b0837c1f85` on `main`; the merged head is `565cc57`. Slice A + the hardening gate now constitute the production foundation on `main`.** The merge push also produced GitHub-hosted CI's first-ever run — `success` on the merge commit itself (run 31567943010), meaning the account-verification hold has cleared. Slice B (shapes + selection) is technically ready; the remaining gate is a product decision, not engineering: the provisional A4/square margin ruling.
 
-**Ben's open items (§8):** rule on the provisional A4/square margins (the Slice B gate) · choose the D-032 availability mechanism · the two standing items (EasyPost key; Slice G font procurement). PR #1 and the Actions hold are closed.
+3. **Publication bleed is settled — D-033 ACCEPTED by Ben, 2026-08-19.** The "quarter-inch bleed" reported from Ben's printing partners was independently researched, challenged, and resolved as **¼ inch added to each full page dimension** — i.e. **0.125 in = 3.175 mm = 9 pt per applicable edge**, not 0.25 in per edge. A survey of 13 book/magazine printers found no publication specification anywhere requiring 0.25 in per edge. All presets and the inngest fallback moved `bleedMm: 3 → 3.175` (derived in code from the imperial value). Bleed is documented as **per-edge and destined to become profile-owned** — gutter bleed is forbidden by IngramSpark, KDP and Gorham — but stays scalar until output profiles exist, because the conversion is migration-free (bleed is derived, never persisted). Margins and safe are deliberately untouched. Full evidence: `baxter-print-geometry-verification-report.md`. **Status: implemented on branch `amendment/d-033-publication-bleed` (`465c939`, one commit ahead of `main`; 14 suites / 111 tests green, typecheck clean), pushed, and opened as [PR #2](https://github.com/56kz55777k-ops/baxter-publishing/pull/2) against `main` — awaiting Ben's review, not self-merged.** (An earlier revision of this handoff recorded the PR as already open; verification on 2026-08-19 found the branch unpushed and no PR — corrected by pushing and opening PR #2 during the resume backup.)
+
+4. **RESUME POINT (2026-08-19) — where the last session left off.** `main` = `819f473` (Slice A + hardening + post-merge docs; hosted CI green on every push since the merge). Open PR: **#2 (D-033 bleed)**, CI running/green on its head. Local repo parked on `main`, clean tree (four pre-existing untracked folders only). Branches retained: `slice-a-native-publishing` (merged record), `amendment/d-033-publication-bleed` (PR #2). Nothing is half-done: no uncommitted code, no unpushed commits, no pending migration. The next human action is Ben's: review/merge PR #2, then rule on the A4/square margins; the next engineering action is Slice B (§9) on a fresh `slice-b-*` branch off `main` after those two.
+
+**Ben's open items (§8):** rule on the provisional A4/square margins (the Slice B gate) · choose the D-032 availability mechanism · the two standing items (EasyPost key; Slice G font procurement). PR #1 and the Actions hold are closed; D-033 is accepted and awaiting PR review.
 
 ---
 
@@ -120,14 +124,16 @@ The publication is always the hero · spread = editing coordinates, pages = prin
 - **D3** Vitest TSX handling via a `typescript`-package pre-transform plugin (Vite 8/OXC honours the app tsconfig's `jsx: preserve` per file).
 - **D4** Schema hardening beyond the field list (structure refinements, uuid-validated ids/clientId).
 - **D5** Discovery flag is server-read `NATIVE_PUBLISHING` (ADR-002); discovery-only, authorization independent.
-- **decisions.md:** **D-031** (editor persistence: `editor_documents`, revision concurrency, jsonb schemaVersion) · **D-032** (availability incident record + observed account map; mechanism = Ben's open decision).
+- **decisions.md:** **D-031** (editor persistence: `editor_documents`, revision concurrency, jsonb schemaVersion) · **D-032** (availability incident record + observed account map; mechanism = Ben's open decision) · **D-033** (publication bleed: 0.125 in = 3.175 mm = 9 pt per applicable edge; per-edge and profile-owned as recorded direction; 3 mm ≠ 3.175 mm; future PDF page-box and two-family preflight invariants recorded, not built).
 - **ADRs (`docs/adr/`):** ADR-001 frame-independent initialization · ADR-002 runtime environment flags · ADR-003 editor state ownership (the seven invariants, with render evidence).
 - **Blueprint Amendment 1:** browser smoke before Slice B; sizing + flag descriptions superseded by ADR-001/002. Original blueprint preserved as history.
+- **Blueprint Amendment 2:** preset bleed 3 → 3.175 mm per applicable edge; `bleedMm` documented as per-edge and provisionally scalar; guides/fit/preflight behaviour unchanged; margins/safe explicitly out of scope. Original blueprint and Amendment 1 preserved as history.
 
 ## 6 · Documents & artifacts index
 
-**Tri-location (canonical `~/Desktop/baxter-spikes/`, copies repo root + Vault handoffs/):** this HANDOFF · `native-publishing-production-implementation-handoff.md` (THE spec) · `native-publishing-slice-a-blueprint.md` + `…-amendment-1.md` · `slice-a-engineering-review.md`.
-**Repo:** `decisions.md` (D-001…D-032) · `docs/adr/ADR-001..003` · `docs/editorial-constitution.md` · `baxter-milestone2-editor-scope.md` · migration `0007` · `apps/web/scripts/budget.json` (bundle baseline + methodology).
+**Tri-location (canonical `~/Desktop/baxter-spikes/`, copies repo root + Vault handoffs/):** this HANDOFF · `native-publishing-production-implementation-handoff.md` (THE spec) · `native-publishing-slice-a-blueprint.md` + `…-amendment-1.md` + `…-amendment-2.md` · `slice-a-engineering-review.md`.
+**Repo:** `decisions.md` (D-001…D-033) · `docs/adr/ADR-001..003` · `docs/editorial-constitution.md` · `baxter-milestone2-editor-scope.md` · migration `0007` · `apps/web/scripts/budget.json` (bundle baseline + methodology).
+**Print-geometry research (historical evidence for D-033; preserved unaltered, never rewritten; tri-location — canonical copies added to `~/Desktop/baxter-spikes/` 2026-08-19):** `baxter-print-geometry-research-verification-handoff.md` (the original research + review mandate) · `baxter-print-geometry-verification-report.md` (independent adversarial verification — verdict CONFIRMED WITH CHANGES; 13-printer evidence table, PDF/PDF-X page-box model, BleedBox clipping risk assessment, 13 corrections).
 **Spike baselines (keep, never regenerate):** `spike-c2-review{9..13}-snapshot-*.zip` + `review{9..13}-*-demo.html` + audits (`review9-progress-for-chatgpt.md`, `cursor-audit.md`, `longform-text-audit.md`, `inspector-audit.md`, `coherence-audit.md`).
 **Milestone 1 record:** `baxter-progress-report.md` (§22 = Slice 9) — M1 sections of the previous handoff revision are preserved in git history of the repo copy.
 
@@ -139,7 +145,8 @@ Autosave 400 rides the retry ladder with a loud console error (a designed `rejec
 
 *(Closed since the last revision: PR #1 — merged 2026-08-12, commit `7826384`; GitHub Actions verification — cleared, first hosted run green on the merge commit.)*
 
-1. **Margins (product decision — the Slice B gate):** confirm or revise A4 15/6 and square 14/6 in `formats.ts` (zine 12/5 is the accepted spike value; D-031).
+0. **Review/merge [PR #2](https://github.com/56kz55777k-ops/baxter-publishing/pull/2) — D-033 publication bleed** (decision ACCEPTED 2026-08-19; presets carry 3.175 mm per applicable edge; implemented, fully verified — 111 tests green — no schema/persistence change, zero shared-bundle impact; branch `amendment/d-033-publication-bleed` @ `465c939`; not self-merged). Reading: `native-publishing-slice-a-blueprint-amendment-2.md`, then D-033 in `decisions.md`.
+1. **Margins (product decision — the Slice B gate):** confirm or revise A4 15/6 and square 14/6 in `formats.ts` (zine 12/5 is the accepted spike value; D-031). Independent of D-033 — bleed and safe are separate problems.
 2. **D-032 availability mechanism (operational/infrastructure):** Supabase Pro, an uptime probe on a data-backed endpoint, or both — so production can never silently pause again.
 3. *(Standing, Milestone 1 — operational)* EasyPost key + live-shipping verification when ready.
 4. *(Parallel, non-engineering — product/licensing)* Font procurement for Slice G: self-hostable Fraunces + DM Sans files licensed for embedding (lead-time item flagged since the production handoff).
@@ -161,7 +168,7 @@ Autosave 400 rides the retry ladder with a loud console error (a designed `rejec
 ## 11 · First moves for a new session
 
 1. Read this handoff, then **`native-publishing-production-implementation-handoff.md`** (Part 2 contracts + Part 11 slices), then `slice-a-engineering-review.md` + the three ADRs.
-2. `cd ~/Desktop/baxter-app && git status` — expect **`main` at or past merge commit `7826384`**, clean tree apart from four pre-existing untracked folders (`Resend Documentation/`, `Vercel Documentation/`, `brand/`, `baxter-slice6-smoke-test.md`). The merged `slice-a-native-publishing` branch still exists (local + remote) as the reviewed-head record.
+2. `cd ~/Desktop/baxter-app && git fetch && git status` — expect **`main` at `819f473` or later** (if PR #2 has merged, `main` will be ahead; `git pull`), clean tree apart from four pre-existing untracked folders (`Resend Documentation/`, `Vercel Documentation/`, `brand/`, `baxter-slice6-smoke-test.md`). Branches present: `slice-a-native-publishing` (merged record) and `amendment/d-033-publication-bleed` (PR #2). Check `gh pr list` — if #2 is still open, it awaits Ben, not you.
 3. Run the battery: `npm run test` · `npm run typecheck` · `npm run lint` · `npm run build` · `npm run budget -w @baxter/web`. All green on the merged tree; hosted CI also runs on push (first run green on `7826384`).
-4. Check Ben's queue (§8). Once margins are ruled: begin Slice B per §9 on a fresh `slice-b-*` branch, contracts open beside the code.
+4. Check Ben's queue (§8): PR #2 verdict, then the margin ruling. Once both are in: begin Slice B per §9 on a fresh `slice-b-*` branch off `main`, contracts open beside the code. Do not start Slice B features before the margin ruling.
 5. For live work: `apps/web/.env.local` must exist (§1); the editor is at `/studio/editor/[id]` for any draft publication; dev commit handle drives saves until B.
