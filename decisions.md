@@ -499,7 +499,7 @@ Rulings:
 
 ## D-033 — Publication bleed: ⅛ inch (3.175 mm) per applicable edge, profile-owned, safe kept separate
 
-**Status: ACCEPTED by Ben, 2026-08-19**, as implemented and verified (typecheck, lint, 111 unit tests, preflight harness 6/6, production build, bundle budget — zero shared-bundle impact, no schema or persistence change).
+**Status: RULING ACCEPTED by Ben, 2026-08-19; IMPLEMENTATION ACCEPTED by Ben, 2026-08-22**, after verification including typecheck, lint, 111 unit tests, preflight harness 6/6, production build, bundle budget, hosted CI `success`, and Vercel preview `success` — zero shared-bundle impact, no schema or persistence change. The two acceptances are separate events and are not to be collapsed. **PR #2 was open and unmerged when this was written; merging is Ben's.**
 
 **Chosen.** The "quarter-inch bleed" reported from Baxter's printing partners is formally interpreted as **¼ inch added to each full page dimension** — i.e. **⅛ in / 0.125 in / 3.175 mm / 9 pt of bleed per applicable edge**, measured outward from trim. The rejected reading is ~~0.25 in / 6.35 mm per edge~~. A 6 × 9 in page bleeding on all four edges occupies **6.25 × 9.25 in**. `0.25 in` is never encoded as a per-edge value.
 
