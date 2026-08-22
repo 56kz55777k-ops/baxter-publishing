@@ -11,6 +11,7 @@ import { loadOrderDetail } from '@/lib/orders/detail';
 import {
   evaluatePreflight,
   getFormatPreset,
+  GENERIC_PUBLICATION_BLEED_MM,
   type PreflightIssue,
 } from '@baxter/domain';
 
@@ -99,7 +100,7 @@ const preflight = inngest.createFunction(
           maxPages: 1000,
           requiresMultipleOfFour: false,
           dimensionToleranceMm: 1,
-          bleedMm: 3,
+          bleedMm: GENERIC_PUBLICATION_BLEED_MM,
           minImageDpi: 300,
         };
         const result = evaluatePreflight(facts, trim, rules);

@@ -51,11 +51,52 @@ export interface FormatPrintRules {
   requiresMultipleOfFour: boolean;
   /** Allowed deviation, in mm, of a page's trim from the preset trim. */
   dimensionToleranceMm: number;
-  /** Expected bleed margin in mm (0 = bleed not expected). Warning only. */
+  /**
+   * Expected bleed PER APPLICABLE EDGE, in mm (0 = bleed not expected).
+   * Warning only.
+   *
+   * Measured outward from trim on ONE edge. A page bleeding on both opposing
+   * edges therefore grows by twice this in that dimension: at the generic
+   * value, +0.25 in / 6.35 mm of total width and height. **Never encode
+   * 0.25 in as the per-edge value** (D-033).
+   *
+   * 3 mm and 3.175 mm are industry synonyms in prose — Adobe itself writes
+   * "0.125 inches (3 mm)" — but they are 0.175 mm apart and must not be
+   * silently substituted. A future printer profile must be able to state a
+   * true 3.0 mm requirement (D-033).
+   *
+   * Scalar today because every current preset bleeds symmetrically on all
+   * four edges. Publication workflows can require zero bleed on the
+   * binding/gutter edge (IngramSpark, Amazon KDP, Gorham all forbid it), so
+   * this becomes per-edge when output profiles arrive. That conversion needs
+   * no migration: bleed is derived from the preset and never persisted into
+   * `editor_documents.doc` (D-033).
+   */
   bleedMm: number;
   /** Minimum acceptable image resolution in DPI. Warning only. */
   minImageDpi: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Bleed — the generic publication value (D-033)                              */
+/* -------------------------------------------------------------------------- */
+
+export const MM_PER_INCH = 25.4;
+export const PT_PER_INCH = 72;
+
+/**
+ * The generic publication bleed, per applicable edge: 1/8 inch.
+ *
+ * D-033 resolved the reported "quarter-inch bleed" as a quarter inch added to
+ * each full page dimension — i.e. an eighth of an inch per applicable edge —
+ * not a quarter inch per edge. Derived here rather than written as a decimal
+ * so the imperial origin stays visible and the mm/pt values cannot drift.
+ */
+export const GENERIC_PUBLICATION_BLEED_IN = 0.125;
+/** 3.175 mm exactly. */
+export const GENERIC_PUBLICATION_BLEED_MM = GENERIC_PUBLICATION_BLEED_IN * MM_PER_INCH;
+/** 9 pt exactly. */
+export const GENERIC_PUBLICATION_BLEED_PT = GENERIC_PUBLICATION_BLEED_IN * PT_PER_INCH;
 
 export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
   {
@@ -69,7 +110,7 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       maxPages: 64,
       requiresMultipleOfFour: true,
       dimensionToleranceMm: 1,
-      bleedMm: 3,
+      bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
     layout: { marginMm: 12, safeMm: 5 },
@@ -85,7 +126,7 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       maxPages: 96,
       requiresMultipleOfFour: true,
       dimensionToleranceMm: 1,
-      bleedMm: 3,
+      bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
     // PROVISIONAL — confirm at Slice A review (D-031).
@@ -103,7 +144,7 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       maxPages: 240,
       requiresMultipleOfFour: false,
       dimensionToleranceMm: 1,
-      bleedMm: 3,
+      bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
     // PROVISIONAL — confirm at Slice A review (D-031).
