@@ -27,18 +27,48 @@ export interface PublicationFormatPreset {
    * documents freeze resolved copies of these into their own meta, so
    * changing a preset later never reflows existing documents.
    *
-   * zine_a5 carries the Spike C v2 accepted values (12/5). The A4 and
-   * square values are PROVISIONAL — proposed in the Slice A blueprint,
-   * awaiting Ben's confirmation at the Slice A review; do not treat them
-   * as settled product decisions (see D-031).
+   * All three presets are ACCEPTED product decisions as of D-034. zine_a5
+   * carries the Spike C v2 values (12/5) unchanged; A4 15/6 is accepted as
+   * proposed; the square margin was revised 14 → 19 mm. Nothing here is
+   * provisional any more.
+   *
+   * Because these are frozen at document creation (D-031), a change to a
+   * value below affects only documents created after it — existing work is
+   * never reflowed, and is never silently mutated.
    */
   layout: FormatLayoutDefaults;
 }
 
 export interface FormatLayoutDefaults {
-  /** Default page margin, mm in from trim. Margin guides + future snap targets. */
+  /**
+   * Default page margin, mm in from trim. Margin guides + future snap targets.
+   *
+   * A single scalar, applied symmetrically to all four edges. Retained
+   * deliberately through the present editor slices (D-034): no current
+   * consumer — not preflight, not the inspector, not an exporter — requires
+   * binding-aware geometry, and building it early would be speculative
+   * infrastructure.
+   *
+   * **This deferral is dated, not indefinite.** Binding-relative per-edge
+   * margins are a hard prerequisite before M2.4/export ships. The future
+   * representation is `{ top, bottom, inner, outer }` — binding-relative,
+   * NOT screen-relative `{ top, right, bottom, left }`, because "inner" is
+   * the left edge on a recto and the right edge on a verso; storing screen
+   * edges would push that flip into every consumer (D-034).
+   */
   marginMm: number;
-  /** Default safe area, mm in from trim — keep important content inside. */
+  /**
+   * Default editorial safe area, mm in from trim — keep important content
+   * inside.
+   *
+   * **An editorial layout guide, not a printer-safety guarantee (D-034).**
+   * These values express where Baxter thinks critical content should sit on
+   * the page; they do not assert conformance with any printer's safety
+   * requirement, and must not be described as satisfying one. Real output
+   * safety — per-edge, gutter-aware, page-count-aware, profile-owned — is
+   * the job of future output-profile and preflight logic (D-033), not of
+   * this number.
+   */
   safeMm: number;
 }
 
@@ -113,6 +143,8 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
+    // ACCEPTED (D-034): unchanged from the Spike C v2 values.
+    // Editorial safe guide, not a printer guarantee.
     layout: { marginMm: 12, safeMm: 5 },
   },
   {
@@ -129,7 +161,7 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
-    // PROVISIONAL — confirm at Slice A review (D-031).
+    // ACCEPTED as proposed (D-034). Editorial safe guide, not a printer guarantee.
     layout: { marginMm: 15, safeMm: 6 },
   },
   {
@@ -147,8 +179,13 @@ export const PUBLICATION_FORMAT_PRESETS: readonly PublicationFormatPreset[] = [
       bleedMm: GENERIC_PUBLICATION_BLEED_MM,
       minImageDpi: 300,
     },
-    // PROVISIONAL — confirm at Slice A review (D-031).
-    layout: { marginMm: 14, safeMm: 6 },
+    // ACCEPTED (D-034): margin revised 14 → 19 mm. Perfect-bound to 240 pages;
+    // the gutter requirement scales with page count while the outer does not,
+    // so the symmetric scalar is set to the stricter (binding) edge. The page
+    // range is NOT narrowed to compensate — binding/page-count requirements
+    // belong to future output-profile and preflight logic.
+    // Editorial safe guide, not a printer guarantee.
+    layout: { marginMm: 19, safeMm: 6 },
   },
 ] as const;
 

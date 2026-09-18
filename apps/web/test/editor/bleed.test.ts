@@ -70,9 +70,11 @@ describe('D-033: the generic publication bleed is 0.125 in per applicable edge',
     expect([sq.trimWidthMm, sq.trimHeightMm]).toEqual([210, 210]);
 
     expect(a5.layout).toEqual({ marginMm: 12, safeMm: 5 });
-    // PROVISIONAL values, deliberately unchanged here (D-031 remains open).
+    // These were PROVISIONAL when D-033 landed and were deliberately left
+    // alone by it; they were settled separately by D-034 (square 14 → 19).
+    // Pinned here so a future bleed change still cannot touch them.
     expect(a4.layout).toEqual({ marginMm: 15, safeMm: 6 });
-    expect(sq.layout).toEqual({ marginMm: 14, safeMm: 6 });
+    expect(sq.layout).toEqual({ marginMm: 19, safeMm: 6 });
   });
 
   it('the bleed box the editor draws grows by exactly 2x the per-edge value', () => {
