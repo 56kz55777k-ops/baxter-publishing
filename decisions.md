@@ -526,13 +526,49 @@ All three format presets and the inngest generic-rules fallback move from `bleed
 
 ---
 
+## D-034 — Editor margins and safe: scalar retained, square revised to 19 mm, safe is editorial
+
+**Status: RULING ACCEPTED by Ben, 2026-09-18. IMPLEMENTATION ACCEPTANCE: NOT YET — deliberately not recorded.** The two acceptances are separate events and are not to be collapsed, exactly as for D-033.
+
+The implementation of this ruling was written and verified in a **sandbox clone of the public repository** — typecheck, test-tree typecheck, lint, 15 suites / 124 tests, production build, preflight harness 6/6, bundle budget PASS, and a shared First-Load JS delta of zero bytes against `main`. It was delivered to Ben as a **single-commit `git am` patch against `699f009`**, because the sandbox holds no credentials for `origin`. Therefore, as of this writing: **not pushed · no PR exists (neither open nor closed) · hosted CI has NOT executed (not passed, not failed) · no Vercel preview was created · not merged.** Implementation acceptance is to be recorded only after Ben applies the patch in the credentialled repository, pushes it, opens the PR, and that repository's own verification has run.
+
+Settles the margin/safe question left PROVISIONAL by D-031 and deliberately untouched by D-033. **Slice B's product gate is lifted by this ruling**; Slice B work itself waits on the implementation being landed and merged.
+
+**Chosen.**
+
+1. **The scalar model is retained.** `marginMm` and `safeMm` remain single scalars applied symmetrically to all four edges through the present editor slices.
+2. **Margin defaults, frozen at document creation:** `zine_a5` **12 mm** (unchanged — the Spike C v2 accepted value) · `magazine_a4` **15 mm** (the provisional value, accepted as proposed) · `photobook_square_210` **19 mm** (revised from 14 mm).
+3. **Editorial safe guides are kept as they are:** 5 / 6 / 6 mm. They are **not** standardised to 6.35 mm.
+4. **`safeMm` is an editorial layout guide, not a universal printer-safety guarantee.** 5 mm and 6 mm express where Baxter thinks critical content should sit; they assert nothing about any printer's safety requirement and must never be described as satisfying one. Real output safety — per-edge, gutter-aware, page-count-aware — belongs to future output-profile and preflight logic (D-033), not to this number.
+5. **`photobook_square_210.maxPages` stays 240.** The product's page range is not narrowed to compensate for a temporary scalar margin model.
+
+**Why the square moves and the others do not.** The square is the only preset where a scalar is not merely imprecise but structurally unable to express the requirement: it is perfect-bound and spans a 12× page range (20–240), and **the gutter requirement scales with page count while the outer requirement does not**. Amazon KDP's published table requires a 12.7 mm inside margin at 151–300 pages; perfect binding physically consumes 6.35–9.53 mm of each inner page; design guidance for 200–400-page perfect-bound books recommends 19–25.4 mm inner. At 14 mm the value cleared KDP by 1.3 mm with no headroom and lost roughly half of itself to the spine at the top of its own declared range. 19 mm sits at the bottom of that guidance band, clears KDP at the 240-page ceiling with real headroom, and at 9.0% of trim sits naturally beside the zine's 8.1% rather than below it. A5 12 mm is the accepted spike value and is not reopened. A4 15 mm is editorially sound at 7.1% of trim, inside the 10–20 mm band of real A4 magazine practice, and clears every cited minimum for a saddle-stitched A4; its only shortfall is 0.88 mm against one source's 48-plus-page figure, which does not justify disturbing a plausible number.
+
+**Why the scalar is kept rather than made per-edge now.** No current consumer requires binding-aware geometry: `preflight.ts` does not read margin or safe at all, no exporter exists (M2.4 unbuilt), and Slice B's inspector only displays these values. Building per-edge now would be speculative infrastructure by exactly the standard D-033 applied when it deferred per-edge *bleed*. The migration argument does not argue the other way either: forward-only lazy migration on read already exists, a v1→v2 conversion mapping one scalar to four equal edges is mechanical and lossless, and `schema_version` is re-derived server-side on write — so converting later needs no SQL migration and no backfill.
+
+**The deferral is dated, not indefinite.** Binding-relative per-edge margins are a **hard prerequisite before M2.4/export ships**. The future representation is **`{ top, bottom, inner, outer }` — binding-relative, not screen-relative `{ top, right, bottom, left }`** — because "inner" is the left edge on a recto and the right edge on a verso; storing screen-relative edges would push that flip into every consumer. Recorded here; **not implemented in this amendment.**
+
+**The asymmetry against D-033, stated plainly.** D-033 was self-healing: bleed is derived from the preset at render time and never persisted, so every document ever made picked up the corrected value the moment the constant changed. **Margin and safe are frozen into each document at creation (D-031) and are never re-derived.** A wrong value here is permanent per document, and a future migration would faithfully preserve it rather than repair it. That is why the care went into the numbers rather than into the model.
+
+**Implications.**
+- **Existing documents are untouched.** D-031's freeze contract is preserved exactly: documents created before this ruling keep their frozen values forever, including square documents born at 14 mm. **No backfill, no SQL migration, no schema-version bump, no silent mutation.** The two populations coexist permanently and legitimately.
+- **New documents** created from the square preset freeze 19 mm.
+- The change is confined to the three `layout` blocks in `packages/domain/src/formats.ts` and their documentation. No schema change, no persistence change, no API change, no behaviour change in `StageGuides`, `geometry.ts` or preflight — the guides simply draw the value the document carries.
+- **Bleed is unaffected.** It remains 0.125 in = 3.175 mm = 9 pt per applicable edge (D-033), unchanged in value, derivation and terminology.
+
+**Evidence and its limits.** The margin research surveyed primary printer specifications (Amazon KDP, IngramSpark, Blurb) and established saddle-stitch and perfect-bound practice. One finding shaped the ruling more than the numbers did: **the two binding families require opposite asymmetry** — saddle-stitch creep pushes inner sheets outward and wants a larger *outer* margin (a common A4 setup is top/bottom 10 mm, inside 13 mm, outside 20 mm), while perfect-bound gutter loss wants a larger *inner* margin. Baxter's presets straddle both families, so a symmetric scalar can only satisfy the stricter edge and be generous on the other. That generosity is the acknowledged, accepted cost of staying scalar for now. **Recorded honestly:** unlike D-033, this ruling rests on the printer survey alone — no named Baxter printing partner specification is on record in any reachable correspondence or document store as of 2026-09-18. KDP's and IngramSpark's figures are published and checkable; the 19–25.4 mm perfect-bound band is trade practice, not a published requirement.
+
+**What would force reconsideration.** A named printing partner's written specification — which would outrank the survey exactly as partner input did for D-033. A real consumer of margin geometry arriving earlier than expected (preflight consuming margins as a constraint, or M2.4) — which triggers the dated per-edge requirement above rather than a change to these values. Evidence that 19 mm reads visually heavy in real square photobook work — 16 mm was the considered alternative and still clears KDP at 240 pages, though it sits below the design guidance at high page counts.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
-- **Editor margins for A4 + square presets** — 15/6 and 14/6 shipped PROVISIONAL in `formats.ts` (D-031); confirm or revise at the Slice A review. Unaffected by D-033.
+- **Per-edge BINDING-RELATIVE margins** — D-034 retains the scalar `marginMm`/`safeMm` model for the present editor slices and records `{top, bottom, inner, outer}` as a **hard prerequisite before M2.4/export ships** (not screen-relative: inner/outer swap physical edge between recto and verso). Migration-free whenever taken: forward-only lazy migration already exists and one scalar maps losslessly to four equal edges.
 - **Per-edge bleed + output profiles** — D-033 records that bleed must become `{top,right,bottom,left}` and profile-owned (gutter bleed is forbidden by IngramSpark/KDP/Gorham). Deferred until a profile actually needs it; migration-free whenever taken, since bleed is derived, never persisted.
 - **Production availability mechanism** — Supabase Pro vs uptime probe vs both (D-032). Ben decides.
 - **Inngest topology** — which workflows are durable steps vs server actions vs cron. Slice 5–6.
 - **DIN licensing** — when to pull DM Sans and license real DIN. After Slice 4 ship.
 - **Preview lifecycle on publication delete** — orphaned Cloudflare images / clean-bucket objects aren't swept on publication deletion (only on re-render). Add a cleanup path if it matters pre-launch.
 
-*(Resolved: "PDF rendering pipeline" — settled by D-015 (mupdf + Cloudflare Images).)*
+*(Resolved: "PDF rendering pipeline" — settled by D-015 (mupdf + Cloudflare Images). "Editor margins for A4 + square presets" — settled by D-034; square revised 14 → 19 mm, A4 15 mm accepted, safe kept at 5/6/6 as an editorial guide.)*
