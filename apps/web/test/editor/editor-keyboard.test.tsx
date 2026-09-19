@@ -4,6 +4,10 @@
  * keyboard behaviour survived the move to shell level unchanged: Space
  * momentary hand with page-scroll prevention, V/H tool switches, the typing
  * guard, and window-blur clearing the Space modifier (contract #26).
+ *
+ * Slice B extends the same handler rather than adding a second one, so the
+ * Slice A assertions below are left exactly as they were and the new map
+ * entries (R, Escape, the undo/redo chord) are asserted alongside them.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import React, { act } from 'react';
@@ -15,17 +19,34 @@ let container: HTMLDivElement;
 let root: Root;
 let spaceNow = false;
 let dispatched: EditorUiAction[] = [];
+let undos = 0;
+let redos = 0;
 
 function Harness() {
-  const { spaceHeld } = useEditorKeyboard((a) => {
-    dispatched.push(a);
-  });
+  const { spaceHeld } = useEditorKeyboard(
+    (a) => {
+      dispatched.push(a);
+    },
+    {
+      onUndo: () => {
+        undos += 1;
+      },
+      onRedo: () => {
+        redos += 1;
+      },
+    }
+  );
   spaceNow = spaceHeld;
   return null;
 }
 
-function key(type: 'keydown' | 'keyup', key: string, target?: EventTarget) {
-  const e = new KeyboardEvent(type, { key, bubbles: true, cancelable: true });
+function key(
+  type: 'keydown' | 'keyup',
+  key: string,
+  target?: EventTarget,
+  mods: { metaKey?: boolean; shiftKey?: boolean } = {}
+) {
+  const e = new KeyboardEvent(type, { key, bubbles: true, cancelable: true, ...mods });
   if (target) Object.defineProperty(e, 'target', { value: target });
   act(() => {
     window.dispatchEvent(e);
@@ -35,6 +56,8 @@ function key(type: 'keydown' | 'keyup', key: string, target?: EventTarget) {
 
 beforeEach(() => {
   dispatched = [];
+  undos = 0;
+  redos = 0;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -91,6 +114,43 @@ describe('useEditorKeyboard — Slice A map preserved at shell level', () => {
     root = createRoot(container);
     key('keydown', 'h');
     expect(dispatched).toEqual([]);
+  });
+
+  it('R arms the rectangle tool; ellipse has no accepted letter (contract #26)', () => {
+    key('keydown', 'r');
+    key('keydown', 'R');
+    expect(dispatched).toEqual([
+      { type: 'SET_TOOL', tool: 'rect' },
+      { type: 'SET_TOOL', tool: 'rect' },
+    ]);
+  });
+
+  it('Escape deselects and returns to the Select tool', () => {
+    key('keydown', 'Escape');
+    expect(dispatched).toEqual([{ type: 'CLEAR_SELECTION' }, { type: 'SET_TOOL', tool: 'select' }]);
+  });
+
+  it('Cmd+Z undoes, Shift+Cmd+Z redoes, and both prevent the browser default', () => {
+    const undo = key('keydown', 'z', undefined, { metaKey: true });
+    expect(undos).toBe(1);
+    expect(redos).toBe(0);
+    expect(undo.defaultPrevented).toBe(true);
+
+    const redo = key('keydown', 'z', undefined, { metaKey: true, shiftKey: true });
+    expect(redos).toBe(1);
+    expect(undos).toBe(1);
+    expect(redo.defaultPrevented).toBe(true);
+
+    // The chord never leaks a tool change.
+    expect(dispatched).toEqual([]);
+  });
+
+  it('the typing guard also covers the undo chord — in-field undo stays native', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    key('keydown', 'z', input, { metaKey: true });
+    expect(undos).toBe(0);
+    input.remove();
   });
 
   it('isTypingTarget covers input, textarea, select and contentEditable', () => {

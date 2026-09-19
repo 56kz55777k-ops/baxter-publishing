@@ -10,8 +10,19 @@
  * reload; nothing is silently kept or thrown away (blueprint §2.6).
  */
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { getFormatPreset, newRectElement } from '@baxter/domain';
+import { useCallback, useMemo, useRef } from 'react';
+import {
+  addElement,
+  findElement,
+  getFormatPreset,
+  liveSelection,
+  reorderElement,
+  setLocked,
+  updateElement,
+  type ArrangeOp,
+  type EditorElement,
+} from '@baxter/domain';
+import { Inspector } from './inspector/Inspector';
 import { fitPageView, fitUnitView, hundredView, unitGeometry } from './geometry';
 import { SaveStateChip } from './SaveStateChip';
 import { SpreadStage } from './SpreadStage';
@@ -29,7 +40,30 @@ export function EditorShell({ publication }: { publication: { id: string; title:
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
   useAutosave(publication.id, state, dispatch);
-  const { spaceHeld } = useEditorKeyboard(uiDispatch);
+
+  /**
+   * Undo/redo are orchestrated here rather than inside either reducer, which
+   * is what keeps selection out of the document store (contract #4, #24).
+   * The handler reads the entry it is about to restore, moves the document
+   * through the transaction log, and restores that entry's selection into the
+   * UI context filtered to ids that still exist — stale ids are never
+   * recreated.
+   */
+  const onUndo = useCallback(() => {
+    const entry = state.history[state.history.length - 1];
+    if (!entry) return;
+    dispatch({ type: 'UNDO', currentSelection: ui.selection });
+    uiDispatch({ type: 'SET_SELECTION', ids: liveSelection(entry.doc, entry.selection) });
+  }, [state.history, ui.selection, dispatch, uiDispatch]);
+
+  const onRedo = useCallback(() => {
+    const entry = state.future[state.future.length - 1];
+    if (!entry) return;
+    dispatch({ type: 'REDO', currentSelection: ui.selection });
+    uiDispatch({ type: 'SET_SELECTION', ids: liveSelection(entry.doc, entry.selection) });
+  }, [state.future, ui.selection, dispatch, uiDispatch]);
+
+  const { spaceHeld } = useEditorKeyboard(uiDispatch, { onUndo, onRedo });
 
   const units = selectUnits(state.doc);
   const preset = getFormatPreset(state.doc.meta.formatPresetId)!;
@@ -71,25 +105,73 @@ export function EditorShell({ publication }: { publication: { id: string; title:
     uiDispatch({ type: 'SET_VIEW', view: hundredView(geom, w, h) });
   }, [geom, viewport, uiDispatch]);
 
-  // Dev-only commit handle for Slice A verification (no editing UI exists
-  // yet). Dead-code-eliminated from production builds by the NODE_ENV check.
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
-    const w = window as typeof window & { __baxterEditorDevCommit?: (label?: string) => void };
-    w.__baxterEditorDevCommit = (label = 'dev commit') => {
-      const doc = state.doc;
-      const nextDoc = {
-        ...doc,
-        pages: doc.pages.map((p, i) =>
-          i === 1 ? { ...p, elements: [...p.elements, newRectElement({ x: 20, y: 20 })] } : p
-        ),
-      };
-      dispatch({ type: 'COMMIT', nextDoc, selection: [], label });
-    };
-    return () => {
-      delete w.__baxterEditorDevCommit;
-    };
-  }, [state.doc, dispatch]);
+  /**
+   * The one document mutation Slice B introduces: a completed creation
+   * gesture. The element is produced by pure helpers, committed once, and the
+   * accepted after-state follows — the new element is selected, the inspector
+   * arms because selection drives it, and the tool returns to Select
+   * (contract #3).
+   *
+   * Slice A's dev-only `__baxterEditorDevCommit` handle is gone: it existed
+   * because no editing surface did. Real tools have replaced it, and the
+   * browser smoke now drives real gestures instead of a synthetic hook.
+   */
+  const onCreate = useCallback(
+    (pageIndex: number, element: EditorElement, label: string) => {
+      const page = unit.pages[pageIndex];
+      if (!page) return;
+      const nextDoc = addElement(state.doc, page.id, element);
+      if (nextDoc === state.doc) return;
+      dispatch({ type: 'COMMIT', nextDoc, selection: ui.selection, label });
+      uiDispatch({ type: 'SET_SELECTION', ids: [element.id] });
+      uiDispatch({ type: 'SET_TOOL', tool: 'select' });
+    },
+    [unit.pages, state.doc, ui.selection, dispatch, uiDispatch]
+  );
+
+  /**
+   * Inspector commits. Each is one intention → one pure helper → one COMMIT →
+   * one history entry (#24). The helpers return the same document reference
+   * for a no-op, so an identical value or an already-front arrange writes
+   * nothing at all.
+   */
+  const selectedElement = useMemo(
+    () => (ui.selection.length === 1 ? (findElement(state.doc, ui.selection[0]!) ?? null) : null),
+    [state.doc, ui.selection]
+  );
+
+  const doc = state.doc;
+  const commitDoc = useCallback(
+    (nextDoc: typeof doc, label: string) => {
+      if (nextDoc === doc) return;
+      dispatch({ type: 'COMMIT', nextDoc, selection: ui.selection, label });
+    },
+    [doc, ui.selection, dispatch]
+  );
+
+  const onPatch = useCallback(
+    (patch: Record<string, unknown>, label: string) => {
+      if (!selectedElement) return;
+      commitDoc(updateElement(state.doc, selectedElement.id, patch), label);
+    },
+    [selectedElement, state.doc, commitDoc]
+  );
+
+  const onArrange = useCallback(
+    (op: ArrangeOp) => {
+      if (!selectedElement) return;
+      commitDoc(reorderElement(state.doc, selectedElement.id, op), 'Arrange');
+    },
+    [selectedElement, state.doc, commitDoc]
+  );
+
+  const onSetLocked = useCallback(
+    (locked: boolean) => {
+      if (!selectedElement) return;
+      commitDoc(setLocked(state.doc, selectedElement.id, locked), locked ? 'Lock' : 'Unlock');
+    },
+    [selectedElement, state.doc, commitDoc]
+  );
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink">
@@ -128,8 +210,28 @@ export function EditorShell({ publication }: { publication: { id: string; title:
       <div className="flex min-h-0 flex-1">
         <UnitList units={units} unitIndex={unitIndex} onNavigate={navigate} />
         <main className={'min-w-0 flex-1 ' + (readOnly ? 'pointer-events-none' : '')} aria-disabled={readOnly}>
-          <SpreadStage geom={geom} viewportRef={viewportRef} spaceHeld={spaceHeld} />
+          <SpreadStage
+            geom={geom}
+            pages={unit.pages}
+            viewportRef={viewportRef}
+            spaceHeld={spaceHeld}
+            readOnly={readOnly}
+            onCreate={onCreate}
+          />
         </main>
+        <Inspector
+          element={selectedElement}
+          page={{
+            formatName: preset.name,
+            marginMm: state.doc.meta.marginMm,
+            safeMm: state.doc.meta.safeMm,
+          }}
+          selectionCount={ui.selection.length}
+          disabled={readOnly}
+          onPatch={onPatch}
+          onArrange={onArrange}
+          onSetLocked={onSetLocked}
+        />
       </div>
 
       <StatusBar

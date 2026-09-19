@@ -48,6 +48,18 @@ export interface DocumentState {
 
 export type DocumentAction =
   | { type: 'COMMIT'; nextDoc: EditorDoc; selection: readonly string[]; label: string }
+  /**
+   * Undo/redo are transaction-log operations, not element operations — they
+   * move whole documents between the two stacks and add no per-element
+   * vocabulary to this reducer (ADR-003 §1 holds).
+   *
+   * `currentSelection` is recorded on the entry pushed to the opposite stack
+   * so the reverse move can restore it. It is passed in rather than read
+   * here because selection belongs to the UI context: this reducer carries it
+   * as opaque data and never owns it.
+   */
+  | { type: 'UNDO'; currentSelection: readonly string[] }
+  | { type: 'REDO'; currentSelection: readonly string[] }
   | { type: 'SAVE_STARTED' }
   | { type: 'SAVED'; revision: number; sentDoc: EditorDoc }
   | { type: 'SAVE_FAILED' }
@@ -90,6 +102,42 @@ export function documentReducer(state: DocumentState, action: DocumentAction): D
           ? [...state.history.slice(state.history.length - HISTORY_CAP + 1), entry]
           : [...state.history, entry];
       return { ...state, doc: action.nextDoc, history, future: [] };
+    }
+
+    case 'UNDO': {
+      if (isTerminal(state.savePhase)) return state; // read-only: edits stand down
+      const entry = state.history[state.history.length - 1];
+      if (!entry) return state;
+      // The entry holds the document BEFORE its commit; the current document
+      // becomes the redo target, carrying the caller's live selection.
+      const redoEntry: HistoryEntry = {
+        doc: state.doc,
+        selection: action.currentSelection,
+        label: entry.label,
+      };
+      return {
+        ...state,
+        doc: entry.doc,
+        history: state.history.slice(0, -1),
+        future: [...state.future, redoEntry],
+      };
+    }
+
+    case 'REDO': {
+      if (isTerminal(state.savePhase)) return state;
+      const entry = state.future[state.future.length - 1];
+      if (!entry) return state;
+      const undoEntry: HistoryEntry = {
+        doc: state.doc,
+        selection: action.currentSelection,
+        label: entry.label,
+      };
+      return {
+        ...state,
+        doc: entry.doc,
+        history: [...state.history, undoEntry],
+        future: state.future.slice(0, -1),
+      };
     }
 
     case 'SAVE_STARTED':

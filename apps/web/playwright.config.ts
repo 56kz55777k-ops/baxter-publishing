@@ -9,12 +9,11 @@
  * SKIPS with a clear message when they are absent — it never fabricates a
  * session.
  *
- * The web server is `next dev` deliberately: Slice A ships no production
- * editing surface, and the smoke's "one real document commit" uses the
- * dev-only commit handle. The reducer→scheduler→fetch→DB→reload seam it
- * exercises is identical in production builds; production-mode mounting is
- * separately evidenced (see the hardening report). When Slice B lands real
- * editing tools, this config flips to `next start`.
+ * The web server is `next start` as of Slice B: real editing tools now exist,
+ * the dev-only commit handle is gone, and the smoke drives real pointer and
+ * keyboard gestures against a production build — which is what Slice A's
+ * amendment-1 note said this config should become once there was something to
+ * drive. `next build` runs first so `next start` has something to serve.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -46,9 +45,9 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
   },
   webServer: {
-    command: `npx next dev -p ${PORT}`,
+    command: `npx next build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}/sign-in`,
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 300_000,
   },
 });

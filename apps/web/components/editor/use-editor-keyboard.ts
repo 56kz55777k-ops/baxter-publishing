@@ -14,7 +14,7 @@
  * Pointer-gesture concerns (pan state, its own blur cancellation) remain
  * stage-local by design — this hook owns keys, not gestures.
  */
-import { useEffect, useState, type Dispatch } from 'react';
+import { useEffect, useRef, useState, type Dispatch } from 'react';
 import type { EditorUiAction } from './state/editor-ui';
 
 /** The one authoritative guard: keys belong to the focused editable surface. */
@@ -29,12 +29,27 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
-export function useEditorKeyboard(uiDispatch: Dispatch<EditorUiAction>): { spaceHeld: boolean } {
+export function useEditorKeyboard(
+  uiDispatch: Dispatch<EditorUiAction>,
+  handlers: { onUndo: () => void; onRedo: () => void }
+): { spaceHeld: boolean } {
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (isTypingTarget(e.target)) return;
+
+      // ⌘Z / ⇧⌘Z — document history (contract #24/#26). The typing guard above
+      // is what keeps in-field undo native while a numeric draft is focused.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) handlersRef.current.onRedo();
+        else handlersRef.current.onUndo();
+        return;
+      }
+
       if (e.key === ' ') {
         e.preventDefault();
         setSpaceHeld(true);
@@ -42,6 +57,15 @@ export function useEditorKeyboard(uiDispatch: Dispatch<EditorUiAction>): { space
         uiDispatch({ type: 'SET_TOOL', tool: 'select' });
       } else if (e.key === 'h' || e.key === 'H') {
         uiDispatch({ type: 'SET_TOOL', tool: 'hand' });
+      } else if (e.key === 'r' || e.key === 'R') {
+        // R is the accepted letter for the rectangle tool. The map assigns no
+        // letter to ellipse, so ellipse stays toolbar-only (contract #26).
+        uiDispatch({ type: 'SET_TOOL', tool: 'rect' });
+      } else if (e.key === 'Escape') {
+        // Deselect + return to Select. An in-flight gesture cancels itself on
+        // Escape in the gesture hook; this is the resting-state behaviour.
+        uiDispatch({ type: 'CLEAR_SELECTION' });
+        uiDispatch({ type: 'SET_TOOL', tool: 'select' });
       }
     }
     function onKeyUp(e: KeyboardEvent) {

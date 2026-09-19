@@ -17,6 +17,9 @@ const INITIAL: EditorUiState = {
   // first fit (SET_UNIT) — nothing renders from this view before that.
   view: { x: 0, y: 0, scale: PX_PER_MM },
   tool: 'select',
+  // Selection dies on reload by design (Part 6) — it is session state, not
+  // document state, and is never persisted or restored from the server.
+  selection: [],
 };
 
 export function EditorUiProvider({ children }: { children: ReactNode }) {
