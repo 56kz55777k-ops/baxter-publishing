@@ -48,3 +48,25 @@ next-env.d.ts
 .idea/
 .env.e2e.local
 test-results/
+playwright-report/
+
+# Credential material — defence in depth, NOT a credential store.
+#
+# Credentials belong OUTSIDE this repository entirely (see SECURITY.md and
+# docs/security-operations.md). These rules are narrow and targeted on
+# purpose: broad patterns like `*Documentation/` or `*.rtf` would silently
+# hide legitimate Baxter material, and a rule that hides real work is worse
+# than no rule. Anything matched here should not have been in the working
+# tree in the first place.
+recovery-codes*
+*recovery-codes*
+credentials.*
+*-credentials.*
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+.netrc
+.npmrc

@@ -9,6 +9,11 @@ on:
   push:
     branches: [main, 'slice-*']
 
+# The repository default for GITHUB_TOKEN is already read-only, but declaring
+# it here means a later settings change cannot silently widen what CI can do.
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
