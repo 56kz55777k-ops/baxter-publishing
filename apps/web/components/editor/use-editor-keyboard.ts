@@ -17,16 +17,32 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import type { EditorUiAction } from './state/editor-ui';
 
+/**
+ * Inputs that take no typed text. Focus lands on them after a pick or a
+ * click (a colour chosen in the inspector leaves focus on the colour input),
+ * and they have no use for ⌘Z, Delete or the arrows — so they must not
+ * silence the document's shortcuts (Slice C decision C-6). `range` and
+ * `radio` are deliberately absent: arrows belong to them.
+ */
+const CONTROL_INPUT_TYPES = new Set(['color', 'checkbox', 'button', 'submit', 'reset']);
+
 /** The one authoritative guard: keys belong to the focused editable surface. */
 export function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
-  return (
-    el.tagName === 'INPUT' ||
-    el.tagName === 'TEXTAREA' ||
-    el.tagName === 'SELECT' ||
-    el.isContentEditable === true
-  );
+  if (el.tagName === 'INPUT') return !CONTROL_INPUT_TYPES.has((el as HTMLInputElement).type);
+  return el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable === true;
+}
+
+/**
+ * A focused button or control input. Not a typing surface, but Space and
+ * Enter are how the keyboard activates it — those two stay native.
+ */
+export function isControlTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.tagName === 'BUTTON') return true;
+  return el.tagName === 'INPUT' && CONTROL_INPUT_TYPES.has((el as HTMLInputElement).type);
 }
 
 export function useEditorKeyboard(
@@ -40,6 +56,7 @@ export function useEditorKeyboard(
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (isTypingTarget(e.target)) return;
+      if (isControlTarget(e.target) && (e.key === ' ' || e.key === 'Enter')) return;
 
       // ⌘Z / ⇧⌘Z — document history (contract #24/#26). The typing guard above
       // is what keeps in-field undo native while a numeric draft is focused.
