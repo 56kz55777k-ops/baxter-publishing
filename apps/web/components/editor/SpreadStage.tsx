@@ -1,47 +1,67 @@
 'use client';
 
 /**
- * The editor surface (Slice A): the current unit rendered at preset trim with
- * bleed/trim/margin/safe guides, plus stage-local viewport interaction —
- * wheel pan, pointer-centred zoom, Space/Hand drag-pan (contract #27).
- * No elements yet.
+ * The editor surface: the current unit rendered at preset trim with
+ * bleed/trim/margin/safe guides, the publication's elements, and the
+ * transient chrome of an in-flight gesture — plus stage-local viewport
+ * interaction (wheel pan, pointer-centred zoom, Space/Hand drag-pan,
+ * contract #27).
  *
- * Ownership boundaries (hardening pass):
+ * Ownership boundaries (hardening pass, extended in Slice B):
  * - Keyboard lives in the shell's useEditorKeyboard — this component only
- *   CONSUMES `spaceHeld`. Pointer-gesture state (panning) stays here, with
- *   its own window-blur cancellation: blur must end an in-flight drag.
+ *   CONSUMES `spaceHeld`. Pointer-gesture state stays here, with window-blur
+ *   cancellation: blur must end an in-flight drag or draw.
  * - Viewport measurement lives in useViewportMeasure (ADR-001: synchronous
  *   initial measure; observer for subsequent changes only).
+ * - Creation/selection/marquee gesture state lives in useStageGestures, in
+ *   refs and local state that never touch the document until one COMMIT.
  *
  * Cursor ownership (contract #21, approved architecture): ONE resolver writes
  * the cursor to this OUTER wrapper element, pre-paint. Konva's inner content
  * element stays untouched — when the Transformer arrives (Slice D) its anchor
  * cursors own the inner element and win by CSS containment. No other writer
- * is permitted, in any slice.
+ * is permitted, in any slice. Slice B extends the priority chain; it does not
+ * fork it.
+ *
+ * Layers: guides and overlays never listen; only the elements layer does, so
+ * hit-testing cost tracks the document rather than the chrome.
  */
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Group, Layer, Stage } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
+import type { EditorElement, EditorPage } from '@baxter/domain';
 import { fitUnitView, panBy, zoomAt, type UnitGeometry } from './geometry';
+import { ElementsLayer } from './ElementsLayer';
+import { SizeReadout } from './SizeReadout';
 import { StageGuides } from './StageGuides';
+import { CreationPreview, MarqueeRect, SelectionOutlines, SnapGuides } from './StageOverlays';
+import { elementBoxes, useStageGestures } from './use-stage-gestures';
 import { useViewportMeasure, type ViewportSize } from './use-viewport-measure';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
+import { isCreationTool } from './state/editor-ui';
 
 const PASTEBOARD = '#eae7e0';
 
 export const SpreadStage = memo(function SpreadStage({
   geom,
+  pages,
   viewportRef,
   spaceHeld,
+  readOnly,
+  onCreate,
 }: {
   geom: UnitGeometry;
+  pages: readonly EditorPage[];
   viewportRef: React.MutableRefObject<ViewportSize>;
   spaceHeld: boolean;
+  readOnly: boolean;
+  onCreate: (pageIndex: number, element: EditorElement, label: string) => void;
 }) {
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [panning, setPanning] = useState(false);
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const panOrigin = useRef<{ sx: number; sy: number; vx: number; vy: number; scale: number } | null>(null);
   const geomRef = useRef(geom);
   geomRef.current = geom;
@@ -50,6 +70,30 @@ export const SpreadStage = memo(function SpreadStage({
   const firstDrawDone = useRef(false);
 
   const size = useViewportMeasure(wrapRef, viewportRef);
+  const boxes = useMemo(() => elementBoxes(pages, geom), [pages, geom]);
+
+  const onSelect = useCallback(
+    (ids: readonly string[]) => uiDispatch({ type: 'SET_SELECTION', ids }),
+    [uiDispatch]
+  );
+  const onToggleSelect = useCallback(
+    (ids: readonly string[]) => uiDispatch({ type: 'TOGGLE_SELECTION', ids }),
+    [uiDispatch]
+  );
+  const onClearSelection = useCallback(() => uiDispatch({ type: 'CLEAR_SELECTION' }), [uiDispatch]);
+
+  const gestures = useStageGestures({
+    geom,
+    view: ui.view,
+    tool: ui.tool,
+    boxes,
+    hostRef: wrapRef,
+    enabled: !readOnly && !spaceHeld && ui.tool !== 'hand',
+    onCreate,
+    onSelect,
+    onToggleSelect,
+    onClearSelection,
+  });
 
   // First measure + viewport resizes: fit the current unit. Unit NAVIGATION
   // fits arrive via SET_UNIT from the shell; commits never refit.
@@ -71,11 +115,28 @@ export const SpreadStage = memo(function SpreadStage({
   }, [size]);
 
   // --- cursor resolver (outer wrapper is the ONLY writer) --------------------
+  // Priority, a strict subset of contract #21's chain for the surfaces Slice B
+  // has: panning → hand available → creation armed → marquee → object hover →
+  // default. Hover stores only the id; lock is looked up live, so toggling
+  // Lock updates the cursor without pointer movement.
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    el.style.cursor = panning ? 'grabbing' : spaceHeld || ui.tool === 'hand' ? 'grab' : 'default';
-  }, [panning, spaceHeld, ui.tool]);
+    const hovered = hoverId ? boxes.find((b) => b.id === hoverId) : undefined;
+    el.style.cursor = panning
+      ? 'grabbing'
+      : spaceHeld || ui.tool === 'hand'
+        ? 'grab'
+        : isCreationTool(ui.tool)
+          ? 'crosshair'
+          : gestures.active
+            ? 'default'
+            : hovered
+              ? hovered.locked
+                ? 'default'
+                : 'move'
+              : 'default';
+  }, [panning, spaceHeld, ui.tool, gestures.active, hoverId, boxes]);
 
   // --- pan gesture (window-level while active, the spike's architecture).
   // Blur cancels an in-flight drag — a gesture concern, so it lives here.
@@ -105,8 +166,9 @@ export const SpreadStage = memo(function SpreadStage({
     };
   }, [panning, uiDispatch]);
 
-  function onMouseDown(e: KonvaEventObject<MouseEvent>) {
-    if (!(spaceHeld || ui.tool === 'hand') || e.evt.button !== 0) return;
+  const panAvailable = spaceHeld || ui.tool === 'hand';
+
+  function startPan(e: KonvaEventObject<MouseEvent>) {
     panOrigin.current = {
       sx: e.evt.clientX,
       sy: e.evt.clientY,
@@ -116,6 +178,32 @@ export const SpreadStage = memo(function SpreadStage({
     };
     setPanning(true);
   }
+
+  function stagePoint(e: KonvaEventObject<MouseEvent>) {
+    return e.target.getStage()?.getPointerPosition() ?? { x: 0, y: 0 };
+  }
+
+  function onStageMouseDown(e: KonvaEventObject<MouseEvent>) {
+    if (e.evt.button !== 0) return;
+    if (panAvailable) {
+      startPan(e);
+      return;
+    }
+    if (readOnly) return;
+    gestures.onStagePointerDown(stagePoint(e), e.evt.shiftKey, null);
+  }
+
+  // Elements handle their own mousedown so the hit id is known without
+  // mapping Konva nodes back to the document. Pan still outranks it.
+  const onElementPointerDown = useCallback(
+    (id: string, e: KonvaEventObject<MouseEvent>) => {
+      if (e.evt.button !== 0 || panAvailable || readOnly) return;
+      e.cancelBubble = true;
+      const point = e.target.getStage()?.getPointerPosition() ?? { x: 0, y: 0 };
+      gestures.onStagePointerDown(point, e.evt.shiftKey, id);
+    },
+    [panAvailable, readOnly, gestures]
+  );
 
   function onWheel(e: KonvaEventObject<WheelEvent>) {
     e.evt.preventDefault();
@@ -133,6 +221,10 @@ export const SpreadStage = memo(function SpreadStage({
   }
 
   const view = ui.view;
+  const selectedBoxes = useMemo(
+    () => (ui.tool === 'select' ? boxes.filter((b) => ui.selection.includes(b.id)).map((b) => b.box) : []),
+    [boxes, ui.selection, ui.tool]
+  );
 
   return (
     <div
@@ -142,14 +234,43 @@ export const SpreadStage = memo(function SpreadStage({
       style={{ backgroundColor: PASTEBOARD }}
     >
       {size.w > 0 && size.h > 0 && (
-        <Stage width={size.w} height={size.h} onMouseDown={onMouseDown} onWheel={onWheel}>
+        <Stage width={size.w} height={size.h} onMouseDown={onStageMouseDown} onWheel={onWheel}>
           <Layer listening={false}>
             <Group x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}>
               <StageGuides geom={geom} />
             </Group>
           </Layer>
+          <Layer>
+            <Group x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}>
+              <ElementsLayer
+                pages={pages}
+                geom={geom}
+                onElementPointerDown={onElementPointerDown}
+                onHoverChange={setHoverId}
+              />
+            </Group>
+          </Layer>
+          <Layer listening={false}>
+            <Group x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}>
+              <SelectionOutlines boxes={selectedBoxes} />
+              {gestures.previewShape && (
+                <CreationPreview
+                  shape={gestures.previewShape}
+                  box={gestures.previewBox}
+                  anchor={gestures.previewAnchor}
+                />
+              )}
+              <MarqueeRect box={gestures.marqueeBox} />
+              <SnapGuides
+                x={gestures.guideX}
+                y={gestures.guideY}
+                extent={{ widthMm: geom.widthMm, heightMm: geom.heightMm, bleedMm: geom.bleedMm }}
+              />
+            </Group>
+          </Layer>
         </Stage>
       )}
+      <SizeReadout readout={gestures.readout} />
     </div>
   );
 });

@@ -42,6 +42,51 @@ export function unitGeometry(
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Unit ↔ page ↔ screen (Slice B)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Screen px → unit-space mm. The stage's Group carries `view`, so this is the
+ * inverse of that transform and the single conversion the gesture layer uses.
+ * Konva Transformer boxes (Slice D) arrive in absolute screen px and will use
+ * the same inverse — contract #9's conversion rule.
+ */
+export function screenToUnitMm(view: ViewTransform, screen: { x: number; y: number }): { x: number; y: number } {
+  return { x: (screen.x - view.x) / view.scale, y: (screen.y - view.y) / view.scale };
+}
+
+/**
+ * Which page of the unit owns a unit-space x. Points left of the first page
+ * or right of the last clamp to the nearest page: an element created from the
+ * pasteboard still belongs to exactly one page (contract #2).
+ */
+export function pageIndexForUnitX(geom: UnitGeometry, unitX: number): number {
+  for (let i = geom.pageOffsetsMm.length - 1; i >= 0; i--) {
+    if (unitX >= geom.pageOffsetsMm[i]!) return i;
+  }
+  return 0;
+}
+
+/** Unit-space mm → that page's trim-relative mm. */
+export function unitToPageMm(geom: UnitGeometry, pageIndex: number, unit: { x: number; y: number }) {
+  return { x: unit.x - (geom.pageOffsetsMm[pageIndex] ?? 0), y: unit.y };
+}
+
+/** A page-relative box → unit space, for rendering and snap targets. */
+export function pageBoxToUnit(
+  geom: UnitGeometry,
+  pageIndex: number,
+  box: { x: number; y: number; width: number; height: number }
+) {
+  return { ...box, x: box.x + (geom.pageOffsetsMm[pageIndex] ?? 0) };
+}
+
+/** Width of one page of the unit, mm. */
+export function pageWidthMm(geom: UnitGeometry): number {
+  return geom.widthMm / geom.pageOffsetsMm.length;
+}
+
 export function clampScale(scale: number): number {
   return Math.min(MAX_ZOOM * PX_PER_MM, Math.max(MIN_ZOOM * PX_PER_MM, scale));
 }

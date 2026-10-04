@@ -1,8 +1,17 @@
 'use client';
 
 /**
- * Bottom strip: tools (Select/Hand), fit controls, zoom readout.
- * View-only controls stay live in read-only states — looking is not editing.
+ * Bottom strip: tools (Select/Hand/Rectangle/Ellipse), fit controls, zoom
+ * readout. View-only controls stay live in read-only states — looking is not
+ * editing.
+ *
+ * The creation tools are armed here by click — the "Toolbar click" phase of
+ * the creation language (contract #3; Slice B plan §3). Rectangle also has its
+ * accepted letter, R; ellipse has none in #26's map, so this button is its
+ * only way in. Arming a tool is UI state, never a document change, exactly
+ * like the R key; while the editor is read-only the stage refuses the pointer,
+ * so an armed tool cannot create anything there. Text labels, not icons:
+ * toolbar icons are listed as post-beta work in the production handoff.
  */
 import { memo } from 'react';
 import { zoomOf } from './geometry';
@@ -23,6 +32,9 @@ function BarButton({
     <button
       type="button"
       title={title}
+      // Tool buttons are toggles: the armed tool is announced, not only
+      // underlined. Fit/zoom buttons pass no `active` and stay plain buttons.
+      aria-pressed={active}
       onClick={onClick}
       className={
         'px-2.5 py-1 text-caption transition-colors duration-400 ease-gentle ' +
@@ -62,6 +74,18 @@ export const StatusBar = memo(function StatusBar({
         title="Pan (H, or hold Space)"
         active={ui.tool === 'hand'}
         onClick={() => uiDispatch({ type: 'SET_TOOL', tool: 'hand' })}
+      />
+      <BarButton
+        label="Rectangle"
+        title="Rectangle (R)"
+        active={ui.tool === 'rect'}
+        onClick={() => uiDispatch({ type: 'SET_TOOL', tool: 'rect' })}
+      />
+      <BarButton
+        label="Ellipse"
+        title="Ellipse"
+        active={ui.tool === 'ellipse'}
+        onClick={() => uiDispatch({ type: 'SET_TOOL', tool: 'ellipse' })}
       />
       <div className="flex-1" />
       <BarButton label="Fit page" onClick={onFitPage} />

@@ -10,3 +10,7 @@ export * from './editor/document';
 export * from './editor/factories';
 export * from './editor/units-of-view';
 export * from './editor/init';
+export * from './editor/elements';
+export * from './editor/precision';
+export * from './editor/snapping';
+export * from './editor/num-field';
