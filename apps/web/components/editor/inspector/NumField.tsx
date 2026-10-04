@@ -23,10 +23,11 @@
  * - **No native spinners** (`appearance: textfield`): permanent +/- controls
  *   are barred without a new decision, and the arrow keys are the accepted
  *   stepping affordance.
- * - **Display = model exactly** via `formatNum`, and the field re-syncs to an
- *   external change only while unfocused, so a live draft is never yanked.
+ * - **Display = model exactly** via `formatNum`: unfocused, the field renders
+ *   the model in the same commit that changes it; focused, it shows the draft,
+ *   which an external change never yanks.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { commitNum, formatNum, stepNum, type NumFieldBounds } from '@baxter/domain';
 
 export function NumField({
@@ -66,11 +67,13 @@ export function NumField({
    */
   const cancelledRef = useRef(false);
 
-  // External changes (undo, another field, a redo) reach an unfocused field
-  // only — a focused draft belongs to the person typing it.
-  useEffect(() => {
-    if (!focused) setDraft(formatNum(value));
-  }, [value, focused]);
+  // Display = model exactly (#19). An unfocused field renders the model
+  // directly, in the same commit that delivers it — a selection switch, an
+  // undo or another field's commit can never paint a stale number. The draft
+  // exists only while focused, where it belongs to the person typing it and
+  // external changes leave it alone. (Formerly an effect re-synced the draft
+  // after paint, which painted the previous element's values for a frame.)
+  const shown = focused ? draft : formatNum(value);
 
   function commit(raw: string) {
     const next = commitNum(raw, bounds);
@@ -100,12 +103,15 @@ export function NumField({
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}
-        value={draft}
+        value={shown}
         aria-label={name ?? label}
         data-testid={testId ?? `num-${label.toLowerCase()}`}
         className="h-[26px] w-full min-w-0 rounded-sm border border-rule bg-canvas px-2 text-caption tabular-nums text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 disabled:text-ink-faint"
         style={{ appearance: 'textfield' }}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setDraft(formatNum(value)); // the draft starts from the current model
+          setFocused(true);
+        }}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={(e) => {
           setFocused(false);
