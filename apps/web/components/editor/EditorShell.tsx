@@ -10,17 +10,26 @@
  * reload; nothing is silently kept or thrown away (blueprint §2.6).
  */
 import Link from 'next/link';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addElement,
   applyMoves,
+  copyElements,
+  duplicateElements,
   findElement,
   getFormatPreset,
   liveSelection,
+  nudgeElements,
+  pasteElements,
+  patchAll,
+  removeElements,
   reorderElement,
+  setLockAll,
   setLocked,
   updateElement,
   type ArrangeOp,
+  type ClipboardItem,
+  type EditorDoc,
   type EditorElement,
   type UnitLayout,
 } from '@baxter/domain';
@@ -65,7 +74,6 @@ export function EditorShell({ publication }: { publication: { id: string; title:
     uiDispatch({ type: 'SET_SELECTION', ids: liveSelection(entry.doc, entry.selection) });
   }, [state.future, ui.selection, dispatch, uiDispatch]);
 
-  const { spaceHeld } = useEditorKeyboard(uiDispatch, { onUndo, onRedo });
 
   const units = selectUnits(state.doc);
   const preset = getFormatPreset(state.doc.meta.formatPresetId)!;
@@ -148,6 +156,133 @@ export function EditorShell({ publication }: { publication: { id: string; title:
       dispatch({ type: 'COMMIT', nextDoc, selection: ui.selection, label: 'Move' });
     },
     [state.doc, unitLayout, ui.selection, dispatch]
+  );
+
+  /* ------------------------------------------------------------------------ */
+  /* Slice C object operations (contracts #5, #20, #24, #26; C-3, C-4)        */
+  /* ------------------------------------------------------------------------ */
+
+  /**
+   * Object operations act on the selected elements of the unit being shown.
+   * Selection survives navigation (#4), but an operation never reaches an
+   * object the creator cannot see.
+   */
+  const unitIds = useMemo(() => new Set(unit.pages.flatMap((p) => p.elements.map((e) => e.id))), [unit.pages]);
+  const unitSelection = useMemo(() => ui.selection.filter((id) => unitIds.has(id)), [ui.selection, unitIds]);
+
+  /** One polite line in the status bar — how a partial delete "says so" (#5). */
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (!announcement) return;
+    const t = setTimeout(() => setAnnouncement(''), 5000);
+    return () => clearTimeout(t);
+  }, [announcement]);
+
+  /** One intention → one COMMIT; a no-op (same document) commits nothing (#24). */
+  const commitDocWith = useCallback(
+    (nextDoc: EditorDoc, label: string) => {
+      if (nextDoc === state.doc) return;
+      dispatch({ type: 'COMMIT', nextDoc, selection: ui.selection, label });
+    },
+    [state.doc, ui.selection, dispatch]
+  );
+
+  /** In-memory, per editor session (C-3). Never the system clipboard. */
+  const clipboard = useRef<ClipboardItem[]>([]);
+
+  const deleteSelection = useCallback(
+    (label: 'Delete' | 'Cut') => {
+      if (readOnly || unitSelection.length === 0) return;
+      const r = removeElements(state.doc, unitSelection);
+      if (r.keptLocked.length > 0) {
+        setAnnouncement(
+          r.removed.length > 0
+            ? `${label === 'Cut' ? 'Cut' : 'Deleted'} ${r.removed.length} · ${r.keptLocked.length} locked kept`
+            : `Locked objects are not deleted (${r.keptLocked.length} kept)`
+        );
+      }
+      if (r.doc === state.doc) return;
+      dispatch({ type: 'COMMIT', nextDoc: r.doc, selection: ui.selection, label });
+      // The deleted ids leave the selection; locked survivors stay selected.
+      uiDispatch({ type: 'SET_SELECTION', ids: ui.selection.filter((id) => !r.removed.includes(id)) });
+    },
+    [readOnly, unitSelection, state.doc, ui.selection, dispatch, uiDispatch]
+  );
+
+  const onDelete = useCallback(() => deleteSelection('Delete'), [deleteSelection]);
+
+  const onNudge = useCallback(
+    (dx: number, dy: number) => {
+      if (readOnly) return;
+      commitDocWith(nudgeElements(state.doc, unitSelection, dx, dy), 'Nudge');
+    },
+    [readOnly, state.doc, unitSelection, commitDocWith]
+  );
+
+  const onDuplicate = useCallback(() => {
+    if (readOnly) return;
+    const r = duplicateElements(state.doc, unitSelection);
+    if (r.doc === state.doc) return;
+    dispatch({ type: 'COMMIT', nextDoc: r.doc, selection: ui.selection, label: 'Duplicate' });
+    uiDispatch({ type: 'SET_SELECTION', ids: r.newIds });
+  }, [readOnly, state.doc, unitSelection, ui.selection, dispatch, uiDispatch]);
+
+  const onCopy = useCallback(() => {
+    if (unitSelection.length === 0) return;
+    clipboard.current = copyElements(state.doc, unitSelection); // no commit: copying changes nothing
+  }, [state.doc, unitSelection]);
+
+  const onCut = useCallback(() => {
+    if (readOnly || unitSelection.length === 0) return;
+    clipboard.current = copyElements(state.doc, unitSelection);
+    deleteSelection('Cut');
+  }, [readOnly, state.doc, unitSelection, deleteSelection]);
+
+  const onPaste = useCallback(() => {
+    if (readOnly) return;
+    const r = pasteElements(state.doc, unitLayout, clipboard.current);
+    if (r.doc === state.doc) return;
+    dispatch({ type: 'COMMIT', nextDoc: r.doc, selection: ui.selection, label: 'Paste' });
+    uiDispatch({ type: 'SET_SELECTION', ids: r.newIds });
+  }, [readOnly, state.doc, unitLayout, ui.selection, dispatch, uiDispatch]);
+
+  /** ⌘A: everything on the current unit, locked included (#5). Selection only — no history. */
+  const onSelectAll = useCallback(() => {
+    uiDispatch({ type: 'SET_SELECTION', ids: [...unitIds] });
+  }, [unitIds, uiDispatch]);
+
+  const { spaceHeld } = useEditorKeyboard(uiDispatch, {
+    onUndo,
+    onRedo,
+    onDelete,
+    onNudge,
+    onDuplicate,
+    onCopy,
+    onCut,
+    onPaste,
+    onSelectAll,
+  });
+
+  const multi = useMemo(
+    () =>
+      unitSelection.length > 1
+        ? unitSelection.map((id) => findElement(state.doc, id)).filter((e): e is EditorElement => !!e)
+        : undefined,
+    [unitSelection, state.doc]
+  );
+  const onMultiOpacity = useCallback(
+    (opacity: number) => {
+      if (readOnly) return;
+      commitDocWith(patchAll(state.doc, unitSelection, { opacity }), 'Set opacity');
+    },
+    [readOnly, state.doc, unitSelection, commitDocWith]
+  );
+  const onLockAll = useCallback(
+    (locked: boolean) => {
+      if (readOnly) return;
+      commitDocWith(setLockAll(state.doc, unitSelection, locked), locked ? 'Lock all' : 'Unlock all');
+    },
+    [readOnly, state.doc, unitSelection, commitDocWith]
   );
 
   /**
@@ -253,6 +388,10 @@ export function EditorShell({ publication }: { publication: { id: string; title:
           onPatch={onPatch}
           onArrange={onArrange}
           onSetLocked={onSetLocked}
+          multi={multi}
+          onMultiOpacity={onMultiOpacity}
+          onLockAll={onLockAll}
+          onDeleteSelection={onDelete}
         />
       </div>
 
@@ -261,6 +400,7 @@ export function EditorShell({ publication }: { publication: { id: string; title:
         onFitPage={onFitPage}
         onFitSpread={onFitSpread}
         onHundred={onHundred}
+        announcement={announcement}
       />
     </div>
   );
