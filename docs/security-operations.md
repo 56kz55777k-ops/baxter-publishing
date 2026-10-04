@@ -291,26 +291,33 @@ reuses an already-running server there), not against the deployed site; but
 local configuration points at the **production Supabase project**, so the
 reads and writes are production reads and writes.
 
-What it changes, exactly (Slice B smoke, revised 2026-10-04): real pointer and
+What it changes, exactly (Slice C smoke and acceptance, revised 2026-10-04 —
+measured on the wire, every `PUT /api/editor/*` counted): real pointer and
 keyboard gestures on the editor for the publication named by
-`E2E_PUBLICATION_ID` — one rectangle created on the unit the editor opens on,
-one X edit to a per-run value, one undo and one redo — each settling through
-the ordinary autosave `PUT /api/editor/[id]`. That route is a conditional
-update of one `editor_documents` row, bumping its revision. It deletes
-nothing, touches no other publication, and cannot reach payments, email,
-storage or image delivery — `.env.local` holds none of those credentials, so
-any code path needing them fails rather than acts. The route also refuses
-anything but the signed-in owner's own draft (401 / 404 / 423), with RLS
-enforcing the same boundary underneath.
+`E2E_PUBLICATION_ID`, each settling through the ordinary autosave
+`PUT /api/editor/[id]` — a conditional update of one `editor_documents` row,
+bumping its revision. The route deletes nothing outside that document, touches
+no other publication, and cannot reach payments, email, storage or image
+delivery — `.env.local` holds none of those credentials, so any code path
+needing them fails rather than acts. It refuses anything but the signed-in
+owner's own draft (401 / 404 / 423), with RLS enforcing the same boundary.
 
-So the blast radius is one row in one publication, growing by **one
-rectangle per run** (Slice A's dev-handle smoke added two per run; that handle
-no longer exists). Rectangles accumulate because Slice B has no delete and
-undo cannot reach across a reload; the smoke is written to stay correct
-against that accumulation (it re-selects its own element by a per-run X
-value). The real exposure is still not the writes; it is that **a production
-account password sits in a file on the developer machine** so a test can type
-it.
+| Run (per browser) | Where in the fixture | Autosave PUTs | Residue |
+|---|---|---|---|
+| Smoke (`editor-smoke.spec.ts`, committed) | first spread | **5** | **none** — deletes what it created; asserts the spread's count is back to its starting value after a reload |
+| Behavioural acceptance (one-off, not committed) | back cover — must be empty at the start | **15** | **none** — deletes everything on the unit it proved empty; asserts empty after a reload |
+
+Slice C made both runs self-cleaning (decision C-8), so the blast radius is
+**writes without residue: 20 PUTs per browser, 60 for the three-browser gate
+(Chromium, WebKit, Firefox)** — all to one row. The smoke identifies its own
+objects by identity (position + inspector values) and never deletes "everything
+on the spread"; if it fails mid-run it still removes its own objects, each only
+after the inspector confirms it. Objects that earlier slices' runs left behind
+(Slice A/B accumulated rectangles: 22 on the front cover and 4 on the first
+spread as of 2026-10-04) are **not** touched by any run; removing them is a
+one-off production write that waits for Ben's explicit go. The real exposure is
+still not the writes; it is that **a production account password sits in a
+file on the developer machine** so a test can type it.
 
 **Running it without copying credentials.** Where the smoke runs somewhere
 other than the working checkout (e.g. a clean verification clone), load
