@@ -256,6 +256,11 @@ export const SpreadStage = memo(function SpreadStage({
     <div
       ref={wrapRef}
       data-testid="spread-stage"
+      // View-only geometry for the browser layer, which must aim real pointer
+      // gestures at model positions in every engine: "x y scale" and each
+      // page's unit offset (mm). Read-only facts already on screen.
+      data-view={`${view.x} ${view.y} ${view.scale}`}
+      data-page-offsets={geom.pageOffsetsMm.join(' ')}
       className="relative h-full w-full overflow-hidden"
       style={{ backgroundColor: PASTEBOARD }}
     >
