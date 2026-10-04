@@ -277,6 +277,18 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * What the native colour control holds while the value is None. A native
+ * colour input reports a choice only when its value CHANGES, so if None held
+ * the latent #000000 (as it once did), choosing black from None was
+ * indistinguishable from cancelling and the stroke could not be activated in
+ * black. None therefore hands the picker a fixed placeholder that is not a
+ * meaningful colour; black, the default and every ordinary choice are real
+ * changes. (Picking exactly this hex — reachable only by typing it — is the
+ * one choice the platform cannot report from None.)
+ */
+const NONE_PICKER_VALUE = '#010203';
+
 function Swatch({
   label,
   value,
@@ -284,22 +296,46 @@ function Swatch({
   onChange,
 }: {
   label: string;
+  /** null = None (contract #18): first-class, shown as "none", never as a latent colour. */
   value: string | null;
   disabled: boolean;
   onChange: (next: string) => void;
 }) {
+  const isNone = value === null;
   return (
-    <label className="flex items-center gap-2">
+    <label
+      className="flex items-center gap-2"
+      data-testid={`swatch-${label.toLowerCase()}`}
+      data-state={isNone ? 'none' : 'set'}
+    >
       <span className="metadata w-10 shrink-0 text-ink-faint">{label}</span>
-      <input
-        type="color"
-        disabled={disabled}
-        aria-label={label}
-        data-testid={`swatch-${label.toLowerCase()}`}
-        value={value ?? '#000000'}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-[26px] w-[26px] cursor-pointer rounded-sm border border-rule bg-canvas p-0"
-      />
+      <span className="relative h-[26px] w-[26px] shrink-0">
+        {isNone && (
+          // The conventional "none" mark: an empty chip crossed by one hairline
+          // in the accent. The real colour control sits invisibly on top, so a
+          // single pick from here both chooses the colour and activates it.
+          <svg
+            aria-hidden="true"
+            data-testid={`swatch-${label.toLowerCase()}-none`}
+            viewBox="0 0 26 26"
+            className="pointer-events-none absolute inset-0 h-full w-full rounded-sm border border-rule bg-canvas"
+          >
+            <line x1="3" y1="23" x2="23" y2="3" style={{ stroke: 'var(--accent)' }} strokeWidth="1.25" strokeLinecap="round" />
+          </svg>
+        )}
+        <input
+          type="color"
+          disabled={disabled}
+          aria-label={isNone ? `${label} colour: none` : `${label} colour`}
+          data-testid={`swatch-${label.toLowerCase()}-input`}
+          value={isNone ? NONE_PICKER_VALUE : value}
+          onChange={(e) => onChange(e.target.value)}
+          className={
+            'h-[26px] w-[26px] cursor-pointer rounded-sm border border-rule bg-canvas p-0 ' +
+            (isNone ? 'absolute inset-0 opacity-0' : '')
+          }
+        />
+      </span>
     </label>
   );
 }
