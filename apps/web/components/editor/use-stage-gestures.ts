@@ -117,10 +117,23 @@ export function useStageGestures(args: {
   onCreate: (pageIndex: number, element: EditorElement, label: string) => void;
   onSelect: (ids: readonly string[]) => void;
   onToggleSelect: (ids: readonly string[]) => void;
+  /** Union into the selection — the additive marquee (#6). */
+  onAddSelect: (ids: readonly string[]) => void;
   onClearSelection: () => void;
 }): StageGestures {
-  const { geom, view, tool, boxes, hostRef, enabled, onCreate, onSelect, onToggleSelect, onClearSelection } =
-    args;
+  const {
+    geom,
+    view,
+    tool,
+    boxes,
+    hostRef,
+    enabled,
+    onCreate,
+    onSelect,
+    onToggleSelect,
+    onAddSelect,
+    onClearSelection,
+  } = args;
 
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [current, setCurrent] = useState<{ x: number; y: number } | null>(null);
@@ -260,7 +273,9 @@ export function useStageGestures(args: {
       // (contract #20), so they are not filtered out here.
       const area = normalizedBox(g.anchor, end);
       const hits = boxesRef.current.filter((b) => rectsIntersect(area, b.box)).map((b) => b.id);
-      if (g.additive) onToggleSelect(hits);
+      // Shift-marquee ADDS (#6): a toggle here would deselect hits that were
+      // already selected. Shift-click alone is the toggle (#5).
+      if (g.additive) onAddSelect(hits);
       else onSelect(hits);
       reset();
     }
@@ -277,7 +292,7 @@ export function useStageGestures(args: {
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('blur', onBlur);
     };
-  }, [gesture, reset, hostRef, onCreate, onSelect, onToggleSelect, onClearSelection]);
+  }, [gesture, reset, hostRef, onCreate, onSelect, onAddSelect, onClearSelection]);
 
   // Escape cancels an in-flight gesture without committing.
   useEffect(() => {

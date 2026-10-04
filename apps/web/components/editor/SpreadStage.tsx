@@ -80,6 +80,10 @@ export const SpreadStage = memo(function SpreadStage({
     (ids: readonly string[]) => uiDispatch({ type: 'TOGGLE_SELECTION', ids }),
     [uiDispatch]
   );
+  const onAddSelect = useCallback(
+    (ids: readonly string[]) => uiDispatch({ type: 'ADD_TO_SELECTION', ids }),
+    [uiDispatch]
+  );
   const onClearSelection = useCallback(() => uiDispatch({ type: 'CLEAR_SELECTION' }), [uiDispatch]);
 
   const gestures = useStageGestures({
@@ -92,6 +96,7 @@ export const SpreadStage = memo(function SpreadStage({
     onCreate,
     onSelect,
     onToggleSelect,
+    onAddSelect,
     onClearSelection,
   });
 
