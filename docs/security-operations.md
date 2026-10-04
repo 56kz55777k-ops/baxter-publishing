@@ -285,28 +285,38 @@ Stated precisely, because "it runs against production" is too vague to act on.
 
 The smoke (`apps/web/test/e2e/editor-smoke.spec.ts`) signs in through the real
 `/sign-in` form with `E2E_EMAIL` / `E2E_PASSWORD` — **a real account password,
-kept in `apps/web/.env.e2e.local`, gitignored**. It runs against `next dev` on
-`localhost:3007`, not against the deployed site; but local development points
-at the **production Supabase project**, so the reads and writes are production
-reads and writes.
+kept in `apps/web/.env.e2e.local`, gitignored**. As of Slice B it runs against
+a **production build** served by `next start` on `localhost:3007` (Playwright
+reuses an already-running server there), not against the deployed site; but
+local configuration points at the **production Supabase project**, so the
+reads and writes are production reads and writes.
 
-What it changes, exactly: two calls to the dev-only commit handle, each
-appending one rectangle to page 2 of the publication named by
-`E2E_PUBLICATION_ID`, each followed by an autosave `PUT /api/editor/[id]`.
-That route is a conditional update of one `editor_documents` row, bumping its
-revision. It deletes nothing, touches no other publication, and cannot reach
-payments, email, storage or image delivery — `.env.local` holds none of those
-credentials, so any code path needing them fails rather than acts. The route
-also refuses anything but the signed-in owner's own draft (401 / 404 / 423),
-with RLS enforcing the same boundary underneath.
+What it changes, exactly (Slice B smoke, revised 2026-10-04): real pointer and
+keyboard gestures on the editor for the publication named by
+`E2E_PUBLICATION_ID` — one rectangle created on the unit the editor opens on,
+one X edit to a per-run value, one undo and one redo — each settling through
+the ordinary autosave `PUT /api/editor/[id]`. That route is a conditional
+update of one `editor_documents` row, bumping its revision. It deletes
+nothing, touches no other publication, and cannot reach payments, email,
+storage or image delivery — `.env.local` holds none of those credentials, so
+any code path needing them fails rather than acts. The route also refuses
+anything but the signed-in owner's own draft (401 / 404 / 423), with RLS
+enforcing the same boundary underneath.
 
-So the blast radius is one row in one publication, growing by two rectangles
-per run. The real exposure is not the writes; it is that **a production
+So the blast radius is one row in one publication, growing by **one
+rectangle per run** (Slice A's dev-handle smoke added two per run; that handle
+no longer exists). Rectangles accumulate because Slice B has no delete and
+undo cannot reach across a reload; the smoke is written to stay correct
+against that accumulation (it re-selects its own element by a per-run X
+value). The real exposure is still not the writes; it is that **a production
 account password sits in a file on the developer machine** so a test can type
 it.
 
-The dev commit handle itself is guarded by `process.env.NODE_ENV === 'production'`
-and is eliminated from production builds.
+**Running it without copying credentials.** Where the smoke runs somewhere
+other than the working checkout (e.g. a clean verification clone), load
+`.env.local` and `.env.e2e.local` into the test process's environment from
+where they live (`set -a; . <path>; set +a`) — never copy the files into a
+second location (§ 5), and never print them.
 
 **Deferred: move automated E2E testing off production.** It should run against
 an isolated E2E Supabase project with disposable fixture data and
