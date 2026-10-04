@@ -294,7 +294,7 @@ export function useStageGestures(args: {
       if (g.kind === 'create') {
         const sx = snapCreationAxis(g.anchor.x, unit.x, targetsRef.current.x);
         const sy = snapCreationAxis(g.anchor.y, unit.y, targetsRef.current.y);
-        setCurrent({ x: unit.x + (sx?.delta ?? 0), y: unit.y + (sy?.delta ?? 0) });
+        setLatest({ x: unit.x + (sx?.delta ?? 0), y: unit.y + (sy?.delta ?? 0) });
         setGuides({ x: sx?.guide ?? null, y: sy?.guide ?? null });
       } else if (g.kind === 'drag') {
         const p = pointFromEvent(ev);
@@ -308,14 +308,29 @@ export function useStageGestures(args: {
           { x: g.union.x + rawX, y: g.union.y + rawY, width: g.union.width, height: g.union.height },
           targetsRef.current
         );
-        setDrag({ dx: dragDelta(rawX, snap.x), dy: dragDelta(rawY, snap.y) });
+        const next = { dx: dragDelta(rawX, snap.x), dy: dragDelta(rawY, snap.y) };
+        dragRef.current = next; // synchronously: a mouseup may arrive before React renders
+        setDrag(next);
         setGuides({ x: snap.x?.guide ?? null, y: snap.y?.guide ?? null });
       } else {
-        setCurrent(unit);
+        setLatest(unit);
       }
     }
 
-    function onUp() {
+    function setLatest(p: { x: number; y: number }) {
+      currentRef.current = p; // synchronously, for the same reason as dragRef
+      setCurrent(p);
+    }
+
+    function onUp(ev: MouseEvent) {
+      // The release point is the gesture's last position. Browsers differ in
+      // whether the final mousemove before mouseup has been rendered (Firefox
+      // routinely delivers mouseup first), so the commit must not depend on a
+      // render having happened: process the mouseup's own coordinates, then
+      // read the refs that processing wrote synchronously. (Found by the
+      // Slice C Firefox gate: creation and drag both committed the
+      // second-to-last pointer position.)
+      onMove(ev);
       const g = gestureRef.current;
       const end = currentRef.current;
       if (!g || !end) {
