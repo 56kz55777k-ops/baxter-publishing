@@ -12,6 +12,6 @@
     "eslint-config-next": "^15.5.0"
   },
   "peerDependencies": {
-    "next": "^15.5.26"
+    "next": "^15.5.27"
   }
 }
