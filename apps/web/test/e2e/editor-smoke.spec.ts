@@ -14,6 +14,15 @@
  *   5. undo and redo work against real gestures;
  *   6. zero console errors or hydration warnings across the run.
  *
+ * Repeatability against a shared fixture: every run leaves its rectangle in
+ * the fixture publication (Slice B has no delete; undo cannot reach across a
+ * reload). The post-reload check therefore proves THIS run's element by
+ * identity — a per-run X value, re-selected by clicking where that element
+ * must be — rather than assuming the spread holds exactly one shape. New
+ * elements append to the top of z-order (contract: array order is z-order),
+ * so the topmost element at that point is this run's even when earlier runs'
+ * shapes sit beneath it.
+ *
  * As of Slice B this runs against a PRODUCTION build (`next start`) and uses
  * no dev-only hooks: Slice A's `__baxterEditorDevCommit` handle existed only
  * because there was no editing surface to drive, and it is gone.
@@ -31,6 +40,10 @@ const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
 const PUBLICATION = process.env.E2E_PUBLICATION_ID;
 const configured = Boolean(EMAIL && PASSWORD && PUBLICATION);
+
+/** The creation drag, in stage-relative client px. */
+const CREATE_FROM = { x: 420, y: 300 };
+const CREATE_TO = { x: 560, y: 400 };
 
 test.describe('editor smoke', () => {
   test.skip(
@@ -98,7 +111,7 @@ test.describe('editor smoke', () => {
 
     // (2) Arm the rectangle tool with its accepted letter and draw.
     await page.keyboard.press('r');
-    await dragOnStage(page, { x: 420, y: 300 }, { x: 560, y: 400 });
+    await dragOnStage(page, CREATE_FROM, CREATE_TO);
 
     // The created element is selected and the inspector is armed — the
     // after-state contract #3 specifies.
@@ -109,10 +122,24 @@ test.describe('editor smoke', () => {
     await expect(page.getByTestId('save-state')).toHaveText(/Unsaved changes|Saving…/);
     await expect(page.getByTestId('save-state')).toHaveText(/All changes saved/, { timeout: 15_000 });
 
-    // (4) A numeric inspector edit commits once and saves.
+    // Where the new element sits, read from the inspector the moment it is
+    // created. The creation anchor is pinned (contract #3), so the drag's start
+    // point IS the element's top-left; only the moving edge may have snapped.
+    const created = {
+      x: Number(await page.getByTestId('num-x').inputValue()),
+      y: Number(await page.getByTestId('num-y').inputValue()),
+      w: Number(await page.getByTestId('num-w').inputValue()),
+      h: Number(await page.getByTestId('num-h').inputValue()),
+    };
+    const pxPerMm = (CREATE_TO.x - CREATE_FROM.x) / created.w;
+
+    // (4) A numeric inspector edit commits once and saves. The value is unique
+    // to this run (30.00–30.99 on the inspector's 0.01 grid) so the reload
+    // check below can tell this run's element from any earlier run's.
+    const runX = Number((30 + (Date.now() % 100) / 100).toFixed(2));
     const x = page.getByTestId('num-x');
     await x.click();
-    await x.fill('30');
+    await x.fill(String(runX));
     await x.press('Enter');
     await expect(page.getByTestId('save-state')).toHaveText(/All changes saved/, { timeout: 15_000 });
 
@@ -131,9 +158,29 @@ test.describe('editor smoke', () => {
     await expect(page.getByTestId('save-state')).toHaveText(/All changes saved/);
     await expect(page.getByTestId('num-x')).toHaveCount(0); // nothing selected yet
 
-    await dragOnStage(page, { x: 200, y: 150 }, { x: 900, y: 650 });
+    // Identity: click where THIS run's element must be after its X edit. The
+    // view after reload is the same fit as before it (same viewport, same unit).
+    const centre = {
+      x: CREATE_FROM.x + (runX - created.x) * pxPerMm + (created.w * pxPerMm) / 2,
+      y: CREATE_FROM.y + (created.h * pxPerMm) / 2,
+    };
+    const stageBox = (await page.getByTestId('spread-stage').boundingBox())!;
+    await page.mouse.click(stageBox.x + centre.x, stageBox.y + centre.y);
     await expect(page.getByTestId('num-x')).toBeVisible();
-    await expect(page.getByTestId('num-x')).toHaveValue('30'); // the edited value survived
+    // The edited, run-unique value survived autosave, reload and rehydration.
+    expect(Number(await page.getByTestId('num-x').inputValue())).toBe(runX);
+    expect(Number(await page.getByTestId('num-y').inputValue())).toBe(created.y);
+    expect(Number(await page.getByTestId('num-w').inputValue())).toBe(created.w);
+    expect(Number(await page.getByTestId('num-h').inputValue())).toBe(created.h);
+
+    // The marquee still finds persisted elements after a reload — one panel
+    // or "N objects", depending on how many earlier runs left shapes here.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('num-x')).toHaveCount(0);
+    await dragOnStage(page, { x: 200, y: 150 }, { x: 900, y: 650 });
+    await expect(
+      page.getByTestId('num-x').or(page.getByRole('heading', { name: /^\d+ objects$/ }))
+    ).toBeVisible();
 
     await expect(page.getByTestId('read-only-banner')).toHaveCount(0);
     expect(consoleProblems, consoleProblems.join('\n')).toEqual([]);
