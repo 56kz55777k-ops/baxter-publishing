@@ -31,12 +31,24 @@ import { commitNum, formatNum, stepNum, type NumFieldBounds } from '@baxter/doma
 
 export function NumField({
   label,
+  name,
+  testId,
   value,
   bounds,
   disabled = false,
   onCommit,
 }: {
+  /** The short visible label beside the field ("X", "W", "%"). */
   label: string;
+  /**
+   * The accessible name, when the visible label is not unique or not a word.
+   * Two fields may share a visible label in different sections — geometry
+   * "W" and stroke "W" — but never an accessible name or a test id: a screen
+   * reader announces the name without the section around it.
+   */
+  name?: string;
+  /** Overrides the derived `num-<label>` test id; must be unique per panel. */
+  testId?: string;
   value: number;
   bounds: NumFieldBounds;
   disabled?: boolean;
@@ -89,8 +101,8 @@ export function NumField({
         spellCheck={false}
         disabled={disabled}
         value={draft}
-        aria-label={label}
-        data-testid={`num-${label.toLowerCase()}`}
+        aria-label={name ?? label}
+        data-testid={testId ?? `num-${label.toLowerCase()}`}
         className="h-[26px] w-full min-w-0 rounded-sm border border-rule bg-canvas px-2 text-caption tabular-nums text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 disabled:text-ink-faint"
         style={{ appearance: 'textfield' }}
         onFocus={() => setFocused(true)}

@@ -173,6 +173,8 @@ function SingleObjectPanel({
           />
           <NumField
             label="W"
+            name="Stroke width"
+            testId="num-stroke-width"
             value={strokeWidth}
             bounds={FINE_BOUNDS}
             disabled={mutationsDisabled}
@@ -194,6 +196,8 @@ function SingleObjectPanel({
       <Fieldset title="Appearance" disabled={mutationsDisabled}>
         <NumField
           label="%"
+          name="Opacity"
+          testId="num-opacity"
           value={Math.round(element.opacity * 100)}
           bounds={PERCENT_BOUNDS}
           disabled={mutationsDisabled}
@@ -202,6 +206,8 @@ function SingleObjectPanel({
         {element.type === 'rect' && (
           <NumField
             label="R"
+            name="Corner radius"
+            testId="num-corner-radius"
             value={element.cornerRadius}
             bounds={FINE_BOUNDS}
             disabled={mutationsDisabled}
