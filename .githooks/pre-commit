@@ -1,0 +1,4 @@
+#!/bin/sh
+# Baxter staged-secret guard. See scripts/check-staged-secrets.mjs for the
+# rationale and its stated limits. Bypassable with --no-verify by design.
+exec node "$(git rev-parse --show-toplevel)/scripts/check-staged-secrets.mjs"

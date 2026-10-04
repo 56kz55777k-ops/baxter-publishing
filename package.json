@@ -2,7 +2,7 @@
   "name": "baxter",
   "private": true,
   "version": "0.1.0",
-  "description": "Baxter Publishing \u2014 a curated independent publishing marketplace.",
+  "description": "Baxter Publishing — a curated independent publishing marketplace.",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -13,7 +13,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
