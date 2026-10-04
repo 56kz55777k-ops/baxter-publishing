@@ -22,15 +22,23 @@ import { Ellipse, Group, Rect } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { EditorElement, EditorPage } from '@baxter/domain';
 import type { UnitGeometry } from './geometry';
+import type { DragPreview } from './use-stage-gestures';
 
 export const ElementsLayer = memo(function ElementsLayer({
   pages,
   geom,
+  dragPreview,
   onElementPointerDown,
   onHoverChange,
 }: {
   pages: readonly EditorPage[];
   geom: UnitGeometry;
+  /**
+   * A drag's transient offset. Only the moving nodes receive it, so the rest
+   * keep their memoised props; the document itself is untouched until the
+   * single COMMIT at release (#7).
+   */
+  dragPreview: DragPreview | null;
   onElementPointerDown: (id: string, e: KonvaEventObject<MouseEvent>) => void;
   /** Hover reports only the id — lock state is looked up live (contract #21). */
   onHoverChange: (id: string | null) => void;
@@ -43,6 +51,8 @@ export const ElementsLayer = memo(function ElementsLayer({
             <ElementNode
               key={el.id}
               element={el}
+              dx={dragPreview?.ids.has(el.id) ? dragPreview.dx : 0}
+              dy={dragPreview?.ids.has(el.id) ? dragPreview.dy : 0}
               onPointerDown={onElementPointerDown}
               onHoverChange={onHoverChange}
             />
@@ -55,10 +65,14 @@ export const ElementsLayer = memo(function ElementsLayer({
 
 const ElementNode = memo(function ElementNode({
   element,
+  dx,
+  dy,
   onPointerDown,
   onHoverChange,
 }: {
   element: EditorElement;
+  dx: number;
+  dy: number;
   onPointerDown: (id: string, e: KonvaEventObject<MouseEvent>) => void;
   onHoverChange: (id: string | null) => void;
 }) {
@@ -69,8 +83,8 @@ const ElementNode = memo(function ElementNode({
   if (element.type === 'rect') {
     return (
       <Rect
-        x={element.x}
-        y={element.y}
+        x={element.x + dx}
+        y={element.y + dy}
         width={element.width}
         height={element.height}
         fill={element.fill}
@@ -93,8 +107,8 @@ const ElementNode = memo(function ElementNode({
     // other element, so the conversion happens here and nowhere else.
     return (
       <Ellipse
-        x={element.x + element.width / 2}
-        y={element.y + element.height / 2}
+        x={element.x + dx + element.width / 2}
+        y={element.y + dy + element.height / 2}
         radiusX={element.width / 2}
         radiusY={element.height / 2}
         fill={element.fill}

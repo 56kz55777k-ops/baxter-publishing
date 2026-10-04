@@ -30,6 +30,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Group, Layer, Stage } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { EditorElement, EditorPage } from '@baxter/domain';
+import { resolveCursor } from './cursor';
 import { fitUnitView, panBy, zoomAt, type UnitGeometry } from './geometry';
 import { ElementsLayer } from './ElementsLayer';
 import { SizeReadout } from './SizeReadout';
@@ -49,6 +50,7 @@ export const SpreadStage = memo(function SpreadStage({
   spaceHeld,
   readOnly,
   onCreate,
+  onMove,
 }: {
   geom: UnitGeometry;
   pages: readonly EditorPage[];
@@ -56,6 +58,7 @@ export const SpreadStage = memo(function SpreadStage({
   spaceHeld: boolean;
   readOnly: boolean;
   onCreate: (pageIndex: number, element: EditorElement, label: string) => void;
+  onMove: (ids: readonly string[], dx: number, dy: number) => void;
 }) {
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
@@ -91,9 +94,11 @@ export const SpreadStage = memo(function SpreadStage({
     view: ui.view,
     tool: ui.tool,
     boxes,
+    selection: ui.selection,
     hostRef: wrapRef,
     enabled: !readOnly && !spaceHeld && ui.tool !== 'hand',
     onCreate,
+    onMove,
     onSelect,
     onToggleSelect,
     onAddSelect,
@@ -120,28 +125,34 @@ export const SpreadStage = memo(function SpreadStage({
   }, [size]);
 
   // --- cursor resolver (outer wrapper is the ONLY writer) --------------------
-  // Priority, a strict subset of contract #21's chain for the surfaces Slice B
-  // has: panning → hand available → creation armed → marquee → object hover →
-  // default. Hover stores only the id; lock is looked up live, so toggling
-  // Lock updates the cursor without pointer movement.
+  // The priority chain lives in `resolveCursor` (contract #21). Hover stores
+  // only the id; lock is looked up live, so toggling Lock updates the cursor
+  // without pointer movement.
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const hovered = hoverId ? boxes.find((b) => b.id === hoverId) : undefined;
-    el.style.cursor = panning
-      ? 'grabbing'
-      : spaceHeld || ui.tool === 'hand'
-        ? 'grab'
-        : isCreationTool(ui.tool)
-          ? 'crosshair'
-          : gestures.active
-            ? 'default'
-            : hovered
-              ? hovered.locked
-                ? 'default'
-                : 'move'
-              : 'default';
-  }, [panning, spaceHeld, ui.tool, gestures.active, hoverId, boxes]);
+    el.style.cursor = resolveCursor({
+      dragging: gestures.dragging,
+      panning,
+      handAvailable: spaceHeld || ui.tool === 'hand',
+      creationTool: isCreationTool(ui.tool),
+      gestureActive: gestures.active,
+      hoveredLocked: hovered?.locked,
+    });
+  }, [gestures.dragging, panning, spaceHeld, ui.tool, gestures.active, hoverId, boxes]);
+
+  // Drag frame timing (blueprint performance budgets: measured from Slice C):
+  // input (mousemove handler) → the next painted frame after React commits.
+  const dragPreview = gestures.dragPreview;
+  useEffect(() => {
+    if (!dragPreview) return;
+    requestAnimationFrame(() => {
+      if (performance.getEntriesByName('baxter:editor:drag-move').length === 0) return;
+      performance.measure('baxter:editor:drag-frame', 'baxter:editor:drag-move');
+      performance.clearMarks('baxter:editor:drag-move');
+    });
+  }, [dragPreview]);
 
   // --- pan gesture (window-level while active, the spike's architecture).
   // Blur cancels an in-flight drag — a gesture concern, so it lives here.
@@ -226,9 +237,19 @@ export const SpreadStage = memo(function SpreadStage({
   }
 
   const view = ui.view;
+  // Outlines travel with a drag preview so the selection never lags its objects.
   const selectedBoxes = useMemo(
-    () => (ui.tool === 'select' ? boxes.filter((b) => ui.selection.includes(b.id)).map((b) => b.box) : []),
-    [boxes, ui.selection, ui.tool]
+    () =>
+      ui.tool === 'select'
+        ? boxes
+            .filter((b) => ui.selection.includes(b.id))
+            .map((b) =>
+              dragPreview?.ids.has(b.id)
+                ? { ...b.box, x: b.box.x + dragPreview.dx, y: b.box.y + dragPreview.dy }
+                : b.box
+            )
+        : [],
+    [boxes, ui.selection, ui.tool, dragPreview]
   );
 
   return (
@@ -250,6 +271,7 @@ export const SpreadStage = memo(function SpreadStage({
               <ElementsLayer
                 pages={pages}
                 geom={geom}
+                dragPreview={dragPreview}
                 onElementPointerDown={onElementPointerDown}
                 onHoverChange={setHoverId}
               />

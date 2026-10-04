@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useCallback, useMemo, useRef } from 'react';
 import {
   addElement,
+  applyMoves,
   findElement,
   getFormatPreset,
   liveSelection,
@@ -21,6 +22,7 @@ import {
   updateElement,
   type ArrangeOp,
   type EditorElement,
+  type UnitLayout,
 } from '@baxter/domain';
 import { Inspector } from './inspector/Inspector';
 import { fitPageView, fitUnitView, hundredView, unitGeometry } from './geometry';
@@ -74,6 +76,11 @@ export function EditorShell({ publication }: { publication: { id: string; title:
     [state.doc.meta.marginMm, state.doc.meta.safeMm]
   );
   const geom = useMemo(() => unitGeometry(unit, preset, layout), [unit, preset, layout]);
+  /** The unit as the pure movement ops see it: its pages and their offsets. */
+  const unitLayout = useMemo<UnitLayout>(
+    () => ({ pageIds: unit.pages.map((p) => p.id), pageOffsetsMm: geom.pageOffsetsMm }),
+    [unit.pages, geom.pageOffsetsMm]
+  );
   const viewportRef = useRef({ w: 0, h: 0 });
   const readOnly = selectReadOnly(state);
 
@@ -127,6 +134,20 @@ export function EditorShell({ publication }: { publication: { id: string; title:
       uiDispatch({ type: 'SET_TOOL', tool: 'select' });
     },
     [unit.pages, state.doc, ui.selection, dispatch, uiDispatch]
+  );
+
+  /**
+   * A completed drag (#7): every unlocked member by the shared delta, per
+   * member re-parent by centre (#2), ONE commit → one history entry → one
+   * autosave. The selection is unchanged — the same objects, moved.
+   */
+  const onMove = useCallback(
+    (ids: readonly string[], dx: number, dy: number) => {
+      const nextDoc = applyMoves(state.doc, unitLayout, ids, dx, dy);
+      if (nextDoc === state.doc) return;
+      dispatch({ type: 'COMMIT', nextDoc, selection: ui.selection, label: 'Move' });
+    },
+    [state.doc, unitLayout, ui.selection, dispatch]
   );
 
   /**
@@ -217,6 +238,7 @@ export function EditorShell({ publication }: { publication: { id: string; title:
             spaceHeld={spaceHeld}
             readOnly={readOnly}
             onCreate={onCreate}
+            onMove={onMove}
           />
         </main>
         <Inspector
