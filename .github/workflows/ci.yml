@@ -24,13 +24,17 @@ jobs:
       # Third-party actions are pinned to full-length commit SHAs, not tags.
       # A tag is a movable pointer: whoever can move `v4` can change what runs
       # here, with our GITHUB_TOKEN, on every push. A SHA cannot be moved.
-      # Dependabot updates these and rewrites the trailing comment, so the
-      # human-readable version stays visible. Re-pin from the upstream release
-      # page; never paste a SHA from a search result.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # The trailing comment keeps the human-readable version visible. There
+      # is no dependabot.yml for github-actions, so nothing bumps these
+      # automatically: re-pin by hand from the upstream release tag (resolve
+      # it with `git ls-remote --tags`); never paste a SHA from a search
+      # result. Both majors below run on the Node 24 actions runtime.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          # Match the Vercel project's Node.js version (Settings → Build and
+          # Deployment), so CI tests the runtime production builds on.
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck

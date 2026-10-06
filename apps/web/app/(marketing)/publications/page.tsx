@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { getAllPublished } from '@/lib/marketplace/queries';
+import { getAllPublished, readCatalogue } from '@/lib/marketplace/queries';
 import { PublicationShelf } from '@/components/publication-shelf';
 import { SiteHeader } from '@/components/site-header';
 import { PUBLICATION_CATEGORIES, isPublicationCategory } from '@baxter/domain';
@@ -26,7 +26,9 @@ export default async function PublicationsPage({
     rawCategory && isPublicationCategory(rawCategory) ? rawCategory : undefined;
 
   const supabase = await createClient();
-  const cards = await getAllPublished(supabase, { category });
+  // D-032: an unreadable catalogue is not an empty one — say which it is.
+  const result = await readCatalogue(getAllPublished(supabase, { category }));
+  const cards = result.ok ? result.value : [];
 
   const linkBase =
     'font-shell text-[0.75rem] tracking-[0.08em] uppercase transition-colors duration-300';
@@ -66,7 +68,14 @@ export default async function PublicationsPage({
       </div>
 
       <section className="px-gutter py-20">
-        {cards.length > 0 ? (
+        {!result.ok ? (
+          <p
+            data-catalogue="unavailable"
+            className="font-serif text-body text-ink-faint max-w-measure"
+          >
+            Publications are briefly unavailable. Please check back shortly.
+          </p>
+        ) : cards.length > 0 ? (
           <PublicationShelf cards={cards} />
         ) : (
           <p className="font-serif text-body text-ink-faint max-w-measure">
