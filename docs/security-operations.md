@@ -312,10 +312,11 @@ Slice C made both runs self-cleaning (decision C-8), so the blast radius is
 (Chromium, WebKit, Firefox)** — all to one row. The smoke identifies its own
 objects by identity (position + inspector values) and never deletes "everything
 on the spread"; if it fails mid-run it still removes its own objects, each only
-after the inspector confirms it. Objects that earlier slices' runs left behind
-(Slice A/B accumulated rectangles: 22 on the front cover and 4 on the first
-spread as of 2026-10-04) are **not** touched by any run; removing them is a
-one-off production write that waits for Ben's explicit go. The real exposure is
+after the inspector confirms it. The objects earlier slices' runs left behind
+(Slice A/B: 22 on the front cover, 4 on the first spread) were removed on
+2026-10-06 on Ben's explicit go — backed up first (the document as served at
+revision 239, checksummed), deleted through the editor in one autosave write,
+and verified empty after reload; the fixture is now clean. The real exposure is
 still not the writes; it is that **a production account password sits in a
 file on the developer machine** so a test can type it.
 

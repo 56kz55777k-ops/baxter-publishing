@@ -90,3 +90,10 @@
 ## 6 · Not in C
 
 Resize/Transformer (D), images (E), crop (F), text (G), lines (H), viewing modes (I), cross-publication clipboard, grouping, multi position/size fields, Dependabot #12/#13 + advisory triage, D-032, EasyPost, Slice G fonts, moving E2E off production.
+
+## 7 · Decisions at acceptance (Ben, 2026-10-06)
+
+- **1a–1d confirmed** as implemented: object operations act on the selected objects of the unit being viewed · multi-object Opacity reflects unlocked members only · "· N locked" only for mixed selections · a click without drag on a member of a multi-selection narrows to it.
+- **2** The stage's read-only `data-view` / `data-page-offsets` attributes ship as **internal test instrumentation, not a public application contract**.
+- **3** The Slice A/B fixture residue was removed (backup first; HANDOFF Phase 11).
+- Merged as PR #15 → `79bbf53` on 2026-10-06.
