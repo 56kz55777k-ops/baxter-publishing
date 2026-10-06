@@ -47,6 +47,8 @@ export type EditorUiAction =
   | { type: 'SET_TOOL'; tool: EditorTool }
   | { type: 'SET_SELECTION'; ids: readonly string[] }
   | { type: 'TOGGLE_SELECTION'; ids: readonly string[] }
+  /** Union, order-preserving: never removes an id (Shift-marquee, contract #6). */
+  | { type: 'ADD_TO_SELECTION'; ids: readonly string[] }
   | { type: 'CLEAR_SELECTION' };
 
 export function editorUiReducer(state: EditorUiState, action: EditorUiAction): EditorUiState {
@@ -73,6 +75,13 @@ export function editorUiReducer(state: EditorUiState, action: EditorUiAction): E
         else next.splice(at, 1);
       }
       return sameIds(state.selection, next) ? state : { ...state, selection: next };
+    }
+    case 'ADD_TO_SELECTION': {
+      // Shift-click toggles (#5); Shift-marquee ADDS (#6) — it must never
+      // deselect an object that was already selected.
+      const next = [...state.selection];
+      for (const id of action.ids) if (!next.includes(id)) next.push(id);
+      return next.length === state.selection.length ? state : { ...state, selection: next };
     }
     case 'CLEAR_SELECTION':
       return state.selection.length === 0 ? state : { ...state, selection: [] };

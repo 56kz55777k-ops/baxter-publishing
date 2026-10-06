@@ -14,10 +14,15 @@
  * keyboard gestures against a production build — which is what Slice A's
  * amendment-1 note said this config should become once there was something to
  * drive. `next build` runs first so `next start` has something to serve.
+ *
+ * Slice C: Chromium, WebKit and Firefox are all browser gates (production
+ * handoff Part 12 / Risk 13). Run one with `--project=<name>`; each result is
+ * recorded separately, and a browser that cannot execute is reported as NOT
+ * EXECUTED with its reason — never silently waived.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 function loadE2EEnv(): void {
   try {
@@ -44,6 +49,11 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 800 },
   },
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1280, height: 800 } } },
+  ],
   webServer: {
     command: `npx next build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}/sign-in`,

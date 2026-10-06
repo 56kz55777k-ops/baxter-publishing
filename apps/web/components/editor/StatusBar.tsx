@@ -51,11 +51,14 @@ export const StatusBar = memo(function StatusBar({
   onFitSpread,
   onHundred,
   spreadFitLabel,
+  announcement = '',
 }: {
   onFitPage: () => void;
   onFitSpread: () => void;
   onHundred: () => void;
   spreadFitLabel: string;
+  /** A calm, transient line — e.g. a delete that kept locked objects (#5). */
+  announcement?: string;
 }) {
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
@@ -87,7 +90,14 @@ export const StatusBar = memo(function StatusBar({
         active={ui.tool === 'ellipse'}
         onClick={() => uiDispatch({ type: 'SET_TOOL', tool: 'ellipse' })}
       />
-      <div className="flex-1" />
+      <p
+        role="status"
+        aria-live="polite"
+        data-testid="editor-announcement"
+        className="flex-1 truncate px-3 text-center text-caption text-ink-soft"
+      >
+        {announcement}
+      </p>
       <BarButton label="Fit page" onClick={onFitPage} />
       <BarButton label={spreadFitLabel} onClick={onFitSpread} />
       <BarButton label="100%" onClick={onHundred} />

@@ -169,6 +169,29 @@ export function snapCreationAxis(
   );
 }
 
+/**
+ * Movement (contract #8, Slice C): a moving set snaps by its UNION bounding
+ * box — both edges and the centre, every feature at rate 1 because the whole
+ * box translates. A single object is a union of one, so single and multi
+ * drags share this one code path. `union` is the box at its current
+ * (unsnapped) position, in unit space.
+ */
+export function snapUnion(
+  union: SnapBox,
+  targets: SnapTargets,
+  radiusMm: number = SNAP_RADIUS_MM
+): { x: AxisSnap | null; y: AxisSnap | null } {
+  const features = (start: number, size: number): SnapCandidate[] => [
+    { value: start, rate: 1 },
+    { value: start + size / 2, rate: 1 },
+    { value: start + size, rate: 1 },
+  ];
+  return {
+    x: bestSnap(features(union.x, union.width), targets.x, radiusMm),
+    y: bestSnap(features(union.y, union.height), targets.y, radiusMm),
+  };
+}
+
 function dedupe(values: readonly number[]): number[] {
   return [...new Set(values)].sort((a, b) => a - b);
 }

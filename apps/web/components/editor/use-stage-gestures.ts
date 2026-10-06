@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The stage's pointer state machine: shape creation, click selection and
- * marquee (contracts #3, #4, #6).
+ * The stage's pointer state machine: shape creation, click selection,
+ * marquee, and object drag (contracts #3, #4, #6, #7, #8).
  *
  * Everything this hook holds is transient. The anchor, the live box, the snap
  * guides and the marquee live in refs and local state that exist only between
@@ -15,13 +15,16 @@
  * SpreadStage, including blur cancellation: losing the window ends a gesture
  * without committing anything.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildTargets,
+  dragDelta,
   newEllipseElement,
   newRectElement,
   quantizeCreate,
   snapCreationAxis,
+  snapUnion,
+  unionBox,
   type EditorElement,
   type EditorPage,
   type SnapBox,
@@ -44,6 +47,12 @@ export const CREATE_CLICK_THRESHOLD_MM = 3;
 export const MARQUEE_CLICK_THRESHOLD_MM = 2;
 /** Contract #11: shapes are at least this per axis. Applied to the preview so preview == commit. */
 export const MIN_SHAPE_MM = 4;
+/**
+ * A press on an object becomes a drag only once the pointer has travelled
+ * this far on screen — a click with hand jitter must never move (or snap)
+ * anything. Screen px, so it feels the same at every zoom.
+ */
+export const DRAG_THRESHOLD_PX = 3;
 
 export interface ElementBox {
   id: string;
@@ -54,7 +63,27 @@ export interface ElementBox {
 
 type Gesture =
   | { kind: 'create'; shape: 'rect' | 'ellipse'; anchor: { x: number; y: number }; pageIndex: number }
-  | { kind: 'marquee'; anchor: { x: number; y: number }; additive: boolean };
+  | { kind: 'marquee'; anchor: { x: number; y: number }; additive: boolean }
+  | {
+      kind: 'drag';
+      anchor: { x: number; y: number };
+      /** Screen-px press point — the drag threshold is measured on screen. */
+      screen: { x: number; y: number };
+      /** The unlocked members that move (#7, #20). */
+      ids: readonly string[];
+      /** Their union box at press, unit space (#8). */
+      union: Box;
+      /** The pressed object; a click without movement narrows to it. */
+      pressedId: string;
+      narrowOnClick: boolean;
+    };
+
+/** The live, not-yet-committed offset of a drag. Preview == commit (C-1). */
+export interface DragPreview {
+  ids: ReadonlySet<string>;
+  dx: number;
+  dy: number;
+}
 
 export interface StageGestures {
   /** Live creation box in unit space, or null. */
@@ -66,6 +95,10 @@ export interface StageGestures {
   guideY: number | null;
   /** `W × H mm` readout content while creating, or null. */
   readout: { widthMm: number; heightMm: number } | null;
+  /** The moving set and its shared delta while a drag is past its threshold. */
+  dragPreview: DragPreview | null;
+  /** True from the moment a drag passes its threshold until it ends (#21: `move`, held). */
+  dragging: boolean;
   onStagePointerDown: (screen: { x: number; y: number }, shiftKey: boolean, hitElementId: string | null) => void;
   cancel: () => void;
   active: boolean;
@@ -111,20 +144,40 @@ export function useStageGestures(args: {
   view: ViewTransform;
   tool: 'select' | 'hand' | 'rect' | 'ellipse';
   boxes: readonly ElementBox[];
+  /** The current selection — a press on a selected member drags the whole set. */
+  selection: readonly string[];
   /** The stage wrapper — window-level listeners convert client coords against it. */
   hostRef: React.RefObject<HTMLElement | null>;
   enabled: boolean;
   onCreate: (pageIndex: number, element: EditorElement, label: string) => void;
+  /** One drag session → one call → one COMMIT (#7, #24). Never called for a zero delta. */
+  onMove: (ids: readonly string[], dx: number, dy: number) => void;
   onSelect: (ids: readonly string[]) => void;
   onToggleSelect: (ids: readonly string[]) => void;
+  /** Union into the selection — the additive marquee (#6). */
+  onAddSelect: (ids: readonly string[]) => void;
   onClearSelection: () => void;
 }): StageGestures {
-  const { geom, view, tool, boxes, hostRef, enabled, onCreate, onSelect, onToggleSelect, onClearSelection } =
-    args;
+  const {
+    geom,
+    view,
+    tool,
+    boxes,
+    selection,
+    hostRef,
+    enabled,
+    onCreate,
+    onMove: onMoveCommit,
+    onSelect,
+    onToggleSelect,
+    onAddSelect,
+    onClearSelection,
+  } = args;
 
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [current, setCurrent] = useState<{ x: number; y: number } | null>(null);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
 
   // Refs keep the window listeners stable and free of stale closures.
   const gestureRef = useRef<Gesture | null>(null);
@@ -138,11 +191,21 @@ export function useStageGestures(args: {
   const targetsRef = useRef<SnapTargets>({ x: [], y: [] });
   const currentRef = useRef<{ x: number; y: number } | null>(null);
   currentRef.current = current;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  dragRef.current = drag;
 
   const reset = useCallback(() => {
     setGesture(null);
     setCurrent(null);
     setGuides({ x: null, y: null });
+    setDrag(null);
+  }, []);
+
+  const snapGeometry = useCallback(() => {
+    const g = geomRef.current;
+    return { pageWidthMm: pageWidthMm(g), pageHeightMm: g.heightMm, pageOffsetsMm: g.pageOffsetsMm, marginMm: g.marginMm };
   }, []);
 
   const onStagePointerDown = useCallback(
@@ -156,12 +219,7 @@ export function useStageGestures(args: {
         // Targets are computed once per gesture: the set cannot change while
         // the pointer is down, and recomputing per move would be wasteful.
         targetsRef.current = buildTargets(
-          {
-            pageWidthMm: pageWidthMm(g),
-            pageHeightMm: g.heightMm,
-            pageOffsetsMm: g.pageOffsetsMm,
-            marginMm: g.marginMm,
-          },
+          snapGeometry(),
           boxesRef.current.map((b): SnapBox => b.box)
         );
         setGesture({ kind: 'create', shape: tool, anchor: unit, pageIndex });
@@ -172,8 +230,41 @@ export function useStageGestures(args: {
       if (tool !== 'select') return;
 
       if (hitElementId) {
-        if (shiftKey) onToggleSelect([hitElementId]);
-        else onSelect([hitElementId]);
+        if (shiftKey) {
+          onToggleSelect([hitElementId]); // #5: Shift-click toggles; it never drags
+          return;
+        }
+        const sel = selectionRef.current;
+        const wasSelected = sel.includes(hitElementId);
+        // Pressing an unselected object selects it alone and drags it alone;
+        // pressing a selected one drags the whole set (#7) and only narrows
+        // the selection if the press turns out to be a click.
+        if (!wasSelected) onSelect([hitElementId]);
+        const all = boxesRef.current;
+        const pressed = all.find((b) => b.id === hitElementId);
+        // Locked: selectable, never draggable (#20). Nothing moves.
+        if (!pressed || pressed.locked) return;
+        const memberIds = wasSelected ? sel : [hitElementId];
+        const movers = all.filter((b) => memberIds.includes(b.id) && !b.locked);
+        const union = unionBox(movers.map((b) => b.box));
+        if (!union) return;
+        const moving = new Set(movers.map((b) => b.id));
+        // Targets: page geometry + every element NOT moving — locked ones
+        // included (#20: locked elements are snap targets).
+        targetsRef.current = buildTargets(
+          snapGeometry(),
+          all.filter((b) => !moving.has(b.id)).map((b): SnapBox => b.box)
+        );
+        setGesture({
+          kind: 'drag',
+          anchor: unit,
+          screen,
+          ids: movers.map((b) => b.id),
+          union,
+          pressedId: hitElementId,
+          narrowOnClick: wasSelected && sel.length > 1,
+        });
+        setCurrent(unit);
         return;
       }
 
@@ -181,7 +272,7 @@ export function useStageGestures(args: {
       setGesture({ kind: 'marquee', anchor: unit, additive: shiftKey });
       setCurrent(unit);
     },
-    [enabled, tool, onSelect, onToggleSelect]
+    [enabled, tool, onSelect, onToggleSelect, snapGeometry]
   );
 
   useEffect(() => {
@@ -203,17 +294,54 @@ export function useStageGestures(args: {
       if (g.kind === 'create') {
         const sx = snapCreationAxis(g.anchor.x, unit.x, targetsRef.current.x);
         const sy = snapCreationAxis(g.anchor.y, unit.y, targetsRef.current.y);
-        setCurrent({ x: unit.x + (sx?.delta ?? 0), y: unit.y + (sy?.delta ?? 0) });
+        setLatest({ x: unit.x + (sx?.delta ?? 0), y: unit.y + (sy?.delta ?? 0) });
         setGuides({ x: sx?.guide ?? null, y: sy?.guide ?? null });
+      } else if (g.kind === 'drag') {
+        const p = pointFromEvent(ev);
+        if (!dragRef.current && Math.hypot(p.x - g.screen.x, p.y - g.screen.y) < DRAG_THRESHOLD_PX) return;
+        performance.mark('baxter:editor:drag-move');
+        // The union box snaps (#8); the SAME delta function previews and
+        // commits, so what is shown at release is exactly what is written.
+        const rawX = unit.x - g.anchor.x;
+        const rawY = unit.y - g.anchor.y;
+        const snap = snapUnion(
+          { x: g.union.x + rawX, y: g.union.y + rawY, width: g.union.width, height: g.union.height },
+          targetsRef.current
+        );
+        const next = { dx: dragDelta(rawX, snap.x), dy: dragDelta(rawY, snap.y) };
+        dragRef.current = next; // synchronously: a mouseup may arrive before React renders
+        setDrag(next);
+        setGuides({ x: snap.x?.guide ?? null, y: snap.y?.guide ?? null });
       } else {
-        setCurrent(unit);
+        setLatest(unit);
       }
     }
 
-    function onUp() {
+    function setLatest(p: { x: number; y: number }) {
+      currentRef.current = p; // synchronously, for the same reason as dragRef
+      setCurrent(p);
+    }
+
+    function onUp(ev: MouseEvent) {
+      // The release point is the gesture's last position. Browsers differ in
+      // whether the final mousemove before mouseup has been rendered (Firefox
+      // routinely delivers mouseup first), so the commit must not depend on a
+      // render having happened: process the mouseup's own coordinates, then
+      // read the refs that processing wrote synchronously. (Found by the
+      // Slice C Firefox gate: creation and drag both committed the
+      // second-to-last pointer position.)
+      onMove(ev);
       const g = gestureRef.current;
       const end = currentRef.current;
       if (!g || !end) {
+        reset();
+        return;
+      }
+
+      if (g.kind === 'drag') {
+        const d = dragRef.current;
+        if (d && (d.dx !== 0 || d.dy !== 0)) onMoveCommit(g.ids, d.dx, d.dy);
+        else if (!d && g.narrowOnClick) onSelect([g.pressedId]); // a click on a member of a set
         reset();
         return;
       }
@@ -260,7 +388,9 @@ export function useStageGestures(args: {
       // (contract #20), so they are not filtered out here.
       const area = normalizedBox(g.anchor, end);
       const hits = boxesRef.current.filter((b) => rectsIntersect(area, b.box)).map((b) => b.id);
-      if (g.additive) onToggleSelect(hits);
+      // Shift-marquee ADDS (#6): a toggle here would deselect hits that were
+      // already selected. Shift-click alone is the toggle (#5).
+      if (g.additive) onAddSelect(hits);
       else onSelect(hits);
       reset();
     }
@@ -277,21 +407,38 @@ export function useStageGestures(args: {
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('blur', onBlur);
     };
-  }, [gesture, reset, hostRef, onCreate, onSelect, onToggleSelect, onClearSelection]);
+  }, [gesture, reset, hostRef, onCreate, onMoveCommit, onSelect, onAddSelect, onClearSelection]);
 
   // Escape cancels an in-flight gesture without committing.
   useEffect(() => {
     if (!gesture) return;
+    const isDrag = gesture.kind === 'drag';
     function onKey(ev: KeyboardEvent) {
-      if (ev.key === 'Escape') reset();
+      if (ev.key !== 'Escape') return;
+      if (isDrag) {
+        // Decision 2 (2026-10-04): Escape during a drag cancels ONLY the drag
+        // and keeps the selection. Captured on window ahead of the shell's
+        // keyboard handler, whose resting-state Escape deselects — one
+        // meaning per press. The next Escape deselects as usual.
+        ev.stopImmediatePropagation();
+        ev.preventDefault();
+      }
+      reset();
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Capture phase only for drag; creation/marquee keep Slice B's behaviour.
+    window.addEventListener('keydown', onKey, isDrag);
+    return () => window.removeEventListener('keydown', onKey, isDrag);
   }, [gesture, reset]);
 
   const creating = gesture?.kind === 'create' ? gesture : null;
   const marqueeing = gesture?.kind === 'marquee' ? gesture : null;
-  const liveBox = gesture && current ? normalizedBox(gesture.anchor, current) : null;
+  const dragging = gesture?.kind === 'drag' && drag !== null ? gesture : null;
+  const liveBox = gesture && current && gesture.kind !== 'drag' ? normalizedBox(gesture.anchor, current) : null;
+  const dragIds = dragging?.ids;
+  const dragPreview = useMemo(
+    () => (dragIds && drag ? { ids: new Set(dragIds), dx: drag.dx, dy: drag.dy } : null),
+    [dragIds, drag]
+  );
   const previewBox =
     creating && liveBox
       ? {
@@ -309,6 +456,8 @@ export function useStageGestures(args: {
     guideX: guides.x,
     guideY: guides.y,
     readout: previewBox ? { widthMm: previewBox.width, heightMm: previewBox.height } : null,
+    dragPreview,
+    dragging: dragging !== null,
     onStagePointerDown,
     cancel: reset,
     active: gesture !== null,

@@ -37,6 +37,7 @@ export function NumField({
   value,
   bounds,
   disabled = false,
+  mixed = false,
   onCommit,
 }: {
   /** The short visible label beside the field ("X", "W", "%"). */
@@ -53,6 +54,13 @@ export function NumField({
   value: number;
   bounds: NumFieldBounds;
   disabled?: boolean;
+  /**
+   * Multi-selection with differing values (contracts #5/#18): the field shows
+   * an em dash — never a fabricated average — and starts empty when focused.
+   * A typed value applies to every unlocked member. Arrows have no base to
+   * step from while mixed, so they do nothing until a value is typed.
+   */
+  mixed?: boolean;
   onCommit: (next: number) => void;
 }) {
   const [draft, setDraft] = useState(() => formatNum(value));
@@ -73,20 +81,22 @@ export function NumField({
   // exists only while focused, where it belongs to the person typing it and
   // external changes leave it alone. (Formerly an effect re-synced the draft
   // after paint, which painted the previous element's values for a frame.)
-  const shown = focused ? draft : formatNum(value);
+  const shown = focused ? draft : mixed ? '' : formatNum(value);
+  const restored = mixed ? '' : formatNum(value);
 
   function commit(raw: string) {
     const next = commitNum(raw, bounds);
     if (next === null) {
-      setDraft(formatNum(value)); // invalid draft → restore the last valid value
+      setDraft(restored); // invalid draft → restore the last valid value
       return;
     }
     setDraft(formatNum(next));
-    if (next === value) return; // identical commits create nothing (#19/#24)
+    if (!mixed && next === value) return; // identical commits create nothing (#19/#24)
     onCommit(next);
   }
 
   function step(direction: 1 | -1, shift: boolean) {
+    if (mixed) return; // no base value to step from
     const next = stepNum(value, bounds, direction, shift);
     setDraft(formatNum(next));
     if (next === value) return; // already at the bound — no entry
@@ -104,12 +114,13 @@ export function NumField({
         spellCheck={false}
         disabled={disabled}
         value={shown}
+        placeholder={mixed ? '—' : undefined}
         aria-label={name ?? label}
         data-testid={testId ?? `num-${label.toLowerCase()}`}
         className="h-[26px] w-full min-w-0 rounded-sm border border-rule bg-canvas px-2 text-caption tabular-nums text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 disabled:text-ink-faint"
         style={{ appearance: 'textfield' }}
         onFocus={() => {
-          setDraft(formatNum(value)); // the draft starts from the current model
+          setDraft(restored); // the draft starts from the current model (empty when mixed)
           setFocused(true);
         }}
         onChange={(e) => setDraft(e.target.value)}
@@ -117,7 +128,7 @@ export function NumField({
           setFocused(false);
           if (cancelledRef.current) {
             cancelledRef.current = false;
-            setDraft(formatNum(value)); // Escape already restored; do not commit
+            setDraft(restored); // Escape already restored; do not commit
             return;
           }
           commit(e.target.value);
@@ -129,7 +140,7 @@ export function NumField({
           } else if (e.key === 'Escape') {
             e.preventDefault();
             cancelledRef.current = true;
-            setDraft(formatNum(value));
+            setDraft(restored);
             inputRef.current?.blur(); // leaves the field; canvas selection is untouched
           } else if (e.key === 'ArrowUp') {
             e.preventDefault();

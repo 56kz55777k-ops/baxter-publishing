@@ -14,3 +14,4 @@ export * from './editor/elements';
 export * from './editor/precision';
 export * from './editor/snapping';
 export * from './editor/num-field';
+export * from './editor/moves';

@@ -4,10 +4,11 @@
  * The inspector — the primary editing surface (contract #18).
  *
  * Contextual: page settings when nothing is selected, the single-object panel
- * when one element is. The multi-object panel (`N objects · M locked`, shared
- * properties, em-dash mixed values) belongs to Slice C's multi-selection and
- * is not stubbed here — an empty panel that promises a feature is worse than
- * an honest one that doesn't.
+ * when one element is, and (Slice C) the multi-object panel when several are:
+ * `N objects · M locked`, the shared property (opacity) applied to unlocked
+ * members only in one action, an em dash for mixed values — never a
+ * fabricated average — lock-all/unlock-all, and delete that removes unlocked
+ * members only and says so (contracts #5, #18, #20).
  *
  * Every control on this panel is wired. Sections that would only be
  * decoration for rect/ellipse are absent rather than disabled: the type
@@ -47,6 +48,11 @@ export interface InspectorProps {
   onPatch: (patch: Record<string, unknown>, label: string) => void;
   onArrange: (op: ArrangeOp) => void;
   onSetLocked: (locked: boolean) => void;
+  /** The selected elements when more than one is selected (Slice C). */
+  multi?: readonly EditorElement[];
+  onMultiOpacity?: (opacity: number) => void;
+  onLockAll?: (locked: boolean) => void;
+  onDeleteSelection?: () => void;
 }
 
 export function Inspector(props: InspectorProps) {
@@ -59,11 +65,17 @@ export function Inspector(props: InspectorProps) {
     >
       {element ? (
         <SingleObjectPanel {...props} element={element} />
+      ) : selectionCount > 1 && props.multi && props.multi.length > 1 ? (
+        <MultiObjectPanel
+          elements={props.multi}
+          disabled={disabled}
+          onOpacity={props.onMultiOpacity ?? (() => {})}
+          onLockAll={props.onLockAll ?? (() => {})}
+          onDelete={props.onDeleteSelection ?? (() => {})}
+        />
       ) : selectionCount > 1 ? (
         <Section title={`${selectionCount} objects`}>
-          <p className="text-caption text-ink-faint">
-            Editing several objects at once arrives with movement and multi-selection.
-          </p>
+          <p className="text-caption text-ink-faint">Select objects on this spread to edit them together.</p>
         </Section>
       ) : (
         <Section title="Page">
@@ -236,6 +248,84 @@ function SingleObjectPanel({
           {locked ? 'Unlock' : 'Lock'}
         </button>
       </Fieldset>
+    </>
+  );
+}
+
+function MultiObjectPanel({
+  elements,
+  disabled,
+  onOpacity,
+  onLockAll,
+  onDelete,
+}: {
+  elements: readonly EditorElement[];
+  disabled: boolean;
+  onOpacity: (opacity: number) => void;
+  onLockAll: (locked: boolean) => void;
+  onDelete: () => void;
+}) {
+  const unlocked = elements.filter((e) => !e.locked);
+  const lockedCount = elements.length - unlocked.length;
+  const allLocked = unlocked.length === 0;
+  const percents = new Set(unlocked.map((e) => Math.round(e.opacity * 100)));
+  const mixed = percents.size > 1;
+  const shared = mixed ? 0 : (percents.values().next().value ?? 100);
+  // Header per the accepted spike: the locked count is shown when it is
+  // informative — some, not all, members locked (#5).
+  const title = `${elements.length} objects${lockedCount > 0 && !allLocked ? ` · ${lockedCount} locked` : ''}`;
+
+  return (
+    <>
+      <h2 className="metadata pb-1 text-ink" data-testid="multi-header">
+        {title}
+      </h2>
+      <Fieldset title="Shared" disabled={disabled || allLocked}>
+        {allLocked ? (
+          <p className="text-caption text-ink-faint">Every selected object is locked.</p>
+        ) : (
+          <>
+            <NumField
+              label="%"
+              name="Opacity"
+              testId="num-opacity"
+              value={shared}
+              mixed={mixed}
+              bounds={PERCENT_BOUNDS}
+              disabled={disabled}
+              onCommit={(percent) => onOpacity(percent / 100)}
+            />
+            {mixed && (
+              <p className="text-caption text-ink-faint">Mixed values — a value you type applies to every unlocked object.</p>
+            )}
+          </>
+        )}
+      </Fieldset>
+      <Fieldset title="Lock" disabled={disabled}>
+        <button
+          type="button"
+          data-testid="lock-all"
+          onClick={() => onLockAll(!allLocked)}
+          disabled={disabled}
+          className="h-[26px] rounded-sm border border-rule px-3 text-caption text-ink transition-colors duration-400 ease-gentle hover:border-accent hover:text-accent"
+        >
+          {allLocked ? 'Unlock all' : 'Lock all'}
+        </button>
+      </Fieldset>
+      <Fieldset title="Delete" disabled={disabled || allLocked}>
+        <button
+          type="button"
+          data-testid="delete-selection"
+          onClick={onDelete}
+          disabled={disabled || allLocked}
+          className="h-[26px] rounded-sm border border-rule px-3 text-caption text-accent transition-colors duration-400 ease-gentle hover:border-accent"
+        >
+          {lockedCount > 0 ? `Delete ${unlocked.length} unlocked` : `Delete ${elements.length} objects`}
+        </button>
+      </Fieldset>
+      <p className="text-caption text-ink-faint">
+        Drag any one to move them together. Select a single object to edit its details.
+      </p>
     </>
   );
 }

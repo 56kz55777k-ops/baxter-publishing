@@ -564,6 +564,22 @@ Settles the margin/safe question left PROVISIONAL by D-031 and deliberately unto
 
 ---
 
+## D-035 — Movement precision: round the shared delta, never the members
+
+**Status:** Accepted by Ben 2026-10-04 (Slice C decisions C-1, and nudge on the same principle). Implemented in Slice C (`packages/domain/src/editor/moves.ts`).
+
+**Context.** Contract #19 records a deliberate cross-system difference: inspector and resize commit on the 0.01 mm model grid; creation, drag and nudge commit on the historic 0.1 mm grid — "do not fix without a decision." The spike implemented the 0.1 grid by rounding *each member's resulting position*. For a moving set that breaks two other contracts: members sitting on the 0.01 grid (anything edited in the inspector) shift relative to one another, so a multi-drag is not rigid (#7), and a union edge snapped onto a guide (#8) can commit up to 0.05 mm away from the guide that was shown.
+
+**Decision.** Movement rounds the **shared delta**, never the members:
+- **Drag, free axis:** the raw delta is rounded to the 0.1 mm drag grid.
+- **Drag, snapped axis:** the delta is the snap's own correction, on the 0.01 mm model grid, so the committed edge is the guide shown (preview == commit, as in #9). A centre snap of an odd-hundredth width can sit ≤ 0.005 mm from its guide — the model grid's own resolution.
+- **Nudge:** the nudge distance (±0.5 / ±5 mm) is the delta, exactly.
+- Each member then sits at `old + delta`, re-expressed on the 0.01 mm model grid (an identity for on-grid values). **Relative spacing within a moving set is invariant** — pinned by a property test over 200 deltas.
+
+**What does not change.** Creation still commits on the 0.1 grid; inspector and resize on 0.01. Every committed value remains on the 0.01 model grid. No schema change, no migration, no version bump.
+
+---
+
 ## Open Decisions (deferred to later slices)
 
 - **Per-edge BINDING-RELATIVE margins** — D-034 retains the scalar `marginMm`/`safeMm` model for the present editor slices and records `{top, bottom, inner, outer}` as a **hard prerequisite before M2.4/export ships** (not screen-relative: inner/outer swap physical edge between recto and verso). Migration-free whenever taken: forward-only lazy migration already exists and one scalar maps losslessly to four equal edges.
