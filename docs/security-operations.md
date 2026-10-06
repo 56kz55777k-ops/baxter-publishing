@@ -241,8 +241,12 @@ allowlist of paths, never an exclusion list — an exclusion list fails open.
 - **Third-party GitHub Actions are pinned to full-length commit SHAs**, with
   the human-readable version in a trailing comment. A tag is a movable
   pointer: whoever can move `v4` changes what runs in CI with our
-  `GITHUB_TOKEN`. A SHA cannot be moved. Dependabot updates the pins and
-  rewrites the comment. Re-pin from the upstream release page.
+  `GITHUB_TOKEN`. A SHA cannot be moved. There is no `dependabot.yml` for
+  the `github-actions` ecosystem, so nothing bumps the pins automatically:
+  re-pin by hand, resolving the SHA from the upstream tag
+  (`git ls-remote --tags`), never from a search result. Since 2026-10-06
+  both actions are on Node-24-runtime majors (checkout v7.0.1, setup-node
+  v6.5.0).
 - The repository's Actions policy is still **Allow all actions and reusable
   workflows**, and *Require actions to be pinned to a full-length commit SHA*
   is off. Turning that requirement on is only safe once every workflow is
@@ -347,20 +351,27 @@ trades a local file for a credential in CI, which is worse.
   against what CodeQL default setup and Dependabot need.
 - **Fork PR workflow approval** is `first-time contributors`; on a public
   repository, `all external contributors` is the stricter setting.
-- **Node version divergence** — Vercel builds on Node 24.x, CI on Node 22. A
-  green CI run does not prove the Vercel build. Not a vulnerability; a gap in
-  what the evidence covers.
+- ~~**Node version divergence**~~ — **closed 2026-10-06**: CI runs on Node 24,
+  matching the Vercel project's Node.js 24.x setting.
 - **`npm install --legacy-peer-deps`** is Vercel's install command, so the
   deployed tree is not built by `npm ci` from the lockfile and peer conflicts
   are ignored. Moving the deployment to `npm ci` would make the deployed
   dependency tree the committed one.
 - **Next.js** carries one remaining moderate advisory whose only fix is a
   major-version upgrade. Tracked as a decision, not a patch.
-- **`drizzle-orm`** carries a high advisory but is unimported dead code.
-  `apps/web/package.json` declares both `@baxter/db` and `drizzle-orm` as
-  direct dependencies that no file under `apps/web` imports. Removing them is
-  dependency cleanup, preferable to upgrading, and it retires `DATABASE_URL`
-  from the deployed environment at the same time.
+- ~~**`drizzle-orm`** in the web app~~ — **closed 2026-10-06**: `@baxter/db`,
+  `drizzle-orm` and `postgres` are removed from `apps/web` (manifest,
+  `transpilePackages`, tsconfig paths); `packages/db` keeps the schema and
+  migration tooling on drizzle-orm 0.45.3. No deployed code reads
+  `DATABASE_URL` now — deleting it from Vercel Preview and Production is
+  Ben's action (the entry above).
+- **OpenTelemetry advisories** (`@opentelemetry/sdk-node`, `propagator-jaeger`,
+  `core` and ~30 instrumentation/exporter packages) arrive through `inngest`,
+  but only `inngest/experimental` (the extended-traces middleware) imports
+  them; Baxter imports `inngest` and `inngest/next` only. An in-range update
+  exists; it is not taken because it would be a broad update of unreachable
+  code to lower a count (§ 6). Dismissing the alerts as "vulnerable code not
+  used" is Ben's call.
 - **Disabling the unused Next.js image optimiser** (`images: { unoptimized: true }`).
   Optional, and explicitly *not* a patch — 15.5.25 already contains the
   relevant Image Optimization fixes, and changing it changes production image

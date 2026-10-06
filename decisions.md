@@ -495,6 +495,8 @@ Rulings:
 
 **What would force reconsideration.** Moving off the free plan resolves the pause class entirely; consolidating the split Vercel/GitHub identities would simplify the account map but is Ben's call, not an engineering requirement.
 
+**Addendum 2026-10-06 (post–Slice C maintenance checkpoint).** *Code half — done:* the "quietly empty" failure shape is removed. Public catalogue reads no longer turn a query error into `[]`; they log `catalogue: query failed` (query name, PostgREST code, message — no secrets) and the home, `/publications` and creator pages render a calm "briefly unavailable" notice that is distinct from the genuine empty state (commit `d80fb9d`, branch `maint/post-slice-c-checkpoint`, 17 tests). *Platform half — still open, Ben decides:* the dashboard shows the project Healthy on Nano compute, the org on the **Free plan** with no backups; Supabase's own documentation states Free projects pause after low activity over 7 days (warning email about a week before; 1-year restore window) and that paid-plan projects cannot be paused. No keepalive exists. Options unchanged — Pro, an external probe on a data-backed page, or both — plus a log alert on the new line.
+
 ---
 
 ## D-033 — Publication bleed: ⅛ inch (3.175 mm) per applicable edge, profile-owned, safe kept separate
