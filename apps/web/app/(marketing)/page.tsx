@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { composeHome } from '@/lib/marketplace/queries';
+import { composeHome, readCatalogue } from '@/lib/marketplace/queries';
 import { PublicationShelf } from '@/components/publication-shelf';
 import { SiteHeader } from '@/components/site-header';
 
@@ -23,7 +23,9 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   const beginHref = user ? '/studio' : '/sign-up';
 
-  const sections = await composeHome(supabase);
+  // D-032: an unreadable catalogue is not an empty one — say which it is.
+  const home = await readCatalogue(composeHome(supabase));
+  const sections = home.ok ? home.value : [];
 
   return (
     <main className="min-h-screen flex flex-col">
@@ -52,11 +54,18 @@ export default async function HomePage() {
               cards={section.cards}
             />
           ))
-        ) : (
+        ) : home.ok ? (
           <section>
             <p className="font-serif text-lede text-ink-soft max-w-measure">
               The first publications are being prepared. Work appears here as it
               is published.
+            </p>
+          </section>
+        ) : (
+          <section data-catalogue="unavailable">
+            <p className="font-serif text-lede text-ink-soft max-w-measure">
+              The publications are briefly unavailable. Please check back
+              shortly.
             </p>
           </section>
         )}

@@ -17,6 +17,68 @@ import { estimateProduction } from '@baxter/domain';
 import { productionMarginBps } from '@/lib/production/config';
 
 /**
+ * D-032 — the catalogue could not be read (database unreachable, paused,
+ * timing out, or the query itself rejected). Thrown instead of returning an
+ * empty list, so "Baxter has no published work" and "Baxter could not look"
+ * never render the same. Pages catch it with `readCatalogue()` and show a
+ * calm, brief notice; the failure itself is in the server log.
+ */
+export class CatalogueUnavailableError extends Error {
+  constructor(readonly query: string) {
+    super(`catalogue unavailable: ${query}`);
+    this.name = 'CatalogueUnavailableError';
+  }
+}
+
+interface QueryError {
+  code?: string;
+  message?: string;
+}
+
+/**
+ * Log a failed catalogue read. Only the query name and PostgREST's code and
+ * message go to the log — never connection details, keys, or request headers
+ * (PostgREST errors carry none of those).
+ */
+function logCatalogueFailure(query: string, error: QueryError, fatal: boolean) {
+  console.error('catalogue: query failed', {
+    query,
+    fatal,
+    code: error.code ?? null,
+    error: error.message ?? String(error),
+  });
+}
+
+/** The rows of a catalogue read, or CatalogueUnavailableError — never a silent []. */
+function rowsOrThrow<T>(
+  query: string,
+  res: { data: unknown; error: QueryError | null }
+): T[] {
+  if (res.error) {
+    logCatalogueFailure(query, res.error, true);
+    throw new CatalogueUnavailableError(query);
+  }
+  return (res.data as T[] | null) ?? [];
+}
+
+/**
+ * Run a catalogue read for a page. Healthy → `{ ok: true, value }` (an empty
+ * catalogue is a healthy, legitimate result). Unavailable → `{ ok: false }`
+ * so the page can say so plainly. Any other error is not ours to hide and
+ * propagates unchanged.
+ */
+export async function readCatalogue<T>(
+  read: Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false }> {
+  try {
+    return { ok: true, value: await read };
+  } catch (e) {
+    if (e instanceof CatalogueUnavailableError) return { ok: false };
+    throw e;
+  }
+}
+
+/**
  * A card's price is the retail a buyer pays — built from production (D-029),
  * not the creator's stored earnings figure. Null when the work can't yet be
  * priced (no page count or undeclared interior), in which case the card simply
@@ -99,23 +161,28 @@ async function toCards(
     .map((r) => r.cover_asset_id)
     .filter((v): v is string => !!v);
 
+  // Creators are required: without them every card is skipped below, which
+  // would turn a failed read into an empty shelf. So a failure here is fatal.
   const creatorById = new Map<string, { handle: string; name: string }>();
   {
-    const { data } = await db
-      .from('users')
-      .select('id, handle, display_name')
-      .in('id', creatorIds);
-    for (const u of data ?? [])
+    const users = rowsOrThrow<{ id: string; handle: string; display_name: string }>(
+      'creators',
+      await db.from('users').select('id, handle, display_name').in('id', creatorIds)
+    );
+    for (const u of users)
       creatorById.set(u.id, { handle: u.handle, name: u.display_name });
   }
 
   const coverExternalById = new Map<string, string>();
   const hashReady = Boolean(process.env.CLOUDFLARE_IMAGES_ACCOUNT_HASH);
   if (coverIds.length && hashReady) {
-    const { data } = await db
+    // Covers are not required: a card without one still renders and links.
+    // A failure degrades to cover-less cards, but is logged, not hidden.
+    const { data, error } = await db
       .from('assets')
       .select('id, external_id')
       .in('id', coverIds);
+    if (error) logCatalogueFailure('covers', error, false);
     for (const a of data ?? [])
       if (a.external_id) coverExternalById.set(a.id, a.external_id);
   }
@@ -149,14 +216,14 @@ export async function getEditorsPicks(
   db: SupabaseClient,
   limit = 6
 ): Promise<PublicationCard[]> {
-  const { data } = await db
+  const res = await db
     .from('publications')
     .select(CARD_COLUMNS)
     .eq('status', 'published')
     .not('editor_pick_at', 'is', null)
     .order('editor_pick_at', { ascending: false })
     .limit(limit);
-  return toCards(db, (data as PubRow[]) ?? []);
+  return toCards(db, rowsOrThrow<PubRow>('editors_picks', res));
 }
 
 /** New Releases — published, newest first. Honest recency, not "popular". */
@@ -164,13 +231,13 @@ export async function getNewReleases(
   db: SupabaseClient,
   limit = 12
 ): Promise<PublicationCard[]> {
-  const { data } = await db
+  const res = await db
     .from('publications')
     .select(CARD_COLUMNS)
     .eq('status', 'published')
     .order('published_at', { ascending: false })
     .limit(limit);
-  return toCards(db, (data as PubRow[]) ?? []);
+  return toCards(db, rowsOrThrow<PubRow>('new_releases', res));
 }
 
 /** All published works (browse), optionally within one category. */
@@ -184,8 +251,7 @@ export async function getAllPublished(
     .eq('status', 'published')
     .order('published_at', { ascending: false });
   if (opts.category) q = q.eq('category', opts.category);
-  const { data } = await q;
-  return toCards(db, (data as PubRow[]) ?? []);
+  return toCards(db, rowsOrThrow<PubRow>('all_published', await q));
 }
 
 /** Published works by one creator (their profile shelf), newest first. */
@@ -193,13 +259,13 @@ export async function getCreatorPublished(
   db: SupabaseClient,
   creatorId: string
 ): Promise<PublicationCard[]> {
-  const { data } = await db
+  const res = await db
     .from('publications')
     .select(CARD_COLUMNS)
     .eq('status', 'published')
     .eq('creator_id', creatorId)
     .order('published_at', { ascending: false });
-  return toCards(db, (data as PubRow[]) ?? []);
+  return toCards(db, rowsOrThrow<PubRow>('creator_published', res));
 }
 
 /**
