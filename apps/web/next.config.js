@@ -21,7 +21,7 @@ const nextConfig = {
   // mupdf is WASM-backed; keep it external so webpack doesn't try to bundle the
   // .wasm and instead loads it from node_modules at runtime.
   serverExternalPackages: ['mupdf'],
-  transpilePackages: ['@baxter/ui-tokens', '@baxter/domain', '@baxter/db'],
+  transpilePackages: ['@baxter/ui-tokens', '@baxter/domain'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'imagedelivery.net' },

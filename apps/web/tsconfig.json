@@ -16,7 +16,6 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"],
-      "@baxter/db": ["../../packages/db/src"],
       "@baxter/domain": ["../../packages/domain/src"],
       "@baxter/ui-tokens": ["../../packages/ui-tokens/src"]
     }
