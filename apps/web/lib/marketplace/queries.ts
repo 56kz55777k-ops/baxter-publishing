@@ -78,6 +78,38 @@ export async function readCatalogue<T>(
   }
 }
 
+/** The public fields of a creator's room — /[handle]. */
+export interface CreatorProfile {
+  id: string;
+  handle: string;
+  display_name: string;
+  bio: string | null;
+  created_at: string;
+}
+
+/**
+ * A creator's public profile, by handle. `null` means the read succeeded and
+ * no creator holds that handle — a genuine 404. A failed read throws
+ * CatalogueUnavailableError (D-032), so a database outage never renders as
+ * "this creator does not exist". Callers handle `~pending-` handles first;
+ * this function does not resolve them any differently.
+ */
+export async function getCreatorProfile(
+  db: SupabaseClient,
+  handle: string
+): Promise<CreatorProfile | null> {
+  const res = await db
+    .from('users')
+    .select('id, handle, display_name, bio, created_at')
+    .eq('handle', handle)
+    .maybeSingle();
+  if (res.error) {
+    logCatalogueFailure('creator_profile', res.error, true);
+    throw new CatalogueUnavailableError('creator_profile');
+  }
+  return (res.data as CreatorProfile | null) ?? null;
+}
+
 /**
  * A card's price is the retail a buyer pays — built from production (D-029),
  * not the creator's stored earnings figure. Null when the work can't yet be

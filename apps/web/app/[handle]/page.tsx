@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/follow-button';
 import { PublicationShelf } from '@/components/publication-shelf';
-import { getCreatorPublished, readCatalogue } from '@/lib/marketplace/queries';
+import {
+  getCreatorProfile,
+  getCreatorPublished,
+  readCatalogue,
+} from '@/lib/marketplace/queries';
 import { signOut } from '../(auth)/actions';
 
 /**
@@ -18,28 +23,68 @@ import { signOut } from '../(auth)/actions';
  *     hiding it.
  *
  * Handles starting with `~pending-` are never resolved publicly — they 404.
+ *
+ * D-032: a lookup that finds no creator is a 404; a lookup that FAILS is not.
+ * It renders a brief unavailable notice (and noindex metadata) that neither
+ * confirms nor denies the creator, so an outage never reads as "this creator
+ * does not exist". The failure itself is in the server log.
  */
+const NOT_FOUND_METADATA: Metadata = { title: 'Not found — Baxter' };
+const UNAVAILABLE_METADATA: Metadata = {
+  title: 'Briefly unavailable — Baxter',
+  robots: { index: false, follow: false },
+};
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ handle: string }>;
-}) {
+}): Promise<Metadata> {
   const { handle } = await params;
   const decoded = decodeURIComponent(handle);
-  if (decoded.startsWith('~pending-')) {
-    return { title: 'Not found — Baxter' };
-  }
+  if (decoded.startsWith('~pending-')) return NOT_FOUND_METADATA;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('users')
-    .select('display_name, bio')
-    .eq('handle', decoded)
-    .maybeSingle();
-  if (!data) return { title: 'Not found — Baxter' };
+  const lookup = await readCatalogue(getCreatorProfile(supabase, decoded));
+  if (!lookup.ok) return UNAVAILABLE_METADATA;
+  const profile = lookup.value;
+  if (!profile) return NOT_FOUND_METADATA;
   return {
-    title: `${data.display_name} — Baxter`,
-    description: data.bio ?? undefined,
+    title: `${profile.display_name} — Baxter`,
+    description: profile.bio ?? undefined,
   };
+}
+
+/** The room could not be read. Says so plainly; claims nothing about the creator. */
+function ProfileUnavailable() {
+  return (
+    <main className="min-h-screen px-gutter pt-16 pb-24">
+      <header className="pb-16">
+        <Link
+          href="/"
+          aria-label="Baxter — home"
+          className="font-shell text-[0.95rem] tracking-[0.18em] uppercase text-ink"
+        >
+          Baxter
+        </Link>
+      </header>
+      <article data-catalogue="unavailable" className="max-w-[34rem] pt-12">
+        <h1 className="font-serif text-h1 leading-[1.1] tracking-tight">
+          This page is briefly unavailable.
+        </h1>
+        <p className="text-ink-soft mt-8 prose-editorial">
+          Please check back shortly.
+        </p>
+        <div className="mt-12">
+          <Link
+            href="/"
+            className="font-shell text-[0.8125rem] tracking-[0.12em] uppercase text-ink border-b border-ink pb-1 hover:text-accent hover:border-accent transition-colors duration-400 ease-gentle"
+          >
+            Return home
+          </Link>
+        </div>
+      </article>
+    </main>
+  );
 }
 
 export default async function ProfilePage({
@@ -54,12 +99,10 @@ export default async function ProfilePage({
   if (handle.startsWith('~pending-')) notFound();
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from('users')
-    .select('id, handle, display_name, bio, created_at')
-    .eq('handle', handle)
-    .maybeSingle();
-
+  // D-032: "no such creator" (404) and "could not look" (unavailable) differ.
+  const lookup = await readCatalogue(getCreatorProfile(supabase, handle));
+  if (!lookup.ok) return <ProfileUnavailable />;
+  const profile = lookup.value;
   if (!profile) notFound();
 
   const {

@@ -22,6 +22,7 @@ import {
   CatalogueUnavailableError,
   composeHome,
   getAllPublished,
+  getCreatorProfile,
   getCreatorPublished,
   getEditorsPicks,
   getNewReleases,
@@ -37,7 +38,7 @@ function fakeDb(answers: Record<string, Answer>): SupabaseClient {
     from(table: string) {
       const answer = answers[table] ?? { data: [], error: null };
       const builder: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'not', 'order', 'limit', 'in'])
+      for (const m of ['select', 'eq', 'not', 'order', 'limit', 'in', 'maybeSingle'])
         builder[m] = () => builder;
       builder.then = (ok: (v: Answer) => unknown, ko?: (e: unknown) => unknown) =>
         Promise.resolve(answer).then(ok, ko);
@@ -159,5 +160,27 @@ describe('degraded but not empty', () => {
     const [card] = await getAllPublished(db);
     expect(card!.coverUrl).toContain('img1');
     expect(log).not.toHaveBeenCalled();
+  });
+});
+
+describe('creator profile lookup (the /[handle] room)', () => {
+  const PROFILE = { id: 'u1', handle: 'maker', display_name: 'A Maker', bio: null, created_at: '2026-03-01T00:00:00Z' };
+
+  it('a found creator → the row, nothing logged', async () => {
+    await expect(getCreatorProfile(fakeDb({ users: { data: PROFILE, error: null } }), 'maker')).resolves.toEqual(PROFILE);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('no such creator → null (a genuine 404), nothing logged', async () => {
+    await expect(getCreatorProfile(fakeDb({ users: { data: null, error: null } }), 'nobody')).resolves.toBeNull();
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('a failed lookup → CatalogueUnavailableError, never null', async () => {
+    const p = getCreatorProfile(fakeDb({ users: { data: null, error: OUTAGE } }), 'maker');
+    await expect(p).rejects.toBeInstanceOf(CatalogueUnavailableError);
+    await expect(p).rejects.toMatchObject({ query: 'creator_profile' });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0]![1]).toEqual({ query: 'creator_profile', fatal: true, code: 'PGRST002', error: OUTAGE.message });
   });
 });
