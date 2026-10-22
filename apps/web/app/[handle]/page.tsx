@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/follow-button';
 import { PublicationShelf } from '@/components/publication-shelf';
-import { getCreatorPublished } from '@/lib/marketplace/queries';
+import { getCreatorPublished, readCatalogue } from '@/lib/marketplace/queries';
 import { signOut } from '../(auth)/actions';
 
 /**
@@ -98,7 +98,9 @@ export default async function ProfilePage({
   });
 
   // The creator's published works (D-024 — this room belongs to them).
-  const publications = await getCreatorPublished(supabase, profile.id);
+  // D-032: an unreadable shelf is not an empty one — say which it is.
+  const shelf = await readCatalogue(getCreatorPublished(supabase, profile.id));
+  const publications = shelf.ok ? shelf.value : [];
 
   return (
     <main className="min-h-screen flex flex-col">
@@ -180,7 +182,15 @@ export default async function ProfilePage({
 
         <section className="py-20">
           <p className="metadata mb-10">Publications</p>
-          {publications.length > 0 ? (
+          {!shelf.ok ? (
+            <p
+              data-catalogue="unavailable"
+              className="font-serif text-body text-ink-faint max-w-measure"
+            >
+              This creator&rsquo;s publications are briefly unavailable. Please
+              check back shortly.
+            </p>
+          ) : publications.length > 0 ? (
             <PublicationShelf cards={publications} />
           ) : (
             <p className="font-serif text-body text-ink-faint max-w-measure">
