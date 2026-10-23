@@ -1,0 +1,331 @@
+{
+ "env": {
+  "os": "Ubuntu 24.04.5 LTS; kernel 6.18.44-fc-v153; x64",
+  "node": "v22.22.0",
+  "playwright": "@playwright/test 1.62.1",
+  "konva": {
+   "version": "10.3.0",
+   "lockIntegrity": "sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==",
+   "installedIntegrity": "sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==",
+   "files": {
+    "lib/shapes/Transformer.js": "e4c7c6396443dec1d02e78455afa379318d759293094661bbca37df6750095cf",
+    "lib/Util.js": "e7fc1e23f380464b1c112884f88b47162c48fe595289be71ccba6ab15eaf07ca",
+    "lib/Node.js": "413002812b225d7ac5f47d6dcd6a4417a6d9c22889c56fc1db815ea3fcd3d46a",
+    "lib/Stage.js": "0e7e29957f8e6da3b835fcf966a3f8be2b8d5d232adbd39999cd06ba2f1565c1",
+    "lib/Container.js": "eaebcbf0fd79e171a783a499bf5894cc38874545346c80f6d3ca09fa931e3cc0",
+    "lib/DragAndDrop.js": "69ec10870b3d37cfbe9f6a748b08234daaa33d377e460555f08e44a1e95e6c20",
+    "lib/index.js": "ae03639d2e3088f89408bf9c88504d5984508e78dda6c59649b1dbb3b9be5369",
+    "lib/_FullInternals.js": "d01884f081f0f6a382e89eb5155748e3e4f694aa0e426c75d4712bf07015b1d0",
+    "lib/_CoreInternals.js": "ab58023ad71b598ae990b030d06f454945237b8fede1a43c92c62082291c9697",
+    "lib/Core.js": "798308a7e5e010812a6d77d09322fcfab7eb748d8d217abc671bc9696e7da97e",
+    "lib/Global.js": "399ab6654f04c0cf76983371bbe03366b72c3e667a87eeb16a8594e7c91c9b33"
+   },
+   "served": "node_modules/konva/lib (ESM, the build the app resolves)"
+  },
+  "model": {
+   "file": "docs/evidence/slice-d-math-check.js",
+   "sha256": "17944ae3ad38d6ebea9023130cd4c5c20640a344118db8017a6544bbf3b64274",
+   "sharedSectionSha256": "989d1995fdcc9f901f7425e3397b655aa565989eb24bd8f1676db8785f24609f",
+   "sharedSectionLines": 269
+  },
+  "probeFiles": {
+   "probe.html": "2ecc62d040973dfa2af72d779448f928787cc09e7e4760a630601445391524fa",
+   "probe-page.js": "dc62b73565d99d68fe123c9ce3844f1f8317d01303f56e7dd99a3b7aa02267ae",
+   "model.mjs": "90a27d466eda2d18904f305708800648e8a3295419354ef525f66ea8c98913e7",
+   "cases.mjs": "14267c38deb985e1984115a92c250c72114ad41373e59d8f6964ffb8504db2b7",
+   "analyse.mjs": "ba50a611175c9ac308f8a7ca7fd04c9d634d249cc7dbb2472cef2943f221fb60",
+   "report.mjs": "3d42b9e90cd63e22e900f1deaaf723ca6d77f956187845f4becebe4b55364ae2",
+   "run-probe.mjs": "d4b01379465e2421e9ce5a604f19163b5300d361715586a7f0abd53ba63877ba"
+  },
+  "negativeControl": "noClamp"
+ },
+ "browsers": {
+  "chromium": {
+   "name": "chromium",
+   "cases": [
+    {
+     "id": "E1",
+     "title": "ratio, bottom-right, crosses x only (pointer far below)",
+     "kind": "real",
+     "group": "E",
+     "status": "FAIL",
+     "failures": [
+      "g0 move 219 (proceed, pointer 358,544): returned anchor target differs from the model by 0.1560000000000059 px | clamp flag browser true model false | Konva raw box differs from the port by 0.011016310125626205 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.83406239240972,122.87554679430728] | Konva tested extents differ from the port",
+      "g0 move 220 (proceed, pointer 357,544): returned anchor target differs from the model by 1.156000000000006 px | clamp flag browser true model false | Konva raw box differs from the port by 0.0793924309601266 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.76568627157522,122.82426470368141] | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.17 x 36.13]",
+      "g0 move 221 (proceed, pointer 356,544): returned anchor target differs from the model by 2.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.06799999999998363 px | Konva raw box differs from the port by 0.1438875034484397 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.7011911990869,122.77589339931515] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.06800000000001205 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.15 x 36.11]",
+      "g0 move 222 (proceed, pointer 355,544): returned anchor target differs from the model by 3.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.1360000000000241 px | Konva raw box differs from the port by 0.20449693871978525 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.64058176381556,122.73043632286165] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.1360000000000241 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.13 x 36.1]",
+      "g0 move 223 (proceed, pointer 354,544): returned anchor target differs from the model by 4.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.20400000000000773 px | Konva raw box differs from the port by 0.26121641777328364 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.58386228476206,122.68789671357155] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.20400000000000773 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.11 x 36.08]",
+      "g0 move 224 (proceed, pointer 353,544): returned anchor target differs from the model by 5.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.2720000000000482 px | Konva raw box differs from the port by 0.31404189300488383 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.53103680953046,122.64827760714783] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.2720000000000198 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.1 x 36.08]",
+      "g0 move 225 (proceed, pointer 352,544): returned anchor target differs from the model by 6.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.30600000000004 px | Konva raw box differs from the port by 0.3629695896418923 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.48210911289345,122.61158183467009] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.3060000000000116 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.08 x 36.06]",
+      "g0 move 226 (proceed, pointer 351,544): returned anchor target differs from the model by 7.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.37400000000002365 px | Konva raw box differs from the port by 0.40799600708336925 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.43708269545198,122.57781202158895] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.37400000000002365 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.07 x 36.05]",
+      "g0 move 227 (proceed, pointer 350,544): returned anchor target differs from the model by 8.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.40800000000001546 px | Konva raw box differs from the port by 0.44911792014633534 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.395960782389,122.54697058679173] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.40800000000001546 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.06 x 36.05]",
+      "g0 move 228 (proceed, pointer 349,544): returned anchor target differs from the model by 9.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.4420000000000073 px | Konva raw box differs from the port by 0.48633238021565717 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.3587463223197,122.51905974173977] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.4420000000000073 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.05 x 36.04]",
+      "g0 move 229 (proceed, pointer 348,544): returned anchor target differs from the model by 10.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.4759999999999991 px | Konva raw box differs from the port by 0.519636716297299 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.32544198623805,122.4940814896785] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.4760000000000275 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.04 x 36.03]",
+      "g0 move 230 (proceed, pointer 347,544): returned anchor target differs from the model by 11.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.5099999999999909 px | Konva raw box differs from the port by 0.5490285359743439 px: [340,340,163.84507870253535,122.88380902690149] vs [340,340,163.296050166561,122.47203762492073] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.5100000000000193 | Konva tested extents differ from the port | bounded box browser [100, 100, 48.19 x 36.14] model [100, 100, 48.03 x 36.02]",
+      "... and 279 more"
+     ],
+     "failureCount": 291,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 511 sent = 511 received (coordinates and modifiers)",
+      "path: 408 measured moves; freezes 0, renames 0, clamped 173, Konva [-1,1) skips 0, Konva unchanged-anchor returns 0, segments 1, floor violations 0, reference violations 0, out/back mismatches 0, max edge jump 0.13 mm; start [100, 100, 57.69 x 43.27] -> back [100, 100, 57.69 x 43.27]; end anchor bottom-right"
+     ],
+     "metrics": {
+      "moves": 510,
+      "pending": 2,
+      "unchanged": 0,
+      "skip": 0,
+      "proceed": 508,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 173,
+      "maxTarget": 86.156,
+      "maxRaw": 327.04703947507016,
+      "maxAnchor": 247.31599999999997,
+      "maxRect": 5.684341886080802e-14,
+      "maxCompare": 163.2,
+      "compareN": 508,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 0,
+      "twinChecked": 508,
+      "diffs": 2882,
+      "minClampExtent": 13.633999999999999,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {
+      "path": {
+       "freezes": 0,
+       "renames": 0,
+       "clamps": 173,
+       "skips": 0,
+       "unchanged": 0,
+       "segs": 1,
+       "floorViol": 0,
+       "refViol": 0,
+       "maxJump": 0.13,
+       "jumpAt": {
+        "pointer": [
+         475,
+         544
+        ],
+        "from": {
+         "x": 10000,
+         "y": 10000,
+         "w": 5769,
+         "h": 4327
+        },
+        "to": {
+         "x": 10000,
+         "y": 10000,
+         "w": 5756,
+         "h": 4317
+        }
+       },
+       "runC2": null,
+       "maxRunCentreErr": 0,
+       "minByW": {
+        "x": 10000,
+        "y": 10000,
+        "w": 4819,
+        "h": 3614
+       },
+       "minByH": {
+        "x": 10000,
+        "y": 10000,
+        "w": 4819,
+        "h": 3614
+       },
+       "returnMismatch": 0,
+       "start": {
+        "x": 10000,
+        "y": 10000,
+        "w": 5769,
+        "h": 4327
+       },
+       "final": {
+        "x": 10000,
+        "y": 10000,
+        "w": 5769,
+        "h": 4327
+       },
+       "measuredMoves": 408,
+       "anchorEnd": "bottom-right"
+      }
+     },
+     "gestures": 1
+    },
+    {
+     "id": "E3",
+     "title": "ratio, bottom-right, crosses both (diagonal through the fixed corner)",
+     "kind": "real",
+     "group": "E",
+     "status": "FAIL",
+     "failures": [
+      "g0 move 123 (proceed, pointer 358,354): returned anchor target differs from the model by 0.1560000000000059 px | clamp flag browser true model false | Konva raw box differs from the port by 0.09867119338464647 px: [340,340,18.341477994970855,13.756108496228142] vs [340,340,18.24280680158621,13.682105101189654] | Konva tested extents differ from the port | bounded box browser [100, 100, 5.39 x 4.04] model [100, 100, 5.37 x 4.03]",
+      "g0 move 124 (proceed, pointer 357,353): returned anchor target differs from the model by 1.156000000000006 px | clamp flag browser true model false | Konva anchor position (oldAbs) differs from the model box corner by 0.06800000000004047 px | Konva raw box differs from the port by 1.0434156112341775 px: [340,340,18.164163258460334,13.62312244384525] vs [340,340,17.120747647226157,12.840560735419617] | boundBoxFunc oldBox differs from the model's current box (absolute px) by 0.06800000000002271 | Konva tested extents differ from the port",
+      "g0 move 125 (unchanged, pointer 356,352): returned anchor target differs from the model by 2.156000000000006 px | clamp flag browser true model false",
+      "g0 move 126 (unchanged, pointer 355,351): returned anchor target differs from the model by 3.156000000000006 px | clamp flag browser true model false",
+      "g0 move 127 (unchanged, pointer 354,351): returned anchor target differs from the model by 4.156000000000006 px | clamp flag browser true model false",
+      "g0 move 128 (unchanged, pointer 353,350): returned anchor target differs from the model by 5.156000000000006 px | clamp flag browser true model false",
+      "g0 move 129 (unchanged, pointer 352,349): returned anchor target differs from the model by 6.156000000000006 px | clamp flag browser true model false",
+      "g0 move 130 (unchanged, pointer 351,348): returned anchor target differs from the model by 7.156000000000006 px | clamp flag browser true model false",
+      "g0 move 131 (unchanged, pointer 350,348): returned anchor target differs from the model by 8.156000000000006 px | clamp flag browser true model false",
+      "g0 move 132 (unchanged, pointer 349,347): returned anchor target differs from the model by 9.156000000000006 px | clamp flag browser true model false",
+      "g0 move 133 (unchanged, pointer 348,346): returned anchor target differs from the model by 10.156000000000006 px | clamp flag browser true model false",
+      "g0 move 134 (unchanged, pointer 347,345): returned anchor target differs from the model by 11.156000000000006 px | clamp flag browser true model false",
+      "... and 163 more"
+     ],
+     "failureCount": 175,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 415 sent = 415 received (coordinates and modifiers)",
+      "path: 408 measured moves; freezes 0, renames 0, clamped 173, Konva [-1,1) skips 0, Konva unchanged-anchor returns 170, segments 1, floor violations 0, reference violations 0, out/back mismatches 0, max edge jump 0.33 mm; start [100, 100, 40 x 30] -> back [100, 100, 40 x 30]; end anchor bottom-right"
+     ],
+     "metrics": {
+      "moves": 414,
+      "pending": 2,
+      "unchanged": 170,
+      "skip": 0,
+      "proceed": 242,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 173,
+      "maxTarget": 86.156,
+      "maxRaw": 1.0434156112341775,
+      "maxAnchor": 0.06800000000004047,
+      "maxRect": 2.842170943040401e-14,
+      "maxCompare": 0,
+      "compareN": 412,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 170,
+      "twinChecked": 412,
+      "diffs": 504,
+      "minClampExtent": 13.633999999999999,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {
+      "path": {
+       "freezes": 0,
+       "renames": 0,
+       "clamps": 173,
+       "skips": 0,
+       "unchanged": 170,
+       "segs": 1,
+       "floorViol": 0,
+       "refViol": 0,
+       "maxJump": 0.33,
+       "jumpAt": {
+        "pointer": [
+         475,
+         441
+        ],
+        "from": {
+         "x": 10000,
+         "y": 10000,
+         "w": 4000,
+         "h": 3000
+        },
+        "to": {
+         "x": 10000,
+         "y": 10000,
+         "w": 3967,
+         "h": 2975
+        }
+       },
+       "runC2": null,
+       "maxRunCentreErr": 0,
+       "minByW": {
+        "x": 10000,
+        "y": 10000,
+        "w": 534,
+        "h": 401
+       },
+       "minByH": {
+        "x": 10000,
+        "y": 10000,
+        "w": 534,
+        "h": 401
+       },
+       "returnMismatch": 0,
+       "start": {
+        "x": 10000,
+        "y": 10000,
+        "w": 4000,
+        "h": 3000
+       },
+       "final": {
+        "x": 10000,
+        "y": 10000,
+        "w": 4000,
+        "h": 3000
+       },
+       "measuredMoves": 408,
+       "anchorEnd": "bottom-right"
+      }
+     },
+     "gestures": 1
+    },
+    {
+     "id": "E12",
+     "title": "one fast move from (150, 140) mm past the fixed corner to (60, 50) mm, then (61, 51) mm",
+     "kind": "real",
+     "group": "E",
+     "status": "FAIL",
+     "failures": [
+      "g0 move 34 (proceed, pointer 204,170): returned anchor target differs from the model by 183.63400000000001 px | clamp flag browser true model false | anchor at boundBoxFunc browser bottom-right model top-left | Konva raw box differs from the port by 192.32914251663385 px: [340,340,18.164163258460334,13.62312244384525] vs [340,340,-174.1649792581735,-130.6237344436301] | Konva tested extents differ from the port | bounded box browser [100, 100, 5.34 x 4.01] model [100, 100, 51.22 x 38.42] | frozen browser false model true",
+      "g0 move 35 (unchanged, pointer 207,173): returned anchor target differs from the model by 180.63400000000001 px | clamp flag browser true model false | segment key browser bottom-right|true|false model top-left|true|false | segment references browser [1,1,10000,10000,null,null] model [-1,-1,15122,13842,null,null] | Konva anchor position (oldAbs) differs from the model box corner by 18.156000000000006 px | Konva comparePoint differs from our fixed corner by 174.14800000000002 px | Konva returned early (anchor unchanged) but the port would have produced [50.59, 62.95, 100.63 x 75.47] instead of holding [100, 100, 51.22 x 38.42] | twin (evidence gestureMove) on an unchanged move gave [50.59, 62.95, 100.63 x 75.47]"
+     ],
+     "failureCount": 2,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 37 sent = 37 received (coordinates and modifiers)",
+      "E12: fast move -> proceed [100, 100, 5.34 x 4.01] anchor bottom-right; clamped true"
+     ],
+     "metrics": {
+      "moves": 36,
+      "pending": 2,
+      "unchanged": 1,
+      "skip": 0,
+      "proceed": 33,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 2,
+      "maxTarget": 183.63400000000001,
+      "maxRaw": 192.32914251663385,
+      "maxAnchor": 18.156000000000006,
+      "maxRect": 5.684341886080802e-14,
+      "maxCompare": 174.14800000000002,
+      "compareN": 34,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 1,
+      "twinChecked": 34,
+      "diffs": 15,
+      "minClampExtent": 13.633999999999999,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {},
+     "gestures": 1
+    }
+   ],
+   "launchError": null,
+   "version": "151.0.7922.34",
+   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+   "pageKonvaVersion": "10.3.0",
+   "viewport": {
+    "innerWidth": 1000,
+    "innerHeight": 800,
+    "devicePixelRatio": 1
+   },
+   "pageErrors": []
+  }
+ }
+}

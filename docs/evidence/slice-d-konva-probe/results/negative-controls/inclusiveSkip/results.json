@@ -1,0 +1,241 @@
+{
+ "env": {
+  "os": "Ubuntu 24.04.5 LTS; kernel 6.18.44-fc-v153; x64",
+  "node": "v22.22.0",
+  "playwright": "@playwright/test 1.62.1",
+  "konva": {
+   "version": "10.3.0",
+   "lockIntegrity": "sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==",
+   "installedIntegrity": "sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==",
+   "files": {
+    "lib/shapes/Transformer.js": "e4c7c6396443dec1d02e78455afa379318d759293094661bbca37df6750095cf",
+    "lib/Util.js": "e7fc1e23f380464b1c112884f88b47162c48fe595289be71ccba6ab15eaf07ca",
+    "lib/Node.js": "413002812b225d7ac5f47d6dcd6a4417a6d9c22889c56fc1db815ea3fcd3d46a",
+    "lib/Stage.js": "0e7e29957f8e6da3b835fcf966a3f8be2b8d5d232adbd39999cd06ba2f1565c1",
+    "lib/Container.js": "eaebcbf0fd79e171a783a499bf5894cc38874545346c80f6d3ca09fa931e3cc0",
+    "lib/DragAndDrop.js": "69ec10870b3d37cfbe9f6a748b08234daaa33d377e460555f08e44a1e95e6c20",
+    "lib/index.js": "ae03639d2e3088f89408bf9c88504d5984508e78dda6c59649b1dbb3b9be5369",
+    "lib/_FullInternals.js": "d01884f081f0f6a382e89eb5155748e3e4f694aa0e426c75d4712bf07015b1d0",
+    "lib/_CoreInternals.js": "ab58023ad71b598ae990b030d06f454945237b8fede1a43c92c62082291c9697",
+    "lib/Core.js": "798308a7e5e010812a6d77d09322fcfab7eb748d8d217abc671bc9696e7da97e",
+    "lib/Global.js": "399ab6654f04c0cf76983371bbe03366b72c3e667a87eeb16a8594e7c91c9b33"
+   },
+   "served": "node_modules/konva/lib (ESM, the build the app resolves)"
+  },
+  "model": {
+   "file": "docs/evidence/slice-d-math-check.js",
+   "sha256": "17944ae3ad38d6ebea9023130cd4c5c20640a344118db8017a6544bbf3b64274",
+   "sharedSectionSha256": "989d1995fdcc9f901f7425e3397b655aa565989eb24bd8f1676db8785f24609f",
+   "sharedSectionLines": 269
+  },
+  "probeFiles": {
+   "probe.html": "2ecc62d040973dfa2af72d779448f928787cc09e7e4760a630601445391524fa",
+   "probe-page.js": "dc62b73565d99d68fe123c9ce3844f1f8317d01303f56e7dd99a3b7aa02267ae",
+   "model.mjs": "90a27d466eda2d18904f305708800648e8a3295419354ef525f66ea8c98913e7",
+   "cases.mjs": "14267c38deb985e1984115a92c250c72114ad41373e59d8f6964ffb8504db2b7",
+   "analyse.mjs": "ba50a611175c9ac308f8a7ca7fd04c9d634d249cc7dbb2472cef2943f221fb60",
+   "report.mjs": "3d42b9e90cd63e22e900f1deaaf723ca6d77f956187845f4becebe4b55364ae2",
+   "run-probe.mjs": "d4b01379465e2421e9ce5a604f19163b5300d361715586a7f0abd53ba63877ba"
+  },
+  "negativeControl": "inclusiveSkip"
+ },
+ "browsers": {
+  "chromium": {
+   "name": "chromium",
+   "cases": [
+    {
+     "id": "H-w0",
+     "title": "width = 0 px (middle-right)",
+     "kind": "real",
+     "group": "H",
+     "status": "PASS",
+     "failures": [],
+     "failureCount": 0,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 2 sent = 2 received (coordinates and modifiers)",
+      "boundary width 0: pointer delivered (125, 144); Konva tested exactly 0; skip"
+     ],
+     "metrics": {
+      "moves": 1,
+      "pending": 0,
+      "unchanged": 0,
+      "skip": 1,
+      "proceed": 0,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 0,
+      "maxTarget": 0,
+      "maxRaw": 0,
+      "maxAnchor": 0,
+      "maxRect": 0,
+      "maxCompare": null,
+      "compareN": 0,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 0,
+      "twinChecked": 1,
+      "diffs": 0,
+      "minClampExtent": null,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {
+      "boundary": {
+       "requested": 0,
+       "label": "0",
+       "delivered": [
+        125,
+        144
+       ],
+       "konvaTested": 0,
+       "cls": "skip",
+       "anchorAfter": "middle-right",
+       "extent": null,
+       "box": null,
+       "frozen": null
+      }
+     },
+     "gestures": 1
+    },
+    {
+     "id": "H-w+1",
+     "title": "width = +1 px (middle-right)",
+     "kind": "real",
+     "group": "H",
+     "status": "FAIL",
+     "failures": [
+      "g0 move 0 (proceed, pointer 129,147): model (port) skips (extent in [-1, 1) px), browser proceed"
+     ],
+     "failureCount": 1,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 2 sent = 2 received (coordinates and modifiers)",
+      "boundary width +1: pointer delivered (129, 147); Konva tested exactly 1; proceed, anchor middle-right, bounded [100, 100, 4 x 30]"
+     ],
+     "metrics": {
+      "moves": 1,
+      "pending": 0,
+      "unchanged": 0,
+      "skip": 1,
+      "proceed": 0,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 0,
+      "maxTarget": 0,
+      "maxRaw": 0,
+      "maxAnchor": 0,
+      "maxRect": 0,
+      "maxCompare": null,
+      "compareN": 0,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 0,
+      "twinChecked": 1,
+      "diffs": 1,
+      "minClampExtent": null,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {
+      "boundary": {
+       "requested": 1,
+       "label": "+1",
+       "delivered": [
+        129,
+        147
+       ],
+       "konvaTested": 1,
+       "cls": "proceed",
+       "anchorAfter": "middle-right",
+       "extent": 1,
+       "box": [
+        10000,
+        10000,
+        400,
+        3000
+       ],
+       "frozen": false
+      }
+     },
+     "gestures": 1
+    },
+    {
+     "id": "H-h+1",
+     "title": "height = +1 px (bottom-center)",
+     "kind": "real",
+     "group": "H",
+     "status": "FAIL",
+     "failures": [
+      "g0 move 0 (proceed, pointer 154,129): model (port) skips (extent in [-1, 1) px), browser proceed"
+     ],
+     "failureCount": 1,
+     "notExecuted": null,
+     "info": [
+      "delivery exact: 2 sent = 2 received (coordinates and modifiers)",
+      "boundary height +1: pointer delivered (154, 129); Konva tested exactly 1; proceed, anchor bottom-center, bounded [100, 100, 40 x 4]"
+     ],
+     "metrics": {
+      "moves": 1,
+      "pending": 0,
+      "unchanged": 0,
+      "skip": 1,
+      "proceed": 0,
+      "frozen": 0,
+      "renamed": 0,
+      "clamped": 0,
+      "maxTarget": 0,
+      "maxRaw": 0,
+      "maxAnchor": 0,
+      "maxRect": 0,
+      "maxCompare": null,
+      "compareN": 0,
+      "maxCentre": null,
+      "centreN": 0,
+      "unchangedPredictedAgree": 0,
+      "unchangedPredictedDisagree": 0,
+      "twinChecked": 1,
+      "diffs": 1,
+      "minClampExtent": null,
+      "maxMirror": null,
+      "mirrorN": 0
+     },
+     "extra": {
+      "boundary": {
+       "requested": 1,
+       "label": "+1",
+       "delivered": [
+        154,
+        129
+       ],
+       "konvaTested": 1,
+       "cls": "proceed",
+       "anchorAfter": "bottom-center",
+       "extent": 1,
+       "box": [
+        10000,
+        10000,
+        4000,
+        400
+       ],
+       "frozen": false
+      }
+     },
+     "gestures": 1
+    }
+   ],
+   "launchError": null,
+   "version": "151.0.7922.34",
+   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+   "pageKonvaVersion": "10.3.0",
+   "viewport": {
+    "innerWidth": 1000,
+    "innerHeight": 800,
+    "devicePixelRatio": 1
+   },
+   "pageErrors": []
+  }
+ }
+}
