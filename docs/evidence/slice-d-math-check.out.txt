@@ -87,7 +87,7 @@ E. crossing-and-return paths (start 40 x 30 at (100,100) mm, 100% zoom, no snap 
   E13 Alt held, 6 centre crossings, start centre 105.005 (r2: centre re-captured per segment): segments 7, renames 6, max centre error vs the first centre 0.010 mm, final [98, 100, 14 x 20]
   E13 Alt held, 6 centre crossings, start centre 105.005 (r3: centre carried): segments 7, renames 6, max centre error vs the first centre 0.005 mm, final [98.01, 100, 13.99 x 20]
 F. seeded random gestures through the Konva port
-  r3 (with the ratio anchor clamp): 4000 gestures, 312818 bounded moves, 47126 segments, 530 Konva 1 px early returns, 6652 freezes, 6652 renames, 6322 clamped moves
+  r3 (with the ratio anchor clamp): 4000 gestures, 312818 bounded moves, 47126 segments, 530 Konva [-1, 1) px early returns, 6652 freezes, 6652 renames, 6322 clamped moves
       one-edge ratio: freezes 0, renames 0, Konva 1 px skips 0
       non-integer outputs 0 | floor violations 0 | undersized shrink 0 | fixed-edge changes within a segment 0
       max centre error per segment 0.005 mm, per continuous Alt hold 0.005 mm | max ratio error 0.005000 mm | max snapped-edge vs guide 0.005 mm
@@ -97,4 +97,19 @@ F. seeded random gestures through the Konva port
 G. r1 shadow runs
   r1: centred moves 148146, centre-drift > 0.005 mm in 115285 (max drift 0.140 mm)
       unsnapped ratio moves 40000, dependent error > 0.005 mm in 5289 (max 0.009847 mm)
+H. Konva early-return boundary [-1, 1) px (node 40 x 30 px at (100, 100) px; the other dimension stays 30 or 40 px)
+  width (middle-right): -1 - 2^-20: proceeds (width -1.0000009536743164, renamed middle-left) | -1: skip | -1 + 2^-20: skip | 0: skip | +1 - 2^-20: skip | +1: proceeds (width 1) | +1 + 2^-20: proceeds (width 1.0000009536743164)
+  height (bottom-center): -1 - 2^-20: proceeds (height -1.0000009536743164, renamed top-center) | -1: skip | -1 + 2^-20: skip | 0: skip | +1 - 2^-20: skip | +1: proceeds (height 1) | +1 + 2^-20: proceeds (height 1.0000009536743164)
+  through the session (40 x 30 mm box at 1 px/mm, right handle, raw width = pointer offset from the left edge):
+     -1 - 2^-20 px: freeze + rename (anchor middle-left)
+     -1 px: Konva skip, prev held
+     0 px: Konva skip, prev held
+     +1 - 2^-20 px: Konva skip, prev held
+     +1 px: bounded [100, 100, 4 x 30]
+     +1 + 2^-20 px: bounded [100, 100, 4 x 30]
+I. write-outcome protocol model (late commits after teardown; exhaustive interleavings)
+  naive (r3 §8.5 outcome handling: a write with no response treated as not committed; no fence; same id ownership and consistency checks): 360 interleavings -> clean 276, recovery pending 72, stopped 12; FALSE "clean" with residue after late commits 64; journal cleared with residue 64; non-owned objects deleted 0; max cleanup writes 1
+     e.g. S2_nothingAtLoad, late write after-load, human none: reported clean, residue Z
+     e.g. S2_nothingAtLoad, late write after-load, human none, first cleanup response lost: reported clean, residue Z
+  r4 (outcomes tracked; unknown -> fence by a confirmed cleanup write; recorded ids only): 360 interleavings -> clean 144, recovery pending 216, stopped 0; FALSE "clean" with residue after late commits 0; journal cleared with residue 0; non-owned objects deleted 0; max cleanup writes 3
 RESULT: all checks passed

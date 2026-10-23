@@ -2,7 +2,9 @@
 // not linted (docs/ is outside the npm workspaces), not run by CI. Run: node docs/evidence/slice-d-math-check.js
 // r2 introduced the integer-hundredths rules; r3 (this version) replaces the simplified Konva model with a
 // line-by-line port of Konva 10.3.0's Transformer anchor logic (ratio reverse per axis, centred mirroring,
-// 1 px early return, anchor rename), adds crossing-and-return cases, and checks the r3 ratio anchor clamp.
+// [-1, 1) px early return, anchor rename), adds crossing-and-return cases, and checks the r3 ratio anchor clamp.
+// r4 corrects the early-return interval to Konva's exact [-1, 1) (Util._inRange is `left <= val && val < right`),
+// adds boundary cases (section H), and adds a model of the production write-outcome protocol (section I).
 // This is MATHEMATICAL-MODEL evidence. Behaviour in real browsers is verified only by the plan's stage 1 probe.
 'use strict';
 
@@ -170,7 +172,7 @@ function bound(s, raw, anchor, ratioFlag, alt, anchorMm) {
 }
 
 // ---------- Konva 10.3.0 Transformer: line-by-line port of _handleMouseMove (anchor branches + centred
-// mirroring) and the start of _fitNodesInto (1 px early return, anchor rename), in absolute stage px.
+// mirroring) and the start of _fitNodesInto ([-1, 1) px early return, anchor rename), in absolute stage px.
 // Source: node_modules/konva/lib/shapes/Transformer.js, _handleMouseMove lines ~506-688, _fitNodesInto ~713-784.
 const CORNERS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
 function konvaStep(nodePx, anchor, anchorTargetPx, keepProportion, centeredScaling, sin, cos) {
@@ -204,8 +206,11 @@ function konvaStep(nodePx, anchor, anchorTargetPx, keepProportion, centeredScali
     tl.x += botOffX; tl.y += botOffY;
   }
   const raw = { x: nodePx.x + tl.x, y: nodePx.y + tl.y, w: br.x - tl.x, h: br.y - tl.y };
-  // _fitNodesInto: Util._inRange(width, -padding*2 - 1, 1) -> this.update(); return  (padding 0)
-  if ((raw.w >= -1 && raw.w <= 1) || (raw.h >= -1 && raw.h <= 1)) return { skip: true, anchor };
+  // _fitNodesInto: if (Util._inRange(width, -padding*2 - 1, 1)) { this.update(); return; } and the same for height
+  // (padding 0). Util._inRange(val, left, right) is `left <= val && val < right` (lib/Util.js), so the skip
+  // interval is [-1, 1): exactly -1 px skips, exactly +1 px proceeds. (r4: r3 used the inclusive [-1, 1].)
+  const inRange = (val, left, right) => left <= val && val < right;
+  if (inRange(raw.w, -1, 1) || inRange(raw.h, -1, 1)) return { skip: true, anchor };
   let renamed = anchor;
   if (raw.w < 0) renamed = renamed.includes('left') ? renamed.replace('left', 'right') : renamed.replace('right', 'left');
   if (raw.h < 0) renamed = renamed.includes('top') ? renamed.replace('top', 'bottom') : renamed.replace('bottom', 'top');
@@ -662,7 +667,7 @@ log('F. seeded random gestures through the Konva port');
   CARRY_CENTRE = false;
   const s2 = runAll(false);
   CARRY_CENTRE = true;
-  log(`  r3 (with the ratio anchor clamp): ${s3.gestures} gestures, ${s3.moves} bounded moves, ${s3.segs} segments, ${s3.skips} Konva 1 px early returns, ${s3.freezes} freezes, ${s3.renames} renames, ${s3.clamped} clamped moves`);
+  log(`  r3 (with the ratio anchor clamp): ${s3.gestures} gestures, ${s3.moves} bounded moves, ${s3.segs} segments, ${s3.skips} Konva [-1, 1) px early returns, ${s3.freezes} freezes, ${s3.renames} renames, ${s3.clamped} clamped moves`);
   log(`      one-edge ratio: freezes ${s3.oneEdgeRatioFreezes}, renames ${s3.oneEdgeRatioRenames}, Konva 1 px skips ${s3.oneEdgeRatioSkips}`);
   log(`      non-integer outputs ${s3.nonInt} | floor violations ${s3.floorViol} | undersized shrink ${s3.undersizedShrink} | fixed-edge changes within a segment ${s3.fixedViol}`);
   log(`      max centre error per segment ${s3.maxCentreErr} mm, per continuous Alt hold ${s3.maxRunCentreErr} mm | max ratio error ${s3.maxRatioErr.toFixed(6)} mm | max snapped-edge vs guide ${s3.maxGuideErr} mm`);
@@ -710,6 +715,133 @@ log('G. r1 shadow runs');
   }
   log(`  r1: centred moves ${r1.centredMoves}, centre-drift > 0.005 mm in ${r1.centreDriftViol} (max drift ${r1.maxDrift.toFixed(3)} mm)`);
   log(`      unsnapped ratio moves ${r1.ratioMoves}, dependent error > 0.005 mm in ${r1.ratioViol} (max ${r1.maxRatioErr.toFixed(6)} mm)`);
+}
+
+// ===== H. Konva's early-return boundary (r4): Util._inRange(v, -1, 1) is `-1 <= v && v < 1` =====
+log('H. Konva early-return boundary [-1, 1) px (node 40 x 30 px at (100, 100) px; the other dimension stays 30 or 40 px)');
+{
+  const node = { x: 100, y: 100, w: 40, h: 30 };
+  const e = Math.pow(2, -20); // exactly representable neighbour offset (~9.5e-7 px)
+  const vals = [[-1 - e, '-1 - 2^-20'], [-1, '-1'], [-1 + e, '-1 + 2^-20'], [0, '0'], [1 - e, '+1 - 2^-20'], [1, '+1'], [1 + e, '+1 + 2^-20']];
+  const expectSkip = (v) => -1 <= v && v < 1;
+  for (const [dim, anchor] of [['width', 'middle-right'], ['height', 'bottom-center']]) {
+    const row = [];
+    for (const [v, label] of vals) {
+      const target = dim === 'width' ? { x: node.x + v, y: node.y + 15 } : { x: node.x + 20, y: node.y + v };
+      const k = konvaStep(node, anchor, target, false, false, 0.6, 0.8);
+      const got = k.skip ? 'skip' : `proceeds (${dim} ${dim === 'width' ? k.raw.w : k.raw.h}${k.renamed ? ', renamed ' + k.anchor : ''})`;
+      row.push(`${label}: ${got}`);
+      check(Boolean(k.skip) === expectSkip(v), `H ${dim} ${label}`);
+      if (!k.skip) check(dim === 'width' ? k.raw.h === 30 : k.raw.w === 40, `H ${dim} ${label} other dimension untouched`);
+    }
+    log(`  ${dim} (${anchor}): ` + row.join(' | '));
+  }
+  // downstream through the session (100% = 1 px/mm here so pointer px are exact): skip holds prev; +1 px reaches boundResize
+  const V1 = { scale: 1, vx: 0, vy: 0 };
+  const cases = [[-1 - e, 'freeze + rename'], [-1, 'Konva skip, prev held'], [0, 'Konva skip, prev held'], [1 - e, 'Konva skip, prev held'], [1, 'bounded (floor 4 mm)'], [1 + e, 'bounded (floor 4 mm)']];
+  const row = [];
+  for (const [v, expect] of cases) {
+    const G = newGesture({ x: 10000, y: 10000, w: 4000, h: 3000 }, noTargets, 'middle-right', V1);
+    const r = gestureMove(G, { x: 100 + v, y: 115 }, false, false, true);
+    const got = r.skipped ? 'Konva skip, prev held' : r.frozen ? `freeze + rename (anchor ${G.anchor})` : `bounded ${boxStr(r.box)}`;
+    row.push(`${v === 1 ? '+1' : v === -1 ? '-1' : v === 0 ? '0' : v > 0 ? (v > 1 ? '+1 + 2^-20' : '+1 - 2^-20') : '-1 - 2^-20'} px: ${got}`);
+    if (expect.startsWith('Konva skip')) check(r.skipped && r.box.w === 4000 && r.box.x === 10000, `H session ${v}`);
+    else if (expect.startsWith('bounded')) check(!r.skipped && !r.frozen && r.box.x === 10000 && r.box.w === 400, `H session ${v}`);
+    else check(!r.skipped && r.frozen && G.anchor === 'middle-left' && r.box.w === 4000, `H session ${v}`);
+  }
+  log('  through the session (40 x 30 mm box at 1 px/mm, right handle, raw width = pointer offset from the left edge):');
+  for (const x of row) log('     ' + x);
+}
+
+// ===== I. production write-outcome protocol (plan §8.5, r4): a model, not the editor =====
+// Server: mirrors apps/web/app/api/editor/[id]/route.ts + lib/editor/db.ts saveEditorDocumentConditional:
+// a PUT replaces the whole document iff its base revision equals the current revision (then revision = base + 1, 200),
+// otherwise 409. A PUT the server has received may commit after the browser has gone offline or closed.
+log('I. write-outcome protocol model (late commits after teardown; exhaustive interleavings)');
+{
+  const B0 = new Map([['b1', 'b']]); // baseline object: never ours
+  class Server {
+    constructor() { this.rev = 0; this.doc = new Map(B0); this.log = []; }
+    put(base, snap, who) { if (base !== this.rev) { this.log.push([who, 409]); return 409; } this.doc = new Map(snap); this.rev = base + 1; this.log.push([who, 200]); return 200; }
+  }
+  const ACTIONS = {
+    S1_createZ: [['create', 'X', 'x0'], ['update', 'X', 'x1'], ['create', 'Z', 'z0']],
+    S1_updateX: [['create', 'X', 'x0'], ['update', 'X', 'x1'], ['update', 'X', 'x2']],
+    S1_deleteX: [['create', 'X', 'x0'], ['update', 'X', 'x1'], ['delete', 'X']],
+    S2_nothingAtLoad: [['create', 'X', 'x0'], ['delete', 'X'], ['create', 'Z', 'z0']],
+    S3_onlyCreateLost: [['create', 'X', 'x0']],
+  };
+  const SLOTS = ['before-load', 'after-load', 'after-cleanup-write-1', 'after-cleanup-write-2', 'after-cleanup-write-3', 'never'];
+  const HUMANS = ['none', 'human-creates-H', 'human-edits-X'];
+  function scenario(actName, slot, dup, human, lostCleanupResponse, protocol) {
+    const server = new Server();
+    // ---- action phase: every write's outgoing body is journaled BEFORE it is forwarded (owned ids + models)
+    const journal = { owned: new Map(), unknown: [], finished: false };
+    const client = { rev: 0, doc: new Map(B0) };
+    const acts = ACTIONS[actName];
+    let inFlight = null;
+    acts.forEach((a, i) => {
+      if (a[0] === 'create' || a[0] === 'update') client.doc.set(a[1], a[2]); else client.doc.delete(a[1]);
+      const snap = new Map(client.doc);
+      for (const [id, m] of snap) if (!B0.has(id)) { if (!journal.owned.has(id)) journal.owned.set(id, new Set()); journal.owned.get(id).add(m); }
+      const last = i === acts.length - 1;
+      if (!last) { if (server.put(client.rev, snap, 'action') === 200) client.rev++; }
+      else { inFlight = { base: client.rev, snap }; journal.unknown.push(inFlight); } // teardown before the response: outcome UNKNOWN
+    });
+    // delayed delivery of the in-flight write (and an optional browser-level duplicate)
+    let deliveries = slot === 'never' ? [] : [slot].concat(dup ? [SLOTS[Math.min(SLOTS.indexOf(slot) + 1, 4)]] : []);
+    const deliver = (at) => { while (deliveries.includes(at)) { deliveries.splice(deliveries.indexOf(at), 1); server.put(inFlight.base, inFlight.snap, 'late-action'); } };
+    if (human === 'human-creates-H') { const d = new Map(server.doc); d.set('H', 'h'); server.put(server.rev, d, 'human'); }
+    if (human === 'human-edits-X' && server.doc.has('X')) { const d = new Map(server.doc); d.set('X', 'xh'); server.put(server.rev, d, 'human'); }
+    deliver('before-load');
+    // ---- cleanup phase (fresh context; cap C = 8 admitted writes)
+    const C = 8;
+    let writes = 0, report = null, cleanupUnknown = false, fenced = journal.unknown.length === 0;
+    let rev = server.rev, doc = new Map(server.doc);
+    deliver('after-load');
+    const deleted = new Set();
+    for (let guard = 0; guard < 20 && report === null; guard++) {
+      const owned = [...doc.keys()].filter((id) => journal.owned.has(id));
+      if (owned.some((id) => !journal.owned.get(id).has(doc.get(id)))) { report = 'recovery-pending (owned object changed by someone else)'; break; } // r3 already had this check
+      let snap;
+      if (owned.length > 0) { snap = new Map(doc); for (const id of owned) snap.delete(id); }
+      else if (protocol === 'r4' && !fenced) { snap = new Map(doc); snap.set('F', 'fence'); journal.owned.set('F', new Set(['fence'])); } // explicit fence object
+      else { report = 'clean'; break; }
+      if (writes >= C) { report = 'recovery-pending (C exhausted)'; break; }
+      writes++;
+      const res = server.put(rev, snap, 'cleanup');
+      const lost = lostCleanupResponse && writes === 1;
+      deliver('after-cleanup-write-' + writes);
+      if (lost) { cleanupUnknown = true; if (protocol === 'r4') { report = 'recovery-pending (cleanup write outcome unknown)'; break; } }
+      if (res === 409) { if (protocol === 'naive') { report = 'stopped (409)'; break; } rev = server.rev; doc = new Map(server.doc); continue; }
+      for (const id of owned) deleted.add(id);
+      rev++; doc = snap; fenced = true;
+      if (protocol === 'r4') { rev = server.rev; doc = new Map(server.doc); } // reload after every confirmed write
+    }
+    if (report === 'clean' && protocol === 'r4' && cleanupUnknown) report = 'recovery-pending (cleanup write outcome unknown)';
+    if (report === 'clean') journal.finished = true;
+    // ---- drain every remaining delayed delivery, then judge
+    for (const at of SLOTS) deliver(at);
+    const residue = [...server.doc.keys()].filter((id) => journal.owned.has(id));
+    const humanLost = (human === 'human-creates-H' && !server.doc.has('H'));
+    return { report, residue, journalFinished: journal.finished, writes, humanLost, deletedHuman: deleted.has('H') || deleted.has('b1') };
+  }
+  for (const protocol of ['naive', 'r4']) {
+    const st = { n: 0, clean: 0, pending: 0, stopped: 0, falseClean: 0, journalClearedWithResidue: 0, unownedDeleted: 0, humanLost: 0, maxWrites: 0, examples: [] };
+    for (const act of Object.keys(ACTIONS)) for (const slot of SLOTS) for (const dup of [false, true]) for (const human of HUMANS) for (const lost of [false, true]) {
+      const r = scenario(act, slot, dup, human, lost, protocol);
+      st.n++; st.maxWrites = Math.max(st.maxWrites, r.writes);
+      if (r.report === 'clean') st.clean++; else if (r.report.startsWith('recovery-pending')) st.pending++; else st.stopped++;
+      if (r.report === 'clean' && r.residue.length > 0) { st.falseClean++; if (st.examples.length < 2) st.examples.push(`${act}, late write ${slot}${dup ? ' (+duplicate)' : ''}, human ${human}${lost ? ', first cleanup response lost' : ''}: reported clean, residue ${r.residue.join(',')}`); }
+      if (r.journalFinished && r.residue.length > 0) st.journalClearedWithResidue++;
+      if (r.deletedHuman) st.unownedDeleted++;
+      if (r.humanLost) st.humanLost++;
+    }
+    log(`  ${protocol === 'naive' ? 'naive (r3 §8.5 outcome handling: a write with no response treated as not committed; no fence; same id ownership and consistency checks)' : 'r4 (outcomes tracked; unknown -> fence by a confirmed cleanup write; recorded ids only)'}: ${st.n} interleavings -> clean ${st.clean}, recovery pending ${st.pending}, stopped ${st.stopped}; FALSE "clean" with residue after late commits ${st.falseClean}; journal cleared with residue ${st.journalClearedWithResidue}; non-owned objects deleted ${st.unownedDeleted}; max cleanup writes ${st.maxWrites}`);
+    for (const ex of st.examples) log('     e.g. ' + ex);
+    if (protocol === 'r4') check(st.falseClean === 0 && st.journalClearedWithResidue === 0 && st.unownedDeleted === 0 && st.maxWrites <= 8, 'I r4 protocol never reports clean falsely');
+    else check(st.falseClean > 0, 'I naive protocol false-clean reproduced');
+  }
 }
 
 log(failures === 0 ? 'RESULT: all checks passed' : `RESULT: ${failures} check(s) FAILED`);
