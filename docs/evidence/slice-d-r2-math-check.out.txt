@@ -1,0 +1,37 @@
+A. Codex counterexamples against r1
+  A1 r1 centred: start x=0 w=10 (centre 5); after widths 10.01, 10.02, 10.03, 10.04 -> x=0 w=10.04 centre=5.02
+  A2 r1 ratio: 4.03x4, s=1.0087 -> 4.07 x 4.03; exact h for w=4.07 is 4.039702; error 0.009702 mm
+  A3 float: 0.03 - 0.01 = 0.019999999999999997; integer hundredths: 3 - 1 = 2 -> fromH(2) = 0.02
+B. r2 deterministic examples (hundredths in brackets)
+  B1 centred (Alt), x=0 w=10, right handle; Konva mirrors about its own (rounded) node centre, r2 ignores it:
+     pointer 10.005 -> w=10.01 x=-0.01 right=10 centre=4.995 [-1,1001]
+     pointer 10.010 -> w=10.02 x=-0.01 right=10.01 centre=5 [-1,1002]
+     pointer 10.015 -> w=10.03 x=-0.02 right=10.01 centre=4.995 [-2,1003]
+     pointer 10.020 -> w=10.04 x=-0.02 right=10.02 centre=5 [-2,1004]
+  B2 right handle: free -> Alt pressed -> Alt held -> Alt released
+     free  to 55.37: x=20 y=10 w=35.37 h=20 [2000,1000,3537,2000]  (fixed left 20.00)
+     Alt   to 57.00: x=18.37 y=10 w=38.63 h=20 [1837,1000,3863,2000]  centre captured from previous box = 37.685
+     Alt   to 57.50: x=17.87 y=10 w=39.63 h=20 [1787,1000,3963,2000]  centre = 37.685
+     free  to 60.00: x=17.87 y=10 w=42.13 h=20 [1787,1000,4213,2000]  (fixed left = previous box's left 17.87)
+  B3 ratio 4.03x4, s=1.0087: controlling x -> x=0 y=0 w=4.07 h=4.04 [0,0,407,404]; exact h for w=4.07 is 4.039702; error 0.000298 mm
+  B4 T10 ratio 4:3, target x=60: controlling x -> x=10 y=10 w=50 h=37.5 [1000,1000,5000,3750] guide x=60
+  B5 ratio, targets x=60 (corr 0.08) and y=47.60 (corr 0.04): controlling y -> x=10 y=10 w=50.13 h=37.6 [1000,1000,5013,3760] guide y=47.6
+  B5b square 40x40, both edges 0.50 from a target: tie -> larger start axis, equal -> x: controlling x -> x=0 y=0 w=50.5 h=50.5 [0,0,5050,5050]
+  B6a normal axis, raw right edge 3.994 -> x=0 y=0 w=4 h=10 [0,0,400,1000] (floor 4)
+  B6b grandfathered 2.5 x 20: shrink to 2.4 -> w=2.5; enlarge to 3.2 -> w=3.2
+  B6c ratio on grandfathered 2.5 x 20: s=0.9 -> 2.5 x 20; s=1.1 -> 2.75 x 22
+  B7 ratio+Alt on 30.01 x 20: controlling x -> x=-3.25 y=-2.17 w=36.5 h=24.33 [-325,-217,3650,2433]; centre error 0.005 mm; ratio error 0.004775 mm
+  B8a two targets 0.50 mm either side (20.00, 21.00): lower wins -> right edge 20 guide 20
+  B8b target = centre of a 10.01-wide element at 20.00 (25.005): right edge 25.01 guide 25.005 (|diff| 0.005 mm)
+  B9 target at 3.00 within the 4 mm floor: w=4 guide=null
+C. representation (exhaustive over -2000.00 .. 2000.00 mm)
+  toH(fromH(h))===h, quantizeInspector(fromH(h))===fromH(h), formatNum(fromH(h))===integer formatting: 0 mismatches in 400001 values
+  toH(x + w) === hx + hw for 200000 random canonical pairs: 0 mismatches; max |float(x+w) - canonical(x+w)| = 1.14e-13 mm
+D. seeded random gestures through the Konva model
+  r2: 4000 gestures, 314646 bounded moves, 46654 segments
+      non-integer outputs 0 | floor violations 0 | undersized shrink 0 | fixed-edge changes within a segment 0
+      max centre error 0.005 mm | max ratio error 0.005000 mm | max snapped-edge vs guide 0.005 mm
+      payload canonical/format mismatches 0 | px round-trip failures 0 | nondeterministic reruns 0
+  r1 shadow: centred moves 148146, centre-drift > 0.005 mm in 115285 (max drift 0.140 mm)
+             unsnapped ratio moves 40000, dependent error > 0.005 mm in 5289 (max 0.009847 mm)
+RESULT: all r2 checks passed
