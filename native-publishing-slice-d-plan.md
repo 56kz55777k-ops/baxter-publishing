@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 4 (r4), 2026-10-23: two focused corrections for Codex's fourth review.**
+**Status:** **Revision 5 (r5), 2026-10-23: one focused correction for Codex's fifth review — cleanup ownership is separated from write journaling.**
+- r5: Codex verified r4's corrected Konva boundary, accepted the conditional-PUT fence argument, and reproduced the r4 evidence output byte for byte. Its one remaining finding — r4 took ownership from outgoing whole-document saves — is answered in §0.4. The maths (§3) and everything else are unchanged from r4.
 - r4: Codex reran the r3 evidence script (output byte-identical to the committed file) and asked for two corrections: Konva's exact early-return boundary, and write outcomes that stay unknown after teardown. Both are answered in §0.3. Everything else is unchanged from r3.
 - r1 (`8042cc8`) drew seven findings; r2 (`b30373c`) answered them (§0.1).
 - Codex then reviewed r2. It independently ran the r2 evidence script and **accepted** the centre capture, the controlling-axis ratio calculation, the integer arithmetic and the preview/commit payload approach. It left three findings, answered here (§0.2).
@@ -10,7 +11,7 @@
 - **Implementation has NOT started and is NOT authorized.** It begins only after Codex's re-review and Ben's go.
 - Nothing in this document changes application code, dependencies or CI. No production-write test has been run for D.
 
-**Base:** `main` = `790ddf9875f7ea4d35e594c52fc6eb1fdb218467` (PR #19 merge, Next.js 15.5.28), tree `db54dbef235a7a4d771f6e48a158f20f1e110677`. Branch: `slice-d-resize`. r1 = `8042cc8`, r2 = `b30373c`, r3 = `d1f0f3d`; r4 is the next commit on the branch.
+**Base:** `main` = `790ddf9875f7ea4d35e594c52fc6eb1fdb218467` (PR #19 merge, Next.js 15.5.28), tree `db54dbef235a7a4d771f6e48a158f20f1e110677`. Branch: `slice-d-resize`. r1 = `8042cc8`, r2 = `b30373c`, r3 = `d1f0f3d`, r4 = `8b9b7d2`; r5 is the next commit on the branch.
 **Supersedes for planning purposes:** `native-publishing-slice-d-readiness.md` (2026-10-06), which stays as the historical readiness record, unaltered.
 **Scope (production handoff Part 11):** Transformer resize + numeric consistency — `boundResize` (edge-diff, ratio, minimums, quantization, stored-box commit), the live pill, the anchor no-op rule, cursor ownership. Acceptance: preview == commit property tests, the R9 matrix including off-grid positions, cursor table tests. Plus the six approved decisions.
 **Contracts:** #2 · #4 · #5 · #9 · #10 · #11 · #18 · #19 · #20 · #21 · #24 · #25 · #26 (and #3 for the creation-pill correction).
@@ -20,11 +21,13 @@
 - The editor code on `790ddf9`: notably `precision.ts`, `snapping.ts`, `num-field.ts`, `SpreadStage.tsx`, `use-viewport-measure.ts`, `use-editor-keyboard.ts`, `use-autosave.ts`, `editor-island.tsx`, `editor-gate.tsx`, `next.config.js`, `middleware.ts`, `editor-smoke.spec.ts`.
 - **Konva 10.3.0's `lib/shapes/Transformer.js`** (the installed version). Every Konva claim below was read from that source, not from memory or docs. It was re-read for r2, and for r3 its anchor branches (`_handleMouseMove`) and the start of `_fitNodesInto` were ported line by line into the evidence script. For r4, `lib/Util.js` `_inRange` (`left <= val && val < right`) was read for the early-return boundary.
 - **The save path** (`apps/web/app/api/editor/[id]/route.ts`, `apps/web/lib/editor/db.ts` `saveEditorDocumentConditional`), read for r4's write-outcome rules (§8.5).
+- **For r5's ownership rules (§8.5):** `apps/web/components/editor/state/save-payload.ts` (every PUT body is `{ doc, baseRevision, clientId }`: the whole document); `autosave-core.ts` and `use-autosave.ts` (one save in flight, never aborted by the client; a 409 is terminal, with no reload or merge); `packages/domain/src/editor/elements.ts` and `moves.ts` (create, duplicate, paste and drag re-parenting act only on the current unit's pages); `EditorShell.tsx` (`onCreate`, `onDuplicate` and `onPaste` select exactly the new ids); `use-editor-keyboard.ts` (⌘D duplicates).
 - **Maths evidence:** `docs/evidence/slice-d-math-check.js` and its output `docs/evidence/slice-d-math-check.out.txt` (renamed from `slice-d-r2-math-check.*` in r3).
   - The script is isolated: not imported, not linted, not run by CI.
   - It reproduces Codex's r1 counterexamples.
   - It checks the rules with deterministic examples (§3.8), crossing-and-return paths, an exhaustive representation check, and 4,000 seeded random gestures (312,818 bounded moves) driven through the Konva port.
   - r4 adds Konva's early-return boundary cases (section H) and an exhaustive model of the production write-outcome protocol (section I, §8.5).
+  - r5 adds section J (§8.5): ownership registered only by attributed creations and kept apart from the write journal, against r4's snapshot-derived rule, with unrelated elements present. Sections A–I and their output are unchanged.
   - Run: `node docs/evidence/slice-d-math-check.js` (exit 0; output byte-identical on every run).
   - **It is mathematical-model evidence.** The real Konva in three browsers is verified only by the stage 1 probe (§6), which has not run.
 
@@ -73,11 +76,21 @@ Codex reran the r3 evidence script and confirmed its output matches the committe
 | # | Finding | Kind | Resolution in r4 | Sections | Evidence actually run |
 |---|---|---|---|---|---|
 | 1 | Konva's early-return interval is [−1, 1), not the inclusive [−1, 1] the model used: `Util._inRange(val, left, right)` is `left <= val && val < right`. Exactly +1 px proceeds; exactly −1 px returns early. | Evidence and plan correction | `konvaStep` now uses `-1 <= v && v < 1` for width and height. §4.1, §3.5 step 0 and G9 are corrected. New deterministic boundary cases cover width and height at −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside the interval — in the port and through the session. They are also added to the stage 1 real-browser/model comparison. | §4.1, §3.5, §3.7 G9, §3.8, §6 stage 1, §7 | Section H: every case as expected (−1 − 2^-20 proceeds and renames; −1, −1 + 2^-20, 0 and +1 − 2^-20 skip; +1 and +1 + 2^-20 proceed; through the session, +1 px reaches `boundResize` and lands on the floor). **No existing count or outcome changed**: across all 1,307,784 width/height values the earlier sections evaluate, none is exactly ±1 px or within 1e-6 px of it (closest 0.0019 px). |
-| 2 | An admitted write whose outcome is unknown can still commit after teardown. Going offline or closing a context stops new traffic but undoes nothing the server has received; a delayed write could land after cleanup loads the document. | Process correction | §8.5 now tracks every admitted write's **outcome** — pending, committed, not-committed or unknown — from the route's actual status contract. All stay charged. Cancellation, connection failure, timeout and context closure are never proof of non-commit. Before going offline, the action phase **settles**: it waits a bounded time for admitted writes to answer. Cleanup resolves unknowns with a **fence**: the first committed cleanup write, which by the route's conditional update makes every older write permanently unable to commit. An explicit marker create-and-delete serves when nothing else needs writing. Ids are journaled from each write's body **before** it is forwarded. Any outcome still unknown (including a cleanup write's own) → journal kept unfinished, recovery pending, new runs blocked, never declared clean. No whole-document restore. | §8.5, §7, §8.2, AC-22, §10.2 choices 22–24, §10.3 Q1, §11 C20–C21 | Section I (a model of the protocol, not the editor), over 360 exhaustive interleavings of late commits, browser-level duplicates, human edits and lost cleanup responses. **r3's outcome handling: 64 false "clean" reports with residue left after late commits. r4: 0 false "clean", 0 journals cleared with residue, 0 non-owned deletions, at most 3 cleanup writes.** The mocked browser tests are planned, not run. |
+| 2 | An admitted write whose outcome is unknown can still commit after teardown. Going offline or closing a context stops new traffic but undoes nothing the server has received; a delayed write could land after cleanup loads the document. | Process correction | §8.5 now tracks every admitted write's **outcome** — pending, committed, not-committed or unknown — from the route's actual status contract. All stay charged. Cancellation, connection failure, timeout and context closure are never proof of non-commit. Before going offline, the action phase **settles**: it waits a bounded time for admitted writes to answer. Cleanup resolves unknowns with a **fence**: the first committed cleanup write, which by the route's conditional update makes every older write permanently unable to commit. An explicit marker create-and-delete serves when nothing else needs writing. Ids are journaled from each write's body **before** it is forwarded (r5: those bodies now go to a write journal that never grants ownership; §0.4). Any outcome still unknown (including a cleanup write's own) → journal kept unfinished, recovery pending, new runs blocked, never declared clean. No whole-document restore. | §8.5, §7, §8.2, AC-22, §10.2 choices 22–24, §10.3 Q1, §11 C20–C21 | Section I (a model of the protocol, not the editor), over 360 exhaustive interleavings of late commits, browser-level duplicates, human edits and lost cleanup responses. **r3's outcome handling: 64 false "clean" reports with residue left after late commits. r4: 0 false "clean", 0 journals cleared with residue, 0 non-owned deletions, at most 3 cleanup writes.** The mocked browser tests are planned, not run. |
 
 **No further defect was exposed.** Two improvements are made explicit:
 - r3's "offline, then close" order would have aborted already-admitted writes and needlessly turned them into unknowns. r4 settles first.
 - A browser may re-send an idempotent PUT below Playwright's interception. That cannot commit twice, because the update is conditional on the base revision (§11 C21).
+
+### 0.4 Codex review of r4 `8b9b7d2` (2026-10-23) — answered in r5
+
+**Accepted by Codex and preserved unchanged:** the corrected Konva boundary [−1, 1) and the conditional-PUT fence argument. Codex's own run of the r4 evidence script matched the committed output byte for byte. No maths change was requested and none is made: sections A–I of the script and their output lines are byte-identical to r4.
+
+| # | Finding | Kind | Resolution in r5 | Sections | Evidence actually run |
+|---|---|---|---|---|---|
+| 1 | Write journaling and cleanup ownership must be separate. r4 defined `B0` as the current unit's ids but treated as owned every id outside `B0` in outgoing saves. Baxter saves the whole document, so those bodies carry existing elements on other pages, and a fresh cleanup document can carry someone else's new element through a delete save or the fence marker's save. Appearing in an outgoing write does not prove test ownership. | Process correction | **Two records, never mixed.** The **ownership registry** (the created-by-this-run set) is written only by the attribution step of a **declared test creation** — create, duplicate, paste, or the fence marker. The intent (run, kind, target unit) is fsynced first, saves are held while the creation is pending, the new id is read from this page's own unit ids before and after the gesture plus the selection, and the record (run, intent, target unit, id) is fsynced **before** any save containing the id is released. Zero or several new ids, a selection mismatch or a timeout → the held saves are aborted unforwarded, nothing is registered, the suite stops and reports. The **write journal** keeps every outgoing body's snapshot, base revision and outcome for late-write reconciliation and the model-consistency check; it never adds ownership, and neither does absence from `B0` or appearing after a reload. A guard aborts, unforwarded, any body with an id on the run's unit that is neither in that page's `B0` nor registered, and stops the suite (report, no ownership). Deletion: registered ids only, on their recorded unit, with the existing selection and model-consistency checks. The fence, the separate allowances, the recovery approvals and the no-restore rule are unchanged; the marker's creation and deletion are charged to C. | §8.5, §8.2, §7, §5, AC-22, §10.2 choices 21, 24–25, §10.3 Q1/Q6, §11 C22 | Section J (a model of the protocol, not the editor): 864 exhaustive runs per protocol — 6 action scripts × 6 other-party cases × 6 late-delivery slots × duplicate deliveries × lost cleanup responses. **r4's rule: an unrelated id entered the ownership set in all 864 runs, and a commit deleted an unrelated element in 590 (`p1` on another page in 590, a human's `h1` in 72, `h2` in 72); every run that r4's rule reported "clean" had deleted `p1`.** The other 274 r4 runs had stopped as recovery pending first (264 on the consistency check, 10 on a lost cleanup response), not because the rule was safe. **r5: 0 unrelated ids owned, 0 unrelated elements deleted or changed in any commit, 0 owned ids outside attributed creations, 0 false "clean", 0 test residue left unreported, 0 unattributed test elements forwarded, at most 2 cleanup writes.** Nine deterministic cases, covering every scenario Codex listed, are spelled out in the output. The browser cases are **planned, not executed**. |
+
+**Why r4's evidence did not show this:** section I's model used a whole-document baseline and took owned ids only from action-phase bodies, unlike the plan's text (a unit baseline; every outgoing body, including the marker's). Its "0 non-owned objects deleted" could not have failed. Section I stays unchanged as the evidence for the outcome and fence protocol; section J applies r4's rule as written, with unrelated elements present.
 
 ---
 
@@ -151,7 +164,7 @@ Each criterion is proved by the tests named in §7 and the browser cases in §8.
 | AC-19 | Shared First-Load JS grows **0 B**; Konva stays editor-only; the island chunk is measured and reported; the production build contains no harness route. | blueprint A7 | — |
 | AC-20 | **Viewport freeze:** from anchor press (threshold-pending included) to release or cancel, wheel pan/zoom changes nothing and the viewport-size refit is deferred to session end. Normal wheel behaviour and any deferred refit apply immediately after release, Escape, blur or unmount. | — | Codex finding 4 |
 | AC-21 | **Grandfathering in a real browser** (local harness): an undersized axis enlarges, cannot shrink, does not jump at press or crossing; ratio on an undersized shape scales up only; inspector edits per D-1. | #11, #19 | D-1, Codex finding 6 |
-| AC-22 | **Production writes** (only when Q1 and Q6 are approved): attempted / admitted / blocked counted per phase; **admitted** writes never exceed A = 24 (actions) or C = 8 (cleanup) per browser, including under concurrency. Every admitted write's outcome is recorded as committed, not-committed or unknown, and nothing treats a lost response as non-commit. The action phase settles before going offline. Cleanup runs in a fresh context and fences unknown outcomes with a committed write. Automatic deletion only of **recorded, baseline-checked element ids**. "Clean" only when nothing remains unknown and no owned id remains; otherwise the journal stays unfinished and recovery is pending. | security-operations §8 | r1 finding 7; r2 findings 2–3; r3 finding 2 |
+| AC-22 | **Production writes** (only when Q1 and Q6 are approved): attempted / admitted / blocked counted per phase; **admitted** writes never exceed A = 24 (actions) or C = 8 (cleanup) per browser, including under concurrency. Every admitted write's outcome is recorded as committed, not-committed, not-forwarded or unknown, and nothing treats a lost response as non-commit. The action phase settles before going offline. Cleanup runs in a fresh context and fences unknown outcomes with a committed write. **Ownership comes only from attributed declared creations**, registered before any save containing the id is forwarded, in a registry kept apart from the write journal; ambiguous attribution stops the suite with nothing forwarded. Automatic deletion only of registered ids on their recorded unit; unrelated elements (other pages, other people's, unregistered `B0` ids) never enter the registry and are never deleted or changed by cleanup. "Clean" only when nothing remains unknown and no registered id remains; otherwise the journal stays unfinished and recovery is pending. | security-operations §8 | r1 finding 7; r2 findings 2–3; r3 finding 2; r4 finding 1 |
 | AC-23 | **Space during an active resize** behaves as Ben decides in Q2. The criterion is written when Q2 is answered. | #26 | D-4 (open part) |
 | AC-24 | **Ratio crossing** (one-edge ratio: corner + Keep proportions/Shift, no Alt), subject to Q7. The dragged anchor never crosses the fixed corner's minimum-box extent: no freeze, no anchor rename, the fixed corner never moves. The box is continuous across the crossing; beyond both axes it is the minimum box. Returning the pointer to an earlier position restores the earlier box exactly. Centred crossings (Alt) stay continuous and recover exactly with the centre carried. | #10, #11 | r2 finding 1; N1, N2 |
 
@@ -494,9 +507,10 @@ Creation's guide can still sit up to 0.05 mm from the committed edge, because cr
 - **Production suite:** `apps/web/test/e2e/editor-resize-acceptance.spec.ts` — committed, but **skipped unless `E2E_ACCEPTANCE=1`** and credentials are present; never in CI (§8.3, §8.5).
 - Shared helpers:
   - `apps/web/test/e2e/support/write-budget.ts` — synchronous reservation; attempted/admitted/blocked counters; exhaustion signal.
-  - `apps/web/test/e2e/support/ownership-journal.ts` — baseline id set, intent/result journal, ownership decision.
+  - `apps/web/test/e2e/support/write-journal.ts` — one record per outgoing write (phase, sequence, base revision, element models, outcome) and the fence state. It never grants ownership (r5).
+  - `apps/web/test/e2e/support/ownership-registry.ts` — creation intents, the hold on saves while a creation is pending, attribution, registration, the unattributed-id guard and the deletion decision (r5; replaces r4's `ownership-journal.ts`).
 - Their tests:
-  - `apps/web/test/e2e-support/write-budget.test.ts` and `ownership-journal.test.ts` (Vitest, pure, no browser);
+  - `apps/web/test/e2e-support/write-budget.test.ts`, `write-journal.test.ts` and `ownership-registry.test.ts` (Vitest, pure, no browser);
   - `apps/web/test/e2e/editor-write-budget.harness.spec.ts` (harness, mocked persistence).
 
 **Modified (implementation, after authorization)**
@@ -530,7 +544,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 | Stage | Content | Checkpoint / dependency |
 |---|---|---|
-| **0** | The plan (docs only). r1 `8042cc8` reviewed by Codex; **r2 (this)**. | **Codex re-reviews r2 → Ben authorizes implementation.** |
+| **0** | The plan (docs only). r1 `8042cc8`, r2 `b30373c`, r3 `d1f0f3d` and r4 `8b9b7d2` reviewed by Codex; **r5 (this)**. | **Codex re-reviews r5 → Ben authorizes the stage 1 probe and implementation.** |
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). | **Codex reviews the maths before any UI exists.** |
 | **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | — |
@@ -628,7 +642,7 @@ Property tests use a small seeded PRNG written inside the test (no `fast-check`)
 - No size change during the session → no refit at the end.
 - The session ref is cleared in every exit path (no leaked suppression).
 
-**`write-budget.test.ts`** and **`ownership-journal.test.ts`** (pure; r3; §8.5)
+**`write-budget.test.ts`**, **`write-journal.test.ts`** and **`ownership-registry.test.ts`** (pure; r3, split in r5; §8.5)
 - Budget, with fake routes:
   - exact boundary: cap N → writes 1…N admitted, N + 1 blocked; `attempted = admitted + blocked`;
   - 50 concurrent requests with cap 24 → exactly 24 admitted, 26 blocked;
@@ -638,14 +652,24 @@ Property tests use a small seeded PRNG written inside the test (no `fast-check`)
   - auth requests do not consume A or C; any other non-GET request is blocked and fails the run;
   - a cleanup phase starts with its own C counters after A is exhausted;
   - **outcomes (r4):** 200 → committed; 400/401/404/409/413/423 → not-committed; 5xx, network error, abort, timeout, settle deadline, or context closed in flight → unknown. Every outcome stays charged;
-  - **journal-before-forward (r4):** the request is not forwarded until its body's ids are fsynced to the journal; a crash between the reservation and the journal write forwards nothing;
+  - **journal-before-forward (r4; r5 wording):** the request is not forwarded until its write record (base revision, element models) is fsynced to the write journal; a crash between the reservation and that record forwards nothing (outcome `not-forwarded`);
   - **protocol (r4):** the section I interleavings as unit tests over a mock server with the route's conditional-update semantics. A late creation and a late update land before load, between load and the fence, after the fence (rejected), as duplicates, and never. Also covered: a lost cleanup response, a human edit to an owned object, and a human creation. Assertions: "clean" never with residue after draining every delayed write; the journal never marked finished unless clean; non-owned objects never deleted.
-- Ownership:
-  - deletes only ids in the journal's created set, absent from the baseline, present now, with model values equal to the last or previous journaled state;
-  - an intent without a recorded id → manual recovery, never deletion;
-  - zero or several new ids after a creation → stop;
-  - a changed model on an owned object → stop;
-  - unknown ids are never touched.
+- Ownership (r5): `ownership-registry.ts` and `write-journal.ts` are separate modules, so the tests exercise the distinction itself.
+  - Recording any outgoing body in the write journal never changes the registry. This is asserted after every journaled body in every case below.
+  - A declared creation registers exactly one id, and only when this page's unit ids before and after the gesture differ by exactly that id and `data-selected-ids == [id]`. The intent record precedes the gesture; the registration precedes the release of any held save.
+  - Saves arriving while a creation is pending are held, then released in arrival order after registration. On ambiguity they are aborted unforwarded (`not-forwarded`, still charged), and the suite stops with a report.
+  - Zero new ids, two new ids, a selection mismatch, a reload between the two reads, or the attribution timeout → ambiguous: nothing registered.
+  - The fence marker follows the same protocol (intent `fence-marker`); its create and delete are charged to C.
+  - The guard: a body with an id on the run's unit that is neither in that page's `B0` nor registered is aborted unforwarded and stops the suite. It never registers that id.
+  - Deletion only of registered ids that are present now on one of their recorded unit's pages, with `data-selected-ids == [id]` and a current model equal to one in a journaled outgoing body. A registered id found on another page → recovery pending, not deleted.
+  - **Section J's cases as unit tests** over the conditional-update mock server, each with `u0` (baseline, on the unit) and `p1` (baseline, on another page) present:
+    - whole-document saves carrying `p1`;
+    - a human element on the unit before cleanup loads (`h1`), carried through a cleanup delete save, and through a fence-marker save;
+    - a human element on another page (`h2`); a human edit to `p1`; a human edit to an owned element; an owned id found off its recorded unit;
+    - a late test creation and a late update alongside those;
+    - ambiguous attribution (two new ids; none); an undeclared new element.
+  - Assertions: unrelated ids never enter the registry, are never deleted or changed in any commit, and survive cleanup; every test-owned id is cleaned or listed as recovery pending; "clean" never with residue after draining every delayed write; no body containing an unattributed test element is forwarded.
+  - An intent without a registered id is reported, never acted on. Unregistered ids are never touched.
 
 **`slice-d-shell-resize.test.tsx`** (reducer + commit observer)
 - One COMMIT `'Resize'`; selection unchanged; one autosave.
@@ -714,22 +738,30 @@ Two suites with different purposes and blast radii. **Interaction behaviour is p
 - **Cursor readings** over each anchor family: inner element vs wrapper.
 - **Space during an active resize:** written after Q2.
 
-**`editor-write-budget.harness.spec.ts` (r3; mocked persistence, no production):** the budget helper and ownership journal run against the real editor in three browsers.
+**`editor-write-budget.harness.spec.ts` (r3; mocked persistence, no production):** the budget helper, the write journal and the ownership registry run against the real editor in three browsers. **Planned, not executed** (stage 8A, after Q5).
 - With A set small (e.g. 3): exhaustion stops the action within one await; the context goes offline and then closes; the mock receives zero requests after going offline, including the `pagehide` keepalive flush of unsaved changes.
 - Concurrent writes, injected with `Promise.all` in the page, never exceed the cap.
 - Retries after mocked 500s consume allowance.
-- A fresh cleanup context deletes only the journaled ids, under its own C, and a cleanup exhausting C stops and reports.
-- A fixture document with a pre-existing element (baseline) and a "human" edit injected between runs verifies that only owned, unchanged ids are deleted.
+- A fresh cleanup context deletes only registered ids, under its own C, and a cleanup exhausting C stops and reports.
 - **Late commits (r4).** The mock server is Node-side and shared by every context. It implements the route's conditional update (PUT applies iff its base revision equals the current one; 200/409) and can hold a received write and commit it later, after the browser has gone offline or its context has closed.
   - **Late creation:** the action phase creates an object. The mock receives its PUT and holds it; teardown begins (budget stop and normal end, both).
     - The held write commits (a) before the cleanup load, (b) between load and the fence, or (c) after the fence, where the mock must reject it with 409.
     - With the fence forced to fail (mock 500 on the fence, or C too small), the run must report recovery pending.
   - **Late update:** the same, with a held resize of an owned object.
   - **Assertions, after draining every held write:** the run never reports "clean" or marks its journal finished while an owned id exists in the mock document; a pending report keeps the journal unfinished and makes the next run refuse to start.
+- **Ownership versus whole-document saves (r5) — planned, not executed.** The fixture has `u0` on the target unit and `p1` on another page. "Human" changes are made by the Node-side mock directly in its document, at a new revision.
+  - **Other-page elements:** every PUT body the mock receives contains `p1` (asserted); `p1` never appears in the registry; after cleanup `p1` is deep-equal to the fixture.
+  - **Human element at cleanup load:** the mock adds `h1` on the target unit before the cleanup context loads. The cleanup delete save carries `h1`; `h1` is not registered, not deleted and not changed.
+  - **Human element through a marker save:** the same `h1`, with nothing owned left at load and one action-phase outcome forced unknown (the mock holds that write and never commits it). The marker is created through the creation protocol, registered before its save is released, then deleted: two writes from C. `h1` survives both saves unchanged.
+  - **Late writes alongside unrelated elements:** a late test creation and a late resize of an owned element, held by the mock, with a human edit to `p1` and a human `h2` on another page; committed before the cleanup load, between load and fence, or after the fence (409). Owned ids are cleaned or listed as recovery pending; `p1` keeps the human's edit; `h2` survives.
+  - **Ambiguous attribution:** a duplicate declared as one creation with two elements selected (two new ids), and a declared create gesture made with the Select tool still active (no new id). The held save is aborted: the mock receives no body containing the new ids, nothing is registered, and the suite stops with a report naming the intent and the before/after ids.
+  - **Undeclared element:** ⌘D pressed without a declared creation. The guard aborts the next save unforwarded; the suite stops; the id is reported, never registered.
+  - **Owned element changed by someone else:** the mock edits an owned element's model → not deleted; recovery pending.
+  - Every case also asserts that recording a body in the write journal left the registry unchanged.
 
 ### 8.3 Production suite (minimal; needs Q1 and Q6)
 Purpose: prove what only production can — the real autosave PUT, the revision guard, persistence and reload — for resize.
-- **Smoke extension** (`editor-smoke.spec.ts`, first spread, its own rectangle): one corner resize; inspector W/H == the pill at release; exactly one PUT for it; undo then redo; reload with exact values. In D the smoke's cleanup moves to the same **id-based ownership** as the acceptance suite (§8.5); its existing geometry identity becomes a consistency check only (§11 C17).
+- **Smoke extension** (`editor-smoke.spec.ts`, first spread, its own rectangle): one corner resize; inspector W/H == the pill at release; exactly one PUT for it; undo then redo; reload with exact values. In D the smoke's cleanup moves to the same **registry-based ownership** as the acceptance suite (§8.5); its existing geometry identity becomes a consistency check only (§11 C17).
 - **Acceptance** (`editor-resize-acceptance.spec.ts`, `E2E_ACCEPTANCE=1`, back cover — must be empty at the start, deleted at the end, asserted empty after a reload):
   - Create one rect and one ellipse.
   - One each: left-side resize (commits x and w); top-left free corner (commits x, y, w, h); Shift ratio corner; Alt centred; inspector W.
@@ -767,7 +799,7 @@ Purpose: prove what only production can — the real autosave PUT, the revision 
 - **Cleanup:** cap C = **8** per browser (3 planned + 5 reserve).
 - **Recovery:** cap 8, separate approval each time.
 
-**Counters** (per phase): `attempted` (every write request reaching the handler), `admitted` (forwarded with `route.continue()`), `blocked` (aborted with `route.abort()`). Invariants: `attempted = admitted + blocked` and `admitted ≤ cap`. `page.on('request')` cross-checks `attempted`.
+**Counters** (per phase): `attempted` (every write request reaching the handler), `admitted` (reserved against the cap and then forwarded with `route.continue()` — or, from r5, aborted before forwarding as `not-forwarded`; either way charged), `blocked` (refused at reservation and aborted with `route.abort()`). Invariants: `attempted = admitted + blocked` and `admitted ≤ cap`. `page.on('request')` cross-checks `attempted`.
 
 **Synchronous reservation.** The write branch of the handler runs, before any `await`:
 1. If the phase is closed or `admitted ≥ cap`: `blocked += 1`; signal exhaustion; `route.abort()`.
@@ -779,10 +811,14 @@ Playwright invokes route handlers on Node's single event loop, and the check-and
 - An admitted write consumes allowance **whatever happens next** — 200, 409, 5xx, network error, or no answer. There are no refunds.
 - A retry (the autosave retry ladder, or a re-sent keepalive) is a new request and needs a new reservation.
 
-**Journal before forwarding (r4).**
-- After the synchronous reservation, and before `route.continue()`, the handler fsyncs to the run journal a record of the write: phase, sequence number, base revision (from the body), and every element id in the body that is not in `B0`, with its model.
-- The reservation stays synchronous; only the forward waits for the journal.
-- So every id that could ever reach the server is journaled before it can get there. A crash between reservation and journal forwards nothing.
+**Two records, kept apart (r5).** r4 took owned ids from outgoing bodies. Baxter saves the whole document (`save-payload.ts`: `{ doc, baseRevision, clientId }`), so every body also carries other pages' elements and, during cleanup, anything someone else has added. r5 therefore keeps two append-only files per run, each fsynced per record:
+- **The write journal** — per outgoing write: phase, sequence number, base revision (from the body), every element id with its model, and the outcome below. It serves late-write reconciliation, the fence, and the model-consistency check before a deletion. **It never adds an id to the ownership registry.**
+- **The ownership registry** — the created-by-this-run set. One record per *attributed declared creation* (below): run id, intent sequence, intent kind, target unit (label and page ids), the element id, and the page it landed on. Nothing else writes to it — not an id's presence in a snapshot, not its absence from `B0`, not its appearance after a reload.
+
+**Journal before forwarding (r4; now the write journal).**
+- After the synchronous reservation, and before `route.continue()`, the handler fsyncs the write's record to the write journal.
+- The reservation stays synchronous; only the forward waits.
+- A crash between reservation and record forwards nothing.
 
 **Write outcomes (r4)** — from the route's actual contract (`route.ts`, `db.ts`). A PUT authorizes (401/404/423), reads (413/400) and validates (400), then runs one conditional `UPDATE … WHERE revision = base` that sets `revision = base + 1`. It answers 200 `{revision}`, or re-selects and answers 409 (stale base) or 404 (no row); a database error answers 500.
 
@@ -791,12 +827,13 @@ Playwright invokes route handlers on Node's single event loop, and the check-and
 | `pending` | admitted; no response yet |
 | `committed` | 200 |
 | `not-committed` | 400, 401, 404, 409, 413 or 423 — returned before the update, or because it matched no row |
+| `not-forwarded` | reserved, then aborted by the harness before `route.continue()` (ambiguous attribution, the unattributed-id guard, or a crash before its record). It never reached the server (r5) |
 | `unknown` | 5xx; network error; request aborted or cancelled; timeout; still pending at the settle deadline; or the context closed with it in flight |
 
-**None of the `unknown` causes is treated as proof that the server did not commit.** The local server's handler keeps running after the browser goes away, so a write it has received can commit later. Every outcome stays charged.
+**None of the `unknown` causes is treated as proof that the server did not commit.** The local server's handler keeps running after the browser goes away, so a write it has received can commit later. Every outcome, `not-forwarded` included, stays charged.
 
 **End of the action phase** (normal end, failure, timeout, or budget exhaustion):
-1. **Close the phase.** Every later write is blocked; the `exhausted` promise rejects, so a running action throws `WriteBudgetExhausted` at its next await (`Promise.race([action, exhausted])`).
+1. **Close the phase.** Every later write is blocked; the `exhausted` promise rejects, so a running action throws `WriteBudgetExhausted` at its next await (`Promise.race([action, exhausted])`). A creation still pending finishes its attribution first (or times out as ambiguous), and its held writes are released or aborted by the creation rules below.
 2. **Settle.** Wait up to 30 s for every `pending` write to answer, **before** going offline. These writes are already admitted and within the cap; letting them answer turns would-be unknowns into known outcomes. Anything still pending at the deadline becomes `unknown`.
 3. `context.setOffline(true)` — no further request leaves, including the editor's `pagehide` keepalive flush — then `context.close()`. Unsaved editor state in that page is discarded with it, by design.
 
@@ -804,49 +841,56 @@ Playwright invokes route handlers on Node's single event loop, and the check-and
 - It runs in a **fresh context**: a new sign-in, its own C counters, and the same enforcement. It loads the newest revision `R_load`. Reaching A therefore never prevents cleanup.
 - **The fence** (needed only when some action-phase outcome is `unknown`):
   - Every action-phase write carries a base revision ≤ `R_load`, and a PUT applies only when its base equals the current revision, which only increases. So the **first cleanup write that is `committed`** leaves the revision above every action-phase base. From that moment no action-phase write — including one still in transit, or a browser-level duplicate — can ever commit.
-  - That first committed write is the fence. If cleanup has nothing of ours to delete, it creates a marker object as the fence (its id journaled before forwarding) and then deletes it: two writes from C.
+  - That first committed write is the fence. If cleanup has nothing of ours to delete, it creates a marker object as the fence through the **declared-creation protocol** below (intent `fence-marker`; its id registered before its save is released), then deletes it under the normal deletion rules: two writes from C. The marker's saves are whole-document saves and carry everything else in the loaded document unchanged.
 - **A 409 before the fence** (a late action-phase commit, or someone else's edit): reload, re-run the ownership and consistency checks below, re-plan. Each attempt counts against C.
 - **After a committed fence**, reload: that document is final with respect to every action-phase write. Delete the remaining owned ids, then reload to verify.
 - **"Clean" is reported, and the journal marked finished, only if all of these hold:**
   - every action-phase `unknown` was fenced by a committed cleanup write;
   - every cleanup write is `committed`;
-  - the final reload shows no owned id.
+  - the final reload shows no registered id.
 - **Otherwise: recovery pending.** This covers a cleanup write whose own outcome is `unknown`, a fence not confirmed, C exhausted, or an ownership/consistency stop.
   - The journal stays unfinished.
-  - The report lists each unknown write (sequence number, base revision, ids, intended change) and each remaining owned id.
+  - The report lists each unknown write (sequence number, base revision, ids, intended change) and each remaining registered id.
   - New runs are blocked, and nothing is declared clean.
-- Cleanup never restores or re-saves a whole earlier document. It only deletes owned ids through the editor.
+- Cleanup never restores or re-saves a whole earlier document. It only deletes registered ids through the editor.
 
-**Ownership — recorded element ids are mandatory (Q6):**
+**Ownership — the created-by-this-run set (Q6; rewritten in r5):**
 - **Instrumentation:** `data-unit-element-ids` (every element id on the shown unit) and `data-selected-ids` (the current selection) on the stage wrapper — internal test instrumentation, like the approved `data-view`. **Without Q6 approval there is no automatic cleanup, and therefore no production run.** There is no geometry-only fallback.
-- **Baseline:** before the first write, the run records the unit's id set `B0` (the acceptance suite also asserts it is empty), fsynced to the run journal.
-- **Creation:**
-  1. The journal records the *intent* (unit, kind, intended geometry) before the action.
-  2. The new object's id is journaled from the outgoing write body before that write is forwarded (above).
-  3. After the action, the run also reads the unit's id set from `data-unit-element-ids`. Exactly one id must be new relative to `B0` and every previously created id, and it must equal the journaled one.
-  4. Zero or several new ids, a mismatch, or a failed read stops the run. Cleanup still applies to every journaled id.
-- **Later actions** on an owned object journal intent; each outgoing body journals the object's model.
+- **`B0`, per page:** each page — action or cleanup — records the unit's ids when it loads, before its first gesture. The action page's `B0` is fsynced to the run directory (the acceptance suite also asserts it is empty). `B0` is used only by the guard below. It is never a source of ownership, in either direction: a registered id can be in a cleanup page's `B0`, and an unregistered id outside every `B0` is still not ours.
+- **Declared creation** — every test step that can add an element (create a rect or ellipse, duplicate, paste) and the fence marker:
+  1. **Intent first.** Fsync an intent record: run id, sequence, kind, target unit, intended geometry (for the report only).
+  2. **Hold saves.** Mark the creation pending. The route handler still reserves each arriving write synchronously, but forwards none while a creation is pending. Autosave keeps one save in flight and never aborts its own request (`autosave-core.ts`), so a held save only looks like a slow network to the editor. The `pagehide` keepalive is held the same way.
+  3. **Read, act, read.** Read `before` = `data-unit-element-ids`; perform the gesture; wait up to 5 s for the unit's ids to change.
+  4. **Attribute.** `fresh` = after − before. Attribution succeeds only if `fresh` is exactly one id, `data-selected-ids` is exactly `[that id]` (the editor sets the selection to exactly the new ids on create, duplicate and paste: `EditorShell.tsx` `onCreate`, `onDuplicate`, `onPaste`), and no reload or remount happened between the two reads.
+     - This is attribution, not inference. The page's document changes only through our own gestures: autosave never merges server state, and a 409 is terminal with no reload (`autosave-core.ts`, `use-autosave.ts`). Exactly one declared gesture runs between the two reads.
+  5. **Register, then release.** Fsync the registry record (run, intent, target unit, id, page). Then clear the pending mark and release the held saves in arrival order, each through the guard and the write journal.
+  6. **Otherwise: ambiguous.** Nothing is registered. The held saves, and every later save from that context, are aborted unforwarded (`not-forwarded`: a known non-commit, still charged). The suite stops; no further test starts in that invocation. The report names the intent, the before and after ids, and the selection. Cleanup still runs for the ids already registered.
+  - Geometry and absence from `B0` are never used to decide ownership.
+- **The unattributed-id guard** (defence in depth; never a source of ownership). Before any write is forwarded, the handler parses `doc.pages[].elements[].id`. If the body has an id on one of the run's target-unit pages that is neither in that page's `B0` nor registered, the write is aborted unforwarded and the suite stops with a report.
+  - It catches a gesture that added an element without being declared (an unexpected duplicate, say), so no unregistered test element can reach the server from the target unit.
+  - Other pages are not checked against a load set. The editor's creation and re-parenting paths act only on the current unit's pages — `addElement` on a given page, `duplicateElements` on the source element's own page (the source comes from the unit's selection), `pasteElements` onto the current unit's pages, `applyMoves` only for members on the unit's pages — and the tests show and select only the target unit.
+- **Later actions** on an owned element journal their intent; their bodies go to the write journal like any other.
 - **Automatic deletion** happens only if **all** of these hold:
-  - the id is in the journal's created set;
-  - the id is not in `B0`;
-  - the id is present now;
-  - selecting the object yields exactly `data-selected-ids == [id]`;
+  - the id is in the ownership registry;
+  - the id is present now, on one of its **recorded unit's** pages (found on any other page → recovery pending, never deleted);
+  - selecting the element yields exactly `data-selected-ids == [id]`;
   - its current model equals that id's model in **some journaled outgoing body** — a committed or an unknown write. That covers a late update that did commit. Geometry is a **consistency check**, never proof of ownership.
-- Deletion uses the editor's normal Delete and the revision-guarded autosave. A 409 means reload and re-plan, as above.
-- **Never deleted automatically:** ids in `B0`; ids absent from every journaled outgoing body; an owned object whose model matches none of our bodies (someone else changed it). These are reported for Ben's manual recovery.
+- Deletion uses the editor's normal Delete and the revision-guarded autosave. That save is a whole-document save of the freshly loaded revision, so every unrelated element and edit in it is carried unchanged. A 409 means reload in a fresh page (with a new `B0`) and re-plan, as above.
+- **Never deleted or changed by cleanup:** any unregistered id, wherever it is and however it appeared (in a `B0`, on another page, in a snapshot or a cleanup document, after a reload); and a registered element whose model matches none of our bodies (someone else changed it) or that is off its recorded unit. Registered ids among these are listed as recovery pending. Ambiguous or unattributed test elements never reach the server (their saves are aborted) and are named in the stop report. Other people's elements are simply left alone.
 - **No baseline restore.** Nothing ever restores or re-saves a whole earlier document over newer changes.
-- A fresh cleanup context loads the newest revision, so a concurrent human edit elsewhere on the unit causes no conflict. Ownership by id makes such edits irrelevant: only owned ids are touched. An edit to an owned object is caught by the consistency check.
+- A fresh cleanup context loads the newest revision, so a concurrent human edit elsewhere causes no conflict, and the registry makes such edits irrelevant: only registered ids are touched. An edit to an owned element is caught by the consistency check.
 
 **Interrupted runs and unknown outcomes:**
 - An unfinished journal — killed run, recovery pending, or unknown outcomes — blocks new runs.
-- `E2E_RECOVER=<journal>` — **only on Ben's go, each time** — opens a fresh context with the recovery cap and applies exactly the cleanup procedure above: fence, reload, ownership and consistency checks, deletion of journaled ids, and the same "clean" conditions.
-- Writes reserved but never forwarded (no journal record) cannot have reached the server. Intents with no outgoing write are reported, not acted on.
+- `E2E_RECOVER=<journal>` — **only on Ben's go, each time** — opens a fresh context with the recovery cap and applies exactly the cleanup procedure above: fence, reload, ownership and consistency checks, deletion of registered ids, and the same "clean" conditions.
+- Writes reserved but never forwarded (`not-forwarded`, or no write-journal record) cannot have reached the server. An intent with no registered id is reported, not acted on. Recovery takes what to delete from the registry only; the write journal serves the fence and the consistency check.
 - If the journal is lost (VM reset), Ben inspects the fixture manually. Nothing is deleted by guesswork.
 
 **Residual risk (accepted only by Ben):**
 - Between a kill and a recovery, test objects remain on the fixture's back cover or first spread (one test-only document; no other publication touched).
 - A fence or deletion may itself end `unknown` (a 5xx or a lost response). The run then stays recovery pending until a later approved recovery run confirms a fence.
 - Admitted writes that failed still count, so a flaky network can exhaust A early. The run then stops; it does not continue.
+- The guard checks only the target unit's pages. A declared gesture that also added an element on another page would not be caught; the editor's creation paths cannot do that today (§8.5 guard), and any change to them must revisit the guard.
 - The fixture password exposure noted in security-operations §8 is unchanged by D.
 
 **Requires Ben's approval:**
@@ -854,7 +898,7 @@ Playwright invokes route handlers on Node's single event loop, and the check-and
 - the A, C and recovery caps (Q1);
 - the id instrumentation (Q6);
 - each recovery run;
-- any manual removal of unowned or ambiguous objects — Ben does that himself;
+- any manual removal of unregistered or ambiguous objects — Ben does that himself;
 - any change to these rules.
 
 ---
@@ -916,16 +960,18 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 18. **Write-budget enforcement at the network layer** with synchronous reservation against admitted writes, termination via offline-then-close, and cleanup in a fresh context (§8.5).
 19. **Ratio anchor clamp at the minimum box's corner** (§3.5 step 0; r3, N1). This keeps Konva from ever renaming the anchor in one-edge ratio mode. Clamping at the minimum extent rather than at the corner itself also means Konva never skips the move (a raw extent in [−1, 1) px), so a fast move past the corner still lands exactly on the minimum box. The visible behaviour is Q7.
 20. **The centre is carried while Alt stays held, and the ratio scale is taken from the anchor position** (§3.3–3.5; r3, N2).
-21. **Ownership only by recorded element ids**, with geometry as a consistency check (§8.5; r2 review finding 3).
+21. **Ownership only by recorded element ids**, with geometry as a consistency check (§8.5; r2 review finding 3). From r5 the ids are those registered by attributing a declared creation (choice 24).
 22. **Outcome states from the route's contract, and settling before going offline** (§8.5; r3 review finding 2). Unknown is never read as not-committed.
 23. **The fence: the first committed cleanup write**, or an explicit marker create-and-delete when there is nothing else to write. It relies on the route's conditional update to make every older write permanently unable to commit (§8.5).
-24. **Journal before forwarding**: owned ids are taken from each outgoing body and fsynced before the request leaves (§8.5).
+24. **Write journal and ownership registry kept apart** (r5; replaces r4's "owned ids taken from each outgoing body"). Every outgoing body is journaled before it is forwarded, for reconciliation and consistency only. Ownership comes only from attributing a declared creation, registered before the first save containing the id is released, with saves held while a creation is pending (§8.5; r4 review finding 1).
+25. **An unattributed-id guard on the target unit** (r5): an outgoing body with an id on the unit that is neither in the page's `B0` nor registered is aborted unforwarded and stops the suite. Defence in depth; it never grants ownership (§8.5).
 
 ### 10.3 Genuinely open
 - **Q1 — Ben; blocks stage 8B.** Approve D's production-write allowances?
   - **A = 24 admitted test-action writes and C = 8 admitted cleanup writes per browser** (96 total ceiling for three browsers), enforced by synchronous reservation, with the counting, termination, ownership and recovery rules of §8.5.
   - A recovery run has a cap of 8 and needs your separate go each time.
   - From r4: when an outcome is unknown, cleanup may spend up to two of its C writes on a fence (a marker created and deleted). Any outcome that stays unknown leaves the run "recovery pending" and blocks new runs until an approved recovery run resolves it.
+  - From r5: an ambiguous creation or an unattributed id stops the suite; the held writes are aborted before they leave the browser and stay charged.
   - Not approved yet; no production-write test runs before Q1 **and** Q6 are approved.
 - **Q2 — Ben; unresolved product question; blocks completion of stage 4 (the Space policy, its tests and AC-23).** What happens when Space is pressed **during** an active resize?
   - **Codex recommends:** *"Finish the current resize; if Space is still held after release, enable panning."*
@@ -942,7 +988,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
   
   Without a harness, AC-21 cannot be proved in a browser without writing undersized shapes into production data, and the production estimate returns to ≈ 38 per browser.
 - **Q6 — Ben; blocks the whole production suite (stage 8B) and any automatic cleanup.** Add `data-unit-element-ids` (every element id on the shown unit) and `data-selected-ids` (the current selection) to the stage wrapper as internal test instrumentation, like the approved `data-view`?
-  - Recorded ids are now the only accepted proof of ownership (§8.5).
+  - From r5, ownership comes only from attributing a declared creation with these two attributes (the unit's ids before and after, and the selection), registered before any save containing the id is forwarded (§8.5). No further attribute is requested.
   - **If Q6 is not approved, automatic cleanup and the production suite stay blocked**; the geometry fallback has been removed.
 - **Q7 — Ben; product behaviour; blocks activating the ratio clamp (completion of stage 4).** When the dragged corner passes the fixed corner **with Keep proportions or Shift on (no Alt)**, should the box:
   - **(a) hold the fixed corner** — proposed (N1). The box keeps following the pointer's distance on the other axis, becomes the minimum box when the pointer is past both axes, never re-anchors, and returns exactly when the pointer comes back; or
@@ -967,10 +1013,11 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 - **C13 — (r1 claim withdrawn).** r1 said grandfathering could not be exercised in a browser. That was wrong: the local harness loads fixture documents with undersized shapes into the real editor without touching production (§8.2, AC-21).
 - **C14 — wheel and viewport during gestures.** `SpreadStage.onWheel` changes the view with no gesture guard, and a viewport-size change refits the view at any time. This is pre-existing for drag, creation and marquee. D freezes the viewport for resize (§4.6); Q3 covers the rest.
 - **C15 — r1 maths.** r1's centred rule drifted (finding 1), its unsnapped ratio rule exceeded its own G5 (finding 2), and its exactness claims assumed exact float arithmetic (finding 3). All are replaced in §3, with the counterexamples reproduced in the evidence script.
-- **C17 — the existing Slice C smoke's cleanup** identifies its objects by geometry (C-8). That is no longer accepted as proof of ownership for D's production runs (r2 review, finding 3). D moves the smoke's cleanup to recorded ids (§8.3, §8.5). Whether pre-D smoke runs should also be held to this rule is Ben's call; this plan does not run them.
+- **C17 — the existing Slice C smoke's cleanup** identifies its objects by geometry (C-8). That is no longer accepted as proof of ownership for D's production runs (r2 review, finding 3). D moves the smoke's cleanup to registered ids (§8.3, §8.5). Whether pre-D smoke runs should also be held to this rule is Ben's call; this plan does not run them.
 - **C18 — r2's evidence model was simplified** (it kept the ratio corner's direction). The r3 port corrected it, and two algorithm defects followed (N1, N2). Model evidence still needs real-Konva confirmation in the stage 1 probe.
 - **C19 — `kMin` is conservative by design.** It uses the exact ceiling of the proportional floor, so the minimum ratio box may sit 0.01 mm above a box rounding alone would allow: 5.34 × 4.01 rather than 5.33 × 4.00 for 4:3, §3.8 E10. That keeps both the exact and the stored dependent at or above the floor.
 - **C20 — r3's write-outcome handling (r3 review, finding 2).** r3 charged unknown outcomes but treated a fresh cleanup context as stable, and its "offline, then close" order aborted already-admitted writes. Section I shows that handling can report "clean" while a late commit leaves residue: 64 of 360 interleavings. r4 replaces it (§8.5).
+- **C22 — r4's ownership source (r4 review, finding 1).** r4 treated as owned the ids in outgoing bodies that were not in the unit's `B0`. Whole-document saves made every other page's elements — and anything someone else added before a cleanup or marker save — look owned. Section J reproduces it: with r4's rule an unrelated id is owned in all 864 runs and an unrelated element is deleted in 590. Section I had not shown it, because its model used a whole-document baseline and took owned ids only from action-phase bodies, unlike the plan's text. r5 separates the ownership registry from the write journal (§8.5).
 - **C21 — browser-level PUT retries.** A browser may re-send an idempotent PUT below Playwright's interception after a connection reset, so one admitted write can reach the server twice. The conditional update allows at most one of them to commit. The budget counts the admitted request once, and the fence covers the duplicate.
 - **C16 — `precision.ts` comment.** It says the commit-boundary grids make "the fixed-edge identity in contract #9's resize maths exact". That holds in integer hundredths (§3.1), not for float subtraction; the comment is corrected in stage 2 (comment only).
 
@@ -989,12 +1036,12 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 ---
 
 ## 13 · Document maintenance
-- **Now (stage 0, r4):**
-  - This plan is revised in place on `slice-d-resize`; r1 (`8042cc8`), r2 (`b30373c`) and r3 (`d1f0f3d`) remain in history.
-  - The evidence script (`docs/evidence/slice-d-math-check.*`) gains sections H and I. Its output is re-committed and is byte-identical on every run.
-  - `HANDOFF.md` is brought to the r4 checkpoint and propagated byte-identical to the canonical and Vault copies, with checksums.
+- **Now (stage 0, r5):**
+  - This plan is revised in place on `slice-d-resize`; r1 (`8042cc8`), r2 (`b30373c`), r3 (`d1f0f3d`) and r4 (`8b9b7d2`) remain in history.
+  - The evidence script (`docs/evidence/slice-d-math-check.*`) gains section J; sections A–I and their output are unchanged. Its output is re-committed and is byte-identical on every run.
+  - `HANDOFF.md` is brought to the r5 checkpoint and propagated byte-identical to the canonical and Vault copies, with checksums.
   - `native-publishing-slice-d-readiness.md` is left unaltered as the historical record.
-- **At stage 8B:** `docs/security-operations.md` §8 gains D's measured per-browser attempted/admitted/blocked counts per phase, the write-budget rules and the id-ownership rules of §8.5, once approved.
+- **At stage 8B:** `docs/security-operations.md` §8 gains D's measured per-browser attempted/admitted/blocked counts per phase, the write-budget rules, the write journal and the ownership-registry rules of §8.5, once approved.
 - **At stage 9:**
   - `decisions.md` **D-036** — the integer-hundredths representation, segments and the centre carry, the ratio anchor clamp (per Ben's Q7 answer), precedence and tolerances (§3), and D-1's amendment of #11/#19.
   - `HANDOFF.md` Phase entry with the measured results, propagated again.

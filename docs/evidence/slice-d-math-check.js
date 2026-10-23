@@ -5,6 +5,7 @@
 // [-1, 1) px early return, anchor rename), adds crossing-and-return cases, and checks the r3 ratio anchor clamp.
 // r4 corrects the early-return interval to Konva's exact [-1, 1) (Util._inRange is `left <= val && val < right`),
 // adds boundary cases (section H), and adds a model of the production write-outcome protocol (section I).
+// r5 adds section J: cleanup ownership established only by attributed creation actions, separate from the write journal.
 // This is MATHEMATICAL-MODEL evidence. Behaviour in real browsers is verified only by the plan's stage 1 probe.
 'use strict';
 
@@ -842,6 +843,179 @@ log('I. write-outcome protocol model (late commits after teardown; exhaustive in
     if (protocol === 'r4') check(st.falseClean === 0 && st.journalClearedWithResidue === 0 && st.unownedDeleted === 0 && st.maxWrites <= 8, 'I r4 protocol never reports clean falsely');
     else check(st.falseClean > 0, 'I naive protocol false-clean reproduced');
   }
+}
+
+// ===== J. cleanup ownership vs write journaling (plan §8.5, r5): a model, not the editor =====
+// Baxter saves the whole document: every PUT body carries every element on every page (save-payload.ts). So appearing in
+// an outgoing body proves nothing about who made an element. r5 keeps two records apart:
+//   ownership registry: written ONLY by the attribution step of a declared test creation (or fence marker), before any
+//                       save containing the id is released;
+//   write journal:      every outgoing body (phase, base revision, element models), for late-write reconciliation and the
+//                       model-consistency check; it never adds ownership.
+// r5 also refuses to forward a body that has an id on the run's unit that is neither in this page's B0 nor registered.
+// "r4 rule" applies r4's §8.5 text literally in both phases: owned := ids in outgoing bodies that are not in the unit's B0.
+// Both protocols share the same server, interleavings, fence, allowance and model-consistency check.
+log('J. cleanup ownership vs write journaling (whole-document saves, unrelated objects, ambiguous creations)');
+{
+  const U = 'U', P = 'P'; // U: the run's unit; P: another page of the same document
+  const obj = (unit, model) => ({ unit, model });
+  const idsOn = (d, unit) => [...d.keys()].filter((id) => !unit || d.get(id).unit === unit);
+  const c = (id, adds, late) => ({ kind: 'create', id, adds, late });
+  const ACTS = {
+    lateCreate:    [c('X', ['X']), { kind: 'update', id: 'X', model: 'x1' }, c('Z', ['Z'], true)],
+    lateUpdate:    [c('X', ['X']), { kind: 'update', id: 'X', model: 'x2', late: true }],
+    noneAtLoad:    [c('X', ['X']), { kind: 'delete', id: 'X' }, c('Z', ['Z'], true)],
+    ambiguousTwo:  [c('X', ['X']), c('Y', ['Y', 'W'])],                                  // the gesture adds two elements
+    ambiguousNone: [c('X', ['X']), c('Y', [])],                                          // the gesture adds none
+    undeclaredNew: [c('X', ['X']), { kind: 'update', id: 'X', model: 'x1', alsoAdds: 'V' }], // a non-creation step adds V
+  };
+  const HUMANS = ['none', 'human-creates-h1-on-U', 'human-creates-h2-on-P', 'human-edits-p1', 'human-edits-owned-X',
+    'owned-X-found-on-P']; // the last is not reachable through the editor's own paths; it exercises the recorded-unit check
+  const SLOTS = ['before-load', 'after-load', 'after-cleanup-write-1', 'after-cleanup-write-2', 'after-cleanup-write-3', 'never'];
+  const TEST_IDS = new Set(['X', 'Z', 'Y', 'W', 'V', 'F']);
+  function run(actName, human, slot, dup, lostCleanup, rule) {
+    const expectUnrelated = new Map([['u0', 'u0'], ['p1', 'p1']]); // id -> the model every later commit must carry
+    const harmed = new Set();  // unrelated ids missing or changed in ANY commit after they were expected
+    const forwarded = [];      // every body this run actually sent to the server
+    const server = {
+      rev: 0, doc: new Map([['u0', obj(U, 'u0')], ['p1', obj(P, 'p1')]]),
+      put(base, snap, byTest = true) {
+        if (byTest) forwarded.push(snap);
+        if (base !== this.rev) return 409;
+        this.doc = new Map(snap); this.rev = base + 1;
+        for (const [id, m] of expectUnrelated) if (!this.doc.has(id) || this.doc.get(id).model !== m) harmed.add(id);
+        return 200;
+      },
+    };
+    const B0 = new Set(idsOn(server.doc, U));
+    const registry = new Map();  // r5 ownership registry: id -> { run, intent, unit, role }
+    const writeJournal = [];     // { phase, base, models }
+    const r4Owned = new Set();
+    let stopped = null, outcome = null;
+    const journal = (phase, base, snap) => {
+      writeJournal.push({ phase, base, models: new Map([...snap].map(([id, o]) => [id, o.model])) });
+      if (rule === 'r4-rule') for (const id of snap.keys()) if (!B0.has(id)) r4Owned.add(id);
+    };
+    // a declared creation: intent recorded, saves held, gesture, attribution from this page's own unit ids
+    const create = (page, intent, adds, role) => {
+      const before = new Set(idsOn(page.doc, U));
+      for (const id of adds) page.doc.set(id, obj(U, id.toLowerCase() + '0'));
+      const fresh = idsOn(page.doc, U).filter((id) => !before.has(id));
+      if (fresh.length !== 1) return false; // ambiguous: nothing registered
+      if (rule === 'r5') registry.set(fresh[0], { run: 'run-1', intent, unit: U, role });
+      return true;
+    };
+    const guardOk = (snap, b0) => rule !== 'r5' || idsOn(snap, U).every((id) => b0.has(id) || registry.has(id));
+    // ---- action phase: one page, loaded at revision 0
+    const page = { rev: 0, doc: new Map(server.doc), b0: B0 };
+    let inFlight = null;
+    for (const st of ACTS[actName]) {
+      if (st.kind === 'create') { if (!create(page, 'create:' + st.id, st.adds, 'test')) stopped = 'ambiguous attribution'; }
+      else if (st.kind === 'update') { page.doc.set(st.id, obj(U, st.model)); if (st.alsoAdds) page.doc.set(st.alsoAdds, obj(U, 'v0')); }
+      else page.doc.delete(st.id);
+      const snap = new Map(page.doc);
+      if (rule === 'r5' && !stopped && !guardOk(snap, page.b0)) stopped = 'unattributed id on the unit';
+      if (rule === 'r5' && stopped) break;     // held/next save aborted: never forwarded (a known non-commit); suite stops
+      journal('action', page.rev, snap);
+      if (st.late) { inFlight = { base: page.rev, snap }; break; } // teardown with this write admitted: outcome UNKNOWN
+      if (server.put(page.rev, snap) === 200) page.rev++;
+      if (stopped) break;                      // r4: forwarded, then stopped
+    }
+    const deliveries = !inFlight || slot === 'never' ? [] : [slot].concat(dup ? [SLOTS[Math.min(SLOTS.indexOf(slot) + 1, 4)]] : []);
+    const deliver = (at) => { while (deliveries.includes(at)) { deliveries.splice(deliveries.indexOf(at), 1); server.put(inFlight.base, inFlight.snap); } };
+    // ---- someone else, in their own editor, at the current revision
+    const humanEdit = (fn) => { const d = new Map(server.doc); fn(d); server.put(server.rev, d, false); };
+    if (human === 'human-creates-h1-on-U') { expectUnrelated.set('h1', 'h1'); humanEdit((d) => d.set('h1', obj(U, 'h1'))); }
+    if (human === 'human-creates-h2-on-P') { expectUnrelated.set('h2', 'h2'); humanEdit((d) => d.set('h2', obj(P, 'h2'))); }
+    if (human === 'human-edits-p1') { expectUnrelated.set('p1', 'p1-edited'); humanEdit((d) => d.set('p1', obj(P, 'p1-edited'))); }
+    if (human === 'human-edits-owned-X' && server.doc.has('X')) humanEdit((d) => d.set('X', obj(U, 'x-human')));
+    if (human === 'owned-X-found-on-P' && server.doc.has('X')) humanEdit((d) => d.set('X', obj(P, d.get('X').model)));
+    deliver('before-load');
+    // ---- cleanup phase: a fresh page per load; own allowance C = 8 (marker create and delete included)
+    const owned = () => (rule === 'r5' ? registry : new Map([...r4Owned].map((id) => [id, { unit: null }])));
+    const seenModels = (id) => new Set(writeJournal.flatMap((r) => (r.models.has(id) ? [r.models.get(id)] : [])));
+    let cp = { rev: server.rev, doc: new Map(server.doc) };
+    deliver('after-load');
+    let fenced = !inFlight, writes = 0;
+    while (outcome === null) {
+      const own = owned(), b0 = new Set(idsOn(cp.doc, U)); // this cleanup page's B0: whatever the unit held when it loaded
+      const present = idsOn(cp.doc).filter((id) => own.has(id));
+      if (rule === 'r5' && present.some((id) => cp.doc.get(id).unit !== own.get(id).unit)) { outcome = 'recovery pending: owned id off its recorded unit'; break; }
+      if (present.some((id) => !seenModels(id).has(cp.doc.get(id).model))) { outcome = 'recovery pending: owned element changed by someone else'; break; }
+      let snap;
+      if (present.length) { snap = new Map(cp.doc); for (const id of present) snap.delete(id); }
+      else if (!fenced) {
+        const mp = { doc: new Map(cp.doc) };
+        if (!create(mp, 'fence-marker', ['F'], 'marker')) { outcome = 'recovery pending: marker attribution failed'; break; }
+        snap = mp.doc;
+      } else { outcome = 'clean'; break; }
+      if (!guardOk(snap, b0)) { outcome = 'recovery pending: unattributed id in a cleanup save'; break; }
+      if (writes === 8) { outcome = 'recovery pending: cleanup allowance exhausted'; break; }
+      writes++;
+      journal('cleanup', cp.rev, snap);
+      const res = server.put(cp.rev, snap);
+      deliver('after-cleanup-write-' + writes);
+      if (lostCleanup && writes === 1) { outcome = 'recovery pending: cleanup write outcome unknown'; break; }
+      if (res === 200) fenced = true;
+      cp = { rev: server.rev, doc: new Map(server.doc) }; // reload after every answer (200 or 409) and re-plan
+    }
+    for (const at of SLOTS) deliver(at); // drain every late write that is still possible
+    const final = server.doc, ownedIds = [...owned().keys()];
+    return {
+      outcome, stopped, writes,
+      ownedIds,
+      unrelatedOwned: ownedIds.filter((id) => expectUnrelated.has(id)),
+      unrelatedHarmed: [...harmed], // checked at every commit, so the final state too
+      testResidue: idsOn(final).filter((id) => TEST_IDS.has(id)),
+      reportedPending: outcome === 'clean' ? [] : ownedIds.filter((id) => final.has(id)),
+      unattributedForwarded: forwarded.some((b) => b.has('Y') || b.has('W') || b.has('V')),
+    };
+  }
+  for (const rule of ['r4-rule', 'r5']) {
+    const st = { n: 0, clean: 0, pending: 0, stopped: 0, unrelatedOwnedRuns: 0, unrelatedHarmedRuns: 0, harmedIds: new Map(),
+      falseClean: 0, residueUnreported: 0, unattributedForwarded: 0, registryOutsideAttributed: 0, maxWrites: 0 };
+    for (const act of Object.keys(ACTS)) for (const human of HUMANS) for (const slot of SLOTS) for (const dup of [false, true]) for (const lost of [false, true]) {
+      const r = run(act, human, slot, dup, lost, rule);
+      st.n++; st.maxWrites = Math.max(st.maxWrites, r.writes);
+      if (r.outcome === 'clean') st.clean++; else st.pending++;
+      if (r.stopped) st.stopped++;
+      if (r.unrelatedOwned.length) st.unrelatedOwnedRuns++;
+      if (r.unrelatedHarmed.length) { st.unrelatedHarmedRuns++; for (const id of r.unrelatedHarmed) st.harmedIds.set(id, (st.harmedIds.get(id) || 0) + 1); }
+      if (r.outcome === 'clean' && r.testResidue.length) st.falseClean++;
+      if (r.outcome !== 'clean' && r.testResidue.some((id) => !r.reportedPending.includes(id))) st.residueUnreported++;
+      if (r.unattributedForwarded) st.unattributedForwarded++;
+      if (r.ownedIds.some((id) => !['X', 'Z', 'F'].includes(id))) st.registryOutsideAttributed++;
+    }
+    const harmed = [...st.harmedIds].map(([id, k]) => `${id} x${k}`).join(', ') || 'none';
+    log(`  ${rule === 'r4-rule' ? "r4 rule (owned := ids in outgoing whole-document bodies not in the unit's B0)" : 'r5 (owned := ids registered by an attributed declared creation; bodies journaled separately)'}: ${st.n} runs -> clean ${st.clean}, recovery pending ${st.pending}; runs stopped for attribution ${st.stopped}`);
+    log(`      runs with an unrelated id in the ownership set ${st.unrelatedOwnedRuns}; runs where a commit deleted or changed an unrelated element ${st.unrelatedHarmedRuns} (${harmed}); owned ids not from an attributed creation, runs ${st.registryOutsideAttributed}`);
+    log(`      false "clean" with test residue ${st.falseClean}; test residue neither cleaned nor reported ${st.residueUnreported}; runs that forwarded an unattributed test element ${st.unattributedForwarded}; max cleanup writes ${st.maxWrites}`);
+    if (rule === 'r5') check(st.unrelatedOwnedRuns === 0 && st.unrelatedHarmedRuns === 0 && st.registryOutsideAttributed === 0 && st.falseClean === 0 && st.residueUnreported === 0 && st.unattributedForwarded === 0 && st.maxWrites <= 8, 'J r5 ownership');
+    else check(st.unrelatedOwnedRuns > 0 && st.unrelatedHarmedRuns > 0, 'J r4 rule defect reproduced');
+  }
+  // the deterministic cases listed in Codex's r4 review, spelled out (r5 protocol)
+  const show = (label, act, human, slot, lost = false) => {
+    const r = run(act, human, slot, false, lost, 'r5');
+    log(`     ${label}: ${r.stopped ? 'stopped (' + r.stopped + '); ' : ''}cleanup ${r.outcome}; owned ${r.ownedIds.join(',') || 'none'}; unrelated owned ${r.unrelatedOwned.join(',') || 'none'}; unrelated harmed ${r.unrelatedHarmed.join(',') || 'none'}; test residue ${r.testResidue.join(',') || 'none'}${r.reportedPending.length ? ' (reported: ' + r.reportedPending.join(',') + ')' : ''}; cleanup writes ${r.writes}`);
+    return r;
+  };
+  log('  r5, the listed cases:');
+  const cases = [
+    show('p1 on another page rides in every save; late test creation Z lands after cleanup load', 'lateCreate', 'none', 'after-load'),
+    show('human h1 created on the unit before cleanup load, carried through the cleanup delete save', 'lateUpdate', 'human-creates-h1-on-U', 'never'),
+    show('human h1 carried through a fence-marker save (nothing owned at load; late write never lands)', 'noneAtLoad', 'human-creates-h1-on-U', 'never'),
+    show('late test update lands before cleanup load, alongside human h2 on another page', 'lateUpdate', 'human-creates-h2-on-P', 'before-load'),
+    show('late test creation alongside human-edited p1; cleanup response lost', 'lateCreate', 'human-edits-p1', 'after-cleanup-write-1', true),
+    show('ambiguous attribution: one gesture adds two elements', 'ambiguousTwo', 'none', 'never'),
+    show('ambiguous attribution: the gesture adds none (p1 edited by a human)', 'ambiguousNone', 'human-edits-p1', 'never'),
+    show('undeclared new element V from a non-creation step', 'undeclaredNew', 'human-creates-h1-on-U', 'never'),
+    show('fence-marker save committed but its response lost, human h1 present', 'noneAtLoad', 'human-creates-h1-on-U', 'never', true),
+  ];
+  for (const r of cases) check(r.unrelatedOwned.length === 0 && r.unrelatedHarmed.length === 0 && r.testResidue.every((id) => r.reportedPending.includes(id)), 'J listed case');
+  check(cases[2].writes === 2 && cases[2].outcome === 'clean', 'J marker create + delete');
+  check(cases[4].outcome !== 'clean' && cases[4].testResidue.length === 0, 'J lost response stays pending even with nothing left');
+  check(cases[8].outcome !== 'clean' && cases[8].testResidue.join() === 'F' && cases[8].reportedPending.includes('F'), 'J lost marker reported');
+  check(cases[5].stopped && cases[6].stopped && cases[7].stopped, 'J ambiguity stops');
 }
 
 log(failures === 0 ? 'RESULT: all checks passed' : `RESULT: ${failures} check(s) FAILED`);

@@ -112,4 +112,21 @@ I. write-outcome protocol model (late commits after teardown; exhaustive interle
      e.g. S2_nothingAtLoad, late write after-load, human none: reported clean, residue Z
      e.g. S2_nothingAtLoad, late write after-load, human none, first cleanup response lost: reported clean, residue Z
   r4 (outcomes tracked; unknown -> fence by a confirmed cleanup write; recorded ids only): 360 interleavings -> clean 144, recovery pending 216, stopped 0; FALSE "clean" with residue after late commits 0; journal cleared with residue 0; non-owned objects deleted 0; max cleanup writes 3
+J. cleanup ownership vs write journaling (whole-document saves, unrelated objects, ambiguous creations)
+  r4 rule (owned := ids in outgoing whole-document bodies not in the unit's B0): 864 runs -> clean 300, recovery pending 564; runs stopped for attribution 288
+      runs with an unrelated id in the ownership set 864; runs where a commit deleted or changed an unrelated element 590 (p1 x590, h1 x72, h2 x72); owned ids not from an attributed creation, runs 864
+      false "clean" with test residue 0; test residue neither cleaned nor reported 0; runs that forwarded an unattributed test element 288; max cleanup writes 2
+  r5 (owned := ids registered by an attributed declared creation; bodies journaled separately): 864 runs -> clean 312, recovery pending 552; runs stopped for attribution 432
+      runs with an unrelated id in the ownership set 0; runs where a commit deleted or changed an unrelated element 0 (none); owned ids not from an attributed creation, runs 0
+      false "clean" with test residue 0; test residue neither cleaned nor reported 0; runs that forwarded an unattributed test element 0; max cleanup writes 2
+  r5, the listed cases:
+     p1 on another page rides in every save; late test creation Z lands after cleanup load: cleanup clean; owned X,Z; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 2
+     human h1 created on the unit before cleanup load, carried through the cleanup delete save: cleanup clean; owned X; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     human h1 carried through a fence-marker save (nothing owned at load; late write never lands): cleanup clean; owned X,Z,F; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 2
+     late test update lands before cleanup load, alongside human h2 on another page: cleanup clean; owned X; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     late test creation alongside human-edited p1; cleanup response lost: cleanup recovery pending: cleanup write outcome unknown; owned X,Z; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     ambiguous attribution: one gesture adds two elements: stopped (ambiguous attribution); cleanup clean; owned X; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     ambiguous attribution: the gesture adds none (p1 edited by a human): stopped (ambiguous attribution); cleanup clean; owned X; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     undeclared new element V from a non-creation step: stopped (unattributed id on the unit); cleanup clean; owned X; unrelated owned none; unrelated harmed none; test residue none; cleanup writes 1
+     fence-marker save committed but its response lost, human h1 present: cleanup recovery pending: cleanup write outcome unknown; owned X,Z,F; unrelated owned none; unrelated harmed none; test residue F (reported: F); cleanup writes 1
 RESULT: all checks passed
