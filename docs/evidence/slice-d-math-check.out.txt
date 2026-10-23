@@ -1,0 +1,100 @@
+A. Codex counterexamples against r1
+  A1 r1 centred: start x=0 w=10 (centre 5); after widths 10.01, 10.02, 10.03, 10.04 -> x=0 w=10.04 centre=5.02
+  A2 r1 ratio: 4.03x4, s=1.0087 -> 4.07 x 4.03; exact h for w=4.07 is 4.039702; error 0.009702 mm
+  A3 float: 0.03 - 0.01 = 0.019999999999999997; integer hundredths: 3 - 1 = 2 -> fromH(2) = 0.02
+B. deterministic examples (hundredths in brackets)
+  B1 centred (Alt), x=0 w=10, right handle; Konva mirrors about its own (rounded) node centre, the maths ignores it:
+     pointer 10.005 -> w=10.01 x=-0.01 right=10 centre=4.995 [-1,1001]
+     pointer 10.010 -> w=10.02 x=-0.01 right=10.01 centre=5 [-1,1002]
+     pointer 10.015 -> w=10.03 x=-0.02 right=10.01 centre=4.995 [-2,1003]
+     pointer 10.020 -> w=10.04 x=-0.02 right=10.02 centre=5 [-2,1004]
+  B2 right handle: free -> Alt pressed -> Alt held -> Alt released
+     free  to 55.37: x=20 y=10 w=35.37 h=20 [2000,1000,3537,2000]  (fixed left 20.00)
+     Alt   to 57.00: x=18.37 y=10 w=38.63 h=20 [1837,1000,3863,2000]  centre captured from previous box = 37.685
+     Alt   to 57.50: x=17.87 y=10 w=39.63 h=20 [1787,1000,3963,2000]  centre = 37.685
+     free  to 60.00: x=17.87 y=10 w=42.13 h=20 [1787,1000,4213,2000]  (fixed left = previous box's left 17.87)
+  B3 ratio 4.03x4, s=1.0087: controlling x -> x=0 y=0 w=4.07 h=4.04 [0,0,407,404]; exact h for w=4.07 is 4.039702; error 0.000298 mm
+  B4 T10 ratio 4:3, target x=60: controlling x -> x=10 y=10 w=50 h=37.5 [1000,1000,5000,3750] guide x=60
+  B5 ratio, targets x=60 (corr 0.08) and y=47.60 (corr 0.04): controlling y -> x=10 y=10 w=50.13 h=37.6 [1000,1000,5013,3760] guide y=47.6
+  B5b square 40x40, both edges 0.50 from a target: tie -> larger start axis, equal -> x: controlling x -> x=0 y=0 w=50.5 h=50.5 [0,0,5050,5050]
+  B6a normal axis, raw right edge 3.994 -> x=0 y=0 w=4 h=10 [0,0,400,1000] (floor 4)
+  B6b grandfathered 2.5 x 20: shrink to 2.4 -> w=2.5; enlarge to 3.2 -> w=3.2
+  B6c ratio on grandfathered 2.5 x 20: s=0.9 -> 2.5 x 20; s=1.1 -> 2.75 x 22
+  B7 ratio+Alt on 30.01 x 20, corner pointer (33.30, 22.10): controlling x -> x=-3.25 y=-2.17 w=36.5 h=24.33 [-325,-217,3650,2433]; centre error 0.005 mm; ratio error 0.004775 mm
+  B8a two targets 0.50 mm either side (20.00, 21.00): lower wins -> right edge 20 guide 20
+  B8b target = centre of a 10.01-wide element at 20.00 (25.005): right edge 25.01 guide 25.005 (|diff| 0.005 mm)
+  B9 target at 3.00 within the 4 mm floor: w=4 guide=null
+C. representation (exhaustive over -2000.00 .. 2000.00 mm)
+  toH(fromH(h))===h, quantizeInspector(fromH(h))===fromH(h), formatNum(fromH(h))===integer formatting: 0 mismatches in 400001 values
+  toH(x + w) === hx + hw for 200000 random canonical pairs: 0 mismatches; max |float(x+w) - canonical(x+w)| = 1.14e-13 mm
+D. Konva port: ratio corner reverse per axis (node 40 x 30 at (100,100) mm, 100% zoom, bottom-right anchor)
+  natural quadrant (130, 160): raw w=53.666 h=40.249 mm -> anchor bottom-right
+  crossed x only   (90, 160): raw w=-48.662 h=36.497 mm -> anchor bottom-left (renamed)
+  crossed y only   (130, 90): raw w=25.298 h=-18.974 mm -> anchor top-right (renamed)
+  crossed both     (90, 90): raw w=-11.314 h=-8.485 mm -> anchor top-left (renamed)
+  Alt, crossed centre in x (110, 160): raw w=-73.756 h=55.317 mm -> anchor bottom-left (renamed)
+  Alt, crossed centre in both (110, 105): raw w=-22.627 h=-16.971 mm -> anchor top-left (renamed)
+E. crossing-and-return paths (start 40 x 30 at (100,100) mm, 100% zoom, no snap targets, 0.2 mm pointer steps)
+  E1 ratio, bottom-right, crosses x only (pointer far below)
+     r2: freezes 1, renames 1, clamped moves 0, segments 2, floor violations 0, reference violations 0, out/back mismatches 202; at waypoint 0 [100, 100, 57.69 x 43.27] -> back at waypoint 0 [99.58, 100, 48.42 x 36.32], end anchor bottom-left
+         max edge jump per 0.2 mm pointer step 13.67 mm at pointer (99.6, 160.0): [100, 100, 48 x 36] -> [86.33, 100, 61.67 x 46.25]
+     r3: freezes 0, renames 0, clamped moves 253, segments 1, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [100, 100, 57.69 x 43.27] -> back at waypoint 0 [100, 100, 57.69 x 43.27], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.09 mm at pointer (139.8, 160.0): [100, 100, 57.69 x 43.27] -> [100, 100, 57.6 x 43.2]
+  E2 ratio, bottom-right, crosses y only (pointer far right)
+     r2: freezes 1, renames 1, clamped moves 0, segments 2, floor violations 0, reference violations 0, out/back mismatches 152; at waypoint 0 [100, 100, 60.93 x 45.7] -> back at waypoint 0 [100, 99.38, 56.82 x 42.62], end anchor top-right
+         max edge jump per 0.2 mm pointer step 9.47 mm at pointer (170.0, 99.6): [100, 100, 56 x 42] -> [100, 92.9, 65.47 x 49.1]
+     r3: freezes 0, renames 0, clamped moves 241, segments 1, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [100, 100, 60.93 x 45.7] -> back at waypoint 0 [100, 100, 60.93 x 45.7], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.07 mm at pointer (170.0, 129.8): [100, 100, 60.93 x 45.7] -> [100, 100, 60.86 x 45.65]
+  E3 ratio, bottom-right, crosses both (diagonal through the fixed corner)
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 6; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.64 mm at pointer (99.4, 99.5): [100, 100, 5.34 x 4.01] -> [99.36, 99.52, 5.98 x 4.49]
+     r3: freezes 0, renames 0, clamped moves 317, segments 1, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.16 mm at pointer (139.8, 129.9): [100, 100, 40 x 30] -> [100, 100, 39.84 x 29.88]
+  E4 ratio, top-left, crosses x only
+     r2: freezes 1, renames 1, clamped moves 0, segments 2, floor violations 0, reference violations 0, out/back mismatches 201; at waypoint 0 [75.5, 81.62, 64.5 x 48.38] -> back at waypoint 0 [84, 86.92, 57.44 x 43.08], end anchor top-right
+         max edge jump per 0.2 mm pointer step 15.82 mm at pointer (140.2, 60.0): [84, 88, 56 x 42] -> [84, 76.13, 71.82 x 53.87]
+     r3: freezes 0, renames 0, clamped moves 253, segments 1, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [75.5, 81.62, 64.5 x 48.38] -> back at waypoint 0 [75.5, 81.62, 64.5 x 48.38], end anchor top-left
+         max edge jump per 0.2 mm pointer step 0.08 mm at pointer (100.2, 60.0): [75.5, 81.62, 64.5 x 48.38] -> [75.58, 81.68, 64.42 x 48.32]
+  E5 ratio+Alt, bottom-right, crosses the centre in x only
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [80.6, 85.45, 78.79 x 59.09] -> back at waypoint 0 [80.6, 85.45, 78.79 x 59.09], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.07 mm at pointer (139.8, 160.0): [80.6, 85.45, 78.79 x 59.09] -> [80.67, 85.5, 78.66 x 59]
+     r3: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [80.6, 85.45, 78.79 x 59.09] -> back at waypoint 0 [80.6, 85.45, 78.79 x 59.09], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.07 mm at pointer (139.8, 160.0): [80.6, 85.45, 78.79 x 59.09] -> [80.67, 85.5, 78.66 x 59]
+  E6 ratio+Alt, bottom-right, crosses the centre in y only
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [70.52, 77.89, 98.95 x 74.21] -> back at waypoint 0 [70.52, 77.89, 98.95 x 74.21], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.04 mm at pointer (180.0, 129.8): [70.52, 77.89, 98.95 x 74.21] -> [70.56, 77.92, 98.88 x 74.16]
+     r3: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [70.52, 77.89, 98.95 x 74.21] -> back at waypoint 0 [70.52, 77.89, 98.95 x 74.21], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.04 mm at pointer (180.0, 129.8): [70.52, 77.89, 98.95 x 74.21] -> [70.56, 77.92, 98.88 x 74.16]
+  E7 ratio+Alt, bottom-right, crosses the centre in both
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.16 mm at pointer (139.8, 129.9): [100, 100, 40 x 30] -> [100.16, 100.12, 39.68 x 29.76]
+     r3: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 0; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.16 mm at pointer (139.8, 129.9): [100, 100, 40 x 30] -> [100.16, 100.12, 39.68 x 29.76]
+  E8 free corner (no ratio), bottom-right, crosses x only [accepted #11 behaviour]
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 4; at waypoint 0 [100, 100, 40 x 60] -> back at waypoint 0 [100, 100, 40 x 60], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.60 mm at pointer (99.4, 160.0): [100, 100, 4 x 60] -> [99.4, 100, 4.6 x 60]
+     r3: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 4; at waypoint 0 [100, 100, 40 x 60] -> back at waypoint 0 [100, 100, 40 x 60], end anchor bottom-right
+         max edge jump per 0.2 mm pointer step 0.60 mm at pointer (99.4, 160.0): [100, 100, 4 x 60] -> [99.4, 100, 4.6 x 60]
+  E9 free side, middle-right, crosses the fixed edge [accepted #11 behaviour]
+     r2: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 4; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor middle-right
+         max edge jump per 0.2 mm pointer step 0.60 mm at pointer (99.4, 115.0): [100, 100, 4 x 30] -> [99.4, 100, 4.6 x 30]
+     r3: freezes 2, renames 2, clamped moves 0, segments 3, floor violations 0, reference violations 0, out/back mismatches 4; at waypoint 0 [100, 100, 40 x 30] -> back at waypoint 0 [100, 100, 40 x 30], end anchor middle-right
+         max edge jump per 0.2 mm pointer step 0.60 mm at pointer (99.4, 115.0): [100, 100, 4 x 30] -> [99.4, 100, 4.6 x 30]
+  E10 ratio crossing near the fixed corner (r3): smallest box [100, 100, 5.34 x 4.01] (kMin = ceil(4.00 x 40/30) = 5.34 on the controlling axis; dependent 4.005 -> 4.01); freezes 0, renames 0, out/back mismatches 0
+  E11 ratio crossing on grandfathered 2.5 x 20 (r3): smallest box [100, 100, 2.5 x 20]; freezes 0, renames 0, out/back mismatches 0
+  E12 r2 one-move jump from (150,140) to (60,50) then (61,51): [100, 100, 51.22 x 38.42] -> frozen [100, 100, 51.22 x 38.42] -> bounded [50.72, 63.04, 100.5 x 75.38], anchor top-left
+  E12 r3 one-move jump from (150,140) to (60,50) then (61,51): [100, 100, 51.22 x 38.42] -> bounded [100, 100, 5.34 x 4.01] -> bounded [100, 100, 5.34 x 4.01], anchor bottom-right
+  E13 Alt held, 6 centre crossings, start centre 105.005 (r2: centre re-captured per segment): segments 7, renames 6, max centre error vs the first centre 0.010 mm, final [98, 100, 14 x 20]
+  E13 Alt held, 6 centre crossings, start centre 105.005 (r3: centre carried): segments 7, renames 6, max centre error vs the first centre 0.005 mm, final [98.01, 100, 13.99 x 20]
+F. seeded random gestures through the Konva port
+  r3 (with the ratio anchor clamp): 4000 gestures, 312818 bounded moves, 47126 segments, 530 Konva 1 px early returns, 6652 freezes, 6652 renames, 6322 clamped moves
+      one-edge ratio: freezes 0, renames 0, Konva 1 px skips 0
+      non-integer outputs 0 | floor violations 0 | undersized shrink 0 | fixed-edge changes within a segment 0
+      max centre error per segment 0.005 mm, per continuous Alt hold 0.005 mm | max ratio error 0.005000 mm | max snapped-edge vs guide 0.005 mm
+      payload canonical/format mismatches 0 | px round-trip failures 0 | nondeterministic reruns 0
+  r2 (no clamp, centre re-captured per segment), same gestures: 312492 bounded moves, 6970 freezes, 6970 renames; one-edge ratio: freezes 594, renames 594, Konva 1 px skips 2
+      centre error per continuous Alt hold 0.005 mm; other properties: non-integer 0, floor 0, undersized 0, fixed-edge 0, centre per segment 0.005, ratio 0.005000, guide 0.005
+G. r1 shadow runs
+  r1: centred moves 148146, centre-drift > 0.005 mm in 115285 (max drift 0.140 mm)
+      unsnapped ratio moves 40000, dependent error > 0.005 mm in 5289 (max 0.009847 mm)
+RESULT: all checks passed
