@@ -15,3 +15,6 @@ export * from './editor/precision';
 export * from './editor/snapping';
 export * from './editor/num-field';
 export * from './editor/moves';
+export * from './editor/hundredths';
+export * from './editor/minimums';
+export * from './editor/resize';
