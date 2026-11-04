@@ -33,6 +33,7 @@ import {
   newRectElement,
   quantizeInspector,
   RESIZE_ANCHORS,
+  ratioDefined,
   ratioMinimumBox,
   resizePayload,
   resizeTargetsH2,
@@ -198,6 +199,16 @@ describe('Slice D — start box, targets and payload (§3.2, §3.9)', () => {
     expect(startBoxH({ x: 20, y: 30, width: 40, height: 50 }, 14800)).toEqual(box(16800, 3000, 4000, 5000));
     // legacy non-canonical stored value: each edge within 0.005 mm of its stored geometry
     expect(startBoxH({ x: 20.004, y: 0, width: 30, height: 10 }, 0)).toEqual(box(2000, 0, 3000, 1000));
+  });
+
+  it('a legacy non-canonical element: its centre target is halfway between its two rounded edges (x 20.004, w 10.004 → 25.005)', () => {
+    const t = resizeTargetsH2({ pageWidthMm: 148, pageHeightMm: 210, pageOffsetsMm: [0], marginMm: 12 }, [{ x: 20.004, y: 100, width: 10.004, height: 5 }]);
+    // rounded edges: L = toH(20.004) = 2000, R = toH(30.008) = 3001; centre = L + R = 5001 H2 = 25.005 mm
+    expect([t.x.includes(4000), t.x.includes(6002), t.x.includes(5001)]).toEqual([true, true, true]);
+    expect(5001 / 200).toBe(25.005);
+    // the formula 2·toH(x) + toH(w) would give 5000 (25.00): not a target
+    expect(2 * toH(20.004) + toH(10.004)).toBe(5000);
+    expect(t.x.includes(5000)).toBe(false);
   });
 
   it('resize targets in H2: page edges, centres and margins; element edges and exact half-hundredth centres', () => {
@@ -822,6 +833,170 @@ describe('Slice D — ratio controlling axis and floors (finding 2)', () => {
 });
 
 /* ========================================================================== */
+
+/* ========================================================================== */
+
+describe('Slice D — a positive stored size that rounds to 0 H (stage 2 correction, review finding 1)', () => {
+  const cases = [
+    { name: 'width only', stored: { x: 0, y: 0, width: 0.004, height: 20 }, start: box(0, 0, 0, 2000), floors: { w: 0, h: 400 } },
+    { name: 'height only', stored: { x: 10, y: 0, width: 20, height: 0.004 }, start: box(1000, 0, 2000, 0), floors: { w: 400, h: 0 } },
+    { name: 'both axes', stored: { x: 0, y: 0, width: 0.004, height: 0.004 }, start: box(0, 0, 0, 0), floors: { w: 0, h: 0 } },
+  ] as const;
+  const allFinite = (B: BoxH) => [B.x, B.y, B.w, B.h].every(Number.isFinite);
+  const samePayload = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    Object.is(a.x, b.x) && Object.is(a.y, b.y) && Object.is(a.width, b.width) && Object.is(a.height, b.height);
+
+  it('the start box, its D-1 floors, and the ratio minimum box (= the start box) are finite', () => {
+    for (const c of cases) {
+      const start = startBoxH(c.stored, 0);
+      expect([c.name, arr(start)]).toEqual([c.name, arr(c.start)]);
+      const st = createResizeState(start, NO_TARGETS);
+      expect(st.floors).toEqual(c.floors);
+      expect(ratioDefined(start)).toBe(false);
+      expect(ratioMinimumBox(st)).toEqual({ w: c.start.w, h: c.start.h });
+    }
+  });
+
+  it('ratio mode (with or without Alt) holds the previous box: no proportion to keep; finite; the release commits nothing', () => {
+    for (const c of cases) {
+      const S = c.start;
+      const st = createResizeState(S, { x: [2 * 500], y: [2 * 2500] }); // targets that would snap if ratio ran
+      for (const alt of [false, true]) {
+        const raw = { left: S.x / 100 - 5, top: S.y / 100 - 5, right: S.x / 100 + 5, bottom: S.y / 100 + 25 };
+        const r = boundResize(st, { anchor: 'bottom-right', ratio: true, alt, raw, anchorPoint: { x: raw.right, y: raw.bottom } });
+        expect([c.name, alt, r.ratioUndefined, r.frozen, r.controllingAxis, r.guideX2, r.guideY2, arr(r.box)]).toEqual([c.name, alt, true, false, null, null, null, arr(S)]);
+        expect(allFinite(r.box)).toBe(true);
+        expect(samePayload(resizePayload(c.stored, S, r.box, 0), c.stored)).toBe(true);
+      }
+    }
+  });
+
+  it('free corner and side moves give the shape size; the 0 H axis never goes below 0; the payload is canonical, untouched fields keep their numbers', () => {
+    // width only: right handle to 5 mm → 5 × 20; x and height keep their original numbers
+    const w = cases[0];
+    const rw = boundResize(createResizeState(w.start, NO_TARGETS), { anchor: 'middle-right', ratio: false, alt: false, raw: { left: 0, top: 0, right: 5, bottom: 20 }, anchorPoint: { x: 5, y: 10 } });
+    expect(arr(rw.box)).toEqual([0, 0, 500, 2000]);
+    const pw = resizePayload(w.stored, w.start, rw.box, 0);
+    expect([pw.width, Object.is(pw.x, 0), Object.is(pw.height, 20)]).toEqual([5, true, true]);
+    // width only, corner with ratio OFF: both axes move freely (the 20 mm axis keeps its 4 mm floor)
+    const rc = boundResize(createResizeState(w.start, NO_TARGETS), { anchor: 'bottom-right', ratio: false, alt: false, raw: { left: 0, top: 0, right: 3, bottom: 2 }, anchorPoint: { x: 3, y: 2 } });
+    expect(arr(rc.box)).toEqual([0, 0, 300, 400]);
+    // height only: bottom handle to 7.5 mm → 20 × 7.5
+    const h = cases[1];
+    const rh = boundResize(createResizeState(h.start, NO_TARGETS), { anchor: 'bottom-center', ratio: false, alt: false, raw: { left: 10, top: 0, right: 30, bottom: 7.5 }, anchorPoint: { x: 20, y: 7.5 } });
+    expect(arr(rh.box)).toEqual([1000, 0, 2000, 750]);
+    const ph = resizePayload(h.stored, h.start, rh.box, 0);
+    expect([ph.height, Object.is(ph.x, 10), Object.is(ph.width, 20)]).toEqual([7.5, true, true]);
+    // both axes: bottom-right corner, ratio off, to (6, 4) → 6 × 4
+    const b = cases[2];
+    const rb = boundResize(createResizeState(b.start, NO_TARGETS), { anchor: 'bottom-right', ratio: false, alt: false, raw: { left: 0, top: 0, right: 6, bottom: 4 }, anchorPoint: { x: 6, y: 4 } });
+    expect(arr(rb.box)).toEqual([0, 0, 600, 400]);
+    expect(resizePayload(b.stored, b.start, rb.box, 0)).toEqual({ x: 0, y: 0, width: 6, height: 4 });
+    // Alt on the 0 H axis: centred about its (zero-width) centre, finite
+    const ra = boundResize(createResizeState(w.start, NO_TARGETS), { anchor: 'middle-right', ratio: false, alt: true, raw: { left: -5, top: 0, right: 5, bottom: 20 }, anchorPoint: { x: 5, y: 10 } });
+    expect(arr(ra.box)).toEqual([-500, 0, 1000, 2000]);
+  });
+
+  it('D-1 grandfathering: a move that leaves the 0 H axis at 0 is a no-op (the original 0.004 is kept); an edge dragged through the fixed edge freezes', () => {
+    for (const c of cases) {
+      const S = c.start;
+      // the moving edge lands within half a hundredth of the fixed edge: rounds to the start size
+      const raw = { left: S.x / 100, top: S.y / 100, right: S.x / 100 + (S.w === 0 ? 0.003 : S.w / 100), bottom: S.y / 100 + (S.h === 0 ? 0.003 : S.h / 100) };
+      const r = boundResize(createResizeState(S, NO_TARGETS), { anchor: 'bottom-right', ratio: false, alt: false, raw, anchorPoint: { x: raw.right, y: raw.bottom } });
+      expect([c.name, arr(r.box), sameBoxH(r.box, S)]).toEqual([c.name, arr(S), true]);
+      expect(samePayload(resizePayload(c.stored, S, r.box, 0), c.stored)).toBe(true);
+    }
+    const w = cases[0];
+    const through = boundResize(createResizeState(w.start, NO_TARGETS), { anchor: 'middle-right', ratio: false, alt: false, raw: { left: 0, top: 0, right: -0.5, bottom: 20 }, anchorPoint: { x: -0.5, y: 10 } });
+    expect([through.frozen, arr(through.box)]).toEqual([true, arr(w.start)]);
+  });
+
+  it('through the Konva port (ratio basis from the stored 0.004 mm, as real Konva reads it): ratio moves are skipped by Konva itself; free moves proceed', () => {
+    for (const c of cases) {
+      const basis = { w: c.stored.width, h: c.stored.height };
+      const G = newGesture(c.start, NO_TARGETS, 'bottom-right', V100, true, true, basis);
+      const S = c.start;
+      const corner = { x: (S.x + S.w) / 100, y: (S.y + S.h) / 100 };
+      // ratio: Konva's projection proposes under 1 px on the 0 H axis and returns early; the box is held
+      for (const d of [5, 20, 60]) {
+        const m = driveMove(G, { x: corner.x + d, y: corner.y + d }, true, false);
+        const how = m.cls === 'proceed' ? (m.result!.ratioUndefined ? 'held by the maths' : 'moved') : `Konva ${m.cls}`;
+        expect([c.name, d, how === 'moved', arr(m.box), allFinite(m.box)]).toEqual([c.name, d, false, arr(S), true]);
+      }
+      // free corner: proceeds, finite, never below the floors
+      const f = driveMove(G, { x: corner.x + 7, y: corner.y + 3 }, false, false);
+      expect([f.cls, allFinite(f.box), f.box.w >= G.state.floors.w && f.box.h >= G.state.floors.h, f.box.w > S.w || f.box.h > S.h]).toEqual(['proceed', true, true, true]);
+    }
+  });
+
+  it('property: 3,000 random gestures from 0 H starts (all modes, toggles, zooms, snap targets) stay finite, never negative, never below their floors; a ratio move never changes the box', () => {
+    const ANCHORS = RESIZE_ANCHORS;
+    let bad = 0;
+    let ratioMoves = 0;
+    for (let seed = 1; seed <= 3000; seed++) {
+      const R = rng(90000 + seed);
+      const gh = (lo: number, hi: number) => lo + Math.floor(R() * (hi - lo + 1));
+      const kind = seed % 3;
+      const x = gh(-2000, 28000), y = gh(-1000, 20000);
+      const stored = {
+        x: fromH(x),
+        y: fromH(y),
+        width: kind !== 1 ? 0.004 : fromH(gh(100, 12000)),
+        height: kind !== 0 ? 0.004 : fromH(gh(100, 12000)),
+      };
+      const start = startBoxH(stored, 0);
+      const t2: TargetsH2 = { x: [2 * x + 300, 2 * x - 500, 2 * gh(0, 28000)], y: [2 * y + 300, 2 * y - 500, 2 * gh(0, 20000)] };
+      const view = { scale: 0.51 + R() * 26.69, vx: R() * 400 - 200, vy: R() * 300 - 150 };
+      const anchor = ANCHORS[gh(0, 7)]!;
+      const G = newGesture(start, t2, anchor, view, true, true, { w: stored.width, h: stored.height });
+      let ratioOn = R() < 0.5, alt = R() < 0.3;
+      let p = { x: (start.x + start.w) / 100, y: (start.y + start.h) / 100 };
+      for (let m = 0; m < 40; m++) {
+        if (R() < 0.1) ratioOn = !ratioOn;
+        if (R() < 0.1) alt = !alt;
+        const jump = R() < 0.1 ? 15 : 2.5;
+        p = { x: p.x + (R() * 2 - 1) * jump, y: p.y + (R() * 2 - 1) * jump };
+        const before = { ...G.state.prev };
+        const res = driveMove(G, p, ratioOn, alt);
+        const B = res.box;
+        if (!allFinite(B) || B.w < 0 || B.h < 0 || B.w < G.state.floors.w || B.h < G.state.floors.h) bad++;
+        if (res.cls === 'proceed' && res.segment!.ratio) {
+          ratioMoves++;
+          if (!sameBoxH(B, before)) bad++;
+        }
+        const pl = resizePayload(stored, start, B, 0);
+        if (![pl.x, pl.y, pl.width, pl.height].every(Number.isFinite) || pl.width <= 0 || pl.height <= 0) bad++;
+        if (sameBoxH(B, start) && !samePayload(pl, stored)) bad++;
+      }
+    }
+    expect(bad).toBe(0);
+    expect(ratioMoves).toBeGreaterThan(0);
+  });
+});
+
+/* ========================================================================== */
+
+describe("Slice D — S2-1 decided (Ben, 2026-11-04): an unchanged bound anchor keeps Konva's native hold", () => {
+  it('snap-enabled example for the browser harness: the same pointer position holds 3.00 × 3.04 before a snap and 4.06 × 4.11 after it', () => {
+    // a grandfathered 3.00 × 3.04 mm rect at (50, 40) on page 1, so its ratio minimum box is its start box;
+    // another element's top edge at 44.11 mm, 1.07 mm below the rect's bottom (43.04)
+    const geom = { pageWidthMm: 148, pageHeightMm: 210, pageOffsetsMm: [0, 148], marginMm: 12 };
+    const targets = resizeTargetsH2(geom, [{ x: 100, y: 44.11, width: 20, height: 15.89 }]);
+    const start = box(5000, 4000, 300, 304);
+    const G = newGesture(start, targets, 'bottom-right', V100);
+    const inside = { x: 51.5, y: 41.5 };
+    // 1. inside the box, ratio on: the clamp holds the anchor at its current corner → Konva keeps the box
+    const a = driveMove(G, inside, true, false);
+    expect([a.cls, a.clamped, a.trace, arr(a.box)]).toEqual(['unchanged', true, ['anchorDragBoundFunc', 'return:anchor-unchanged'], [5000, 4000, 300, 304]]);
+    // 2. outward: Konva proceeds and the bottom edge snaps to 44.11 (controlling y): 4.06 × 4.11
+    const b = driveMove(G, { x: 53.3, y: 43.34 }, true, false);
+    expect([b.cls, b.result!.controllingAxis, b.result!.guideY2, arr(b.box)]).toEqual(['proceed', 'y', 8822, [5000, 4000, 406, 411]]);
+    // 3. back to the same inside position: the anchor is not at the minimum corner now, so Konva proceeds,
+    //    the snap re-engages, and the box stays 4.06 × 4.11
+    const c = driveMove(G, inside, true, false);
+    expect([c.cls, c.clamped, arr(c.box)]).toEqual(['proceed', true, [5000, 4000, 406, 411]]);
+  });
+});
 
 /** Section F's gesture generator (the evidence script's, value for value). */
 function sectionFGesture(seed: number) {

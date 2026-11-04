@@ -191,10 +191,24 @@ export function newGesture(
   anchor: ResizeAnchor,
   view: View,
   clamp = true,
-  unchangedReturn = true
+  unchangedReturn = true,
+  /**
+   * The node size Konva reads its ratio basis from at mousedown (any unit). Real Konva reads the
+   * node's stored size, which for a 0 H axis is still positive (e.g. 0.004 mm); the default is the
+   * start box in H, which is the same proportion for every box with no 0 H axis.
+   */
+  konvaBasis: { w: number; h: number } = start
 ): Gesture {
-  const hyp = Math.hypot(start.w, start.h);
-  return { state: createResizeState(start, targets), anchor, view, sin: start.h / hyp, cos: start.w / hyp, clamp, unchangedReturn };
+  const hyp = Math.hypot(konvaBasis.w, konvaBasis.h);
+  return {
+    state: createResizeState(start, targets),
+    anchor,
+    view,
+    sin: konvaBasis.h / hyp,
+    cos: konvaBasis.w / hyp,
+    clamp,
+    unchangedReturn,
+  };
 }
 
 /** The node box in absolute stage px, from a box in H (what `onTransform` leaves on the node). */

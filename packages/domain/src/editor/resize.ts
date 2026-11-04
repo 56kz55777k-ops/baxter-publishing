@@ -26,6 +26,17 @@
  * box (plan §3.3, r3 N2). The state is immutable: `boundResize` returns the
  * next state alongside the box.
  *
+ * **Zero-H axes.** The schema accepts any positive stored size, so an axis
+ * can be positive in mm and still round to 0 H at the edges (a 0.004 mm
+ * width at x = 0). Such an axis is defined, finite and grandfathered: its
+ * floor is 0, so it never shrinks and can grow; free, side and centred moves
+ * work as usual. Ratio mode has no proportion to keep when either start axis
+ * is 0 H, so a ratio move HOLDS the previous box (`ratioUndefined`), and
+ * `ratioMinimumBox` is the start box. Real Konva does the same in practice:
+ * its ratio projection of such a box proposes under 1 px and it skips the
+ * move. A release equal to the start in H commits nothing and the original
+ * stored numbers are kept (`resizePayload`), so a 0 H axis never writes 0.
+ *
  * What this module does not do: the D-5 intent threshold, the ratio anchor
  * clamp's application to Konva's anchor, cancel and commit are the resize
  * session's (plan §4.3, stage 4). It supplies the numbers they need
@@ -285,14 +296,24 @@ export function withSegment(
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Ratio needs a proportion: both start sizes positive in H. When a positive
+ * stored size rounds to 0 H, ratio mode holds the box (see the module note).
+ */
+export function ratioDefined(start: BoxH): boolean {
+  return start.w > 0 && start.h > 0;
+}
+
+/**
  * The smallest box ratio mode can produce: the controlling (larger start)
  * axis at `kMin = max(fl_k, ceil(fl_o · S0k / S0o))`, the other derived from
  * it. Both sizes then meet their floors; with a grandfathered axis both stay
  * at or above their start values. The session's ratio anchor clamp keeps the
  * dragged anchor at least this far from the fixed corner (step 0).
+ * Without a proportion (a start axis of 0 H) it is the start box.
  */
 export function ratioMinimumBox(state: ResizeState): { w: number; h: number } {
   const S0 = state.start;
+  if (!ratioDefined(S0)) return { w: S0.w, h: S0.h };
   const big = S0.w >= S0.h ? 'x' : 'y';
   const S0k = big === 'x' ? S0.w : S0.h;
   const S0o = big === 'x' ? S0.h : S0.w;
@@ -334,6 +355,8 @@ export interface ResizeResult {
   controllingAxis: 'x' | 'y' | null;
   /** Drag-through (plan §3.5 step 1): Konva proposed a non-positive extent; `prev` is held. */
   frozen: boolean;
+  /** Ratio mode on a start box with a 0 H axis: no proportion to keep; `prev` is held. */
+  ratioUndefined: boolean;
   /** The segment this move ran in (null only for a freeze before any segment existed). */
   segment: ResizeSegment | null;
 }
@@ -344,7 +367,7 @@ export function boundResize(state: ResizeState, input: ResizeMoveInput): ResizeR
   // Step 1 — drag-through freeze (free and centred modes; one-edge ratio never gets here after
   // the clamp). Konva has already renamed the anchor, so the next move starts a new segment.
   if (raw.right - raw.left <= 0 || raw.bottom - raw.top <= 0) {
-    return { state, box: state.prev, guideX2: null, guideY2: null, controllingAxis: null, frozen: true, segment: state.segment };
+    return { state, box: state.prev, guideX2: null, guideY2: null, controllingAxis: null, frozen: true, ratioUndefined: false, segment: state.segment };
   }
 
   // Step 2 — the segment for this key.
@@ -359,6 +382,10 @@ export function boundResize(state: ResizeState, input: ResizeMoveInput): ResizeR
   let guideY2: number | null = null;
   let controllingAxis: 'x' | 'y' | null = null;
 
+  if (g.ratio && !ratioDefined(s.start)) {
+    // No proportion to keep (a start axis rounds to 0 H): hold the previous box.
+    return { state: s, box: s.prev, guideX2: null, guideY2: null, controllingAxis: null, frozen: false, ratioUndefined: true, segment: g };
+  }
   if (g.ratio) {
     ({ box, guideX2, guideY2, controllingAxis } = boundRatio(s, g, input.anchorPoint));
   } else {
@@ -376,7 +403,7 @@ export function boundResize(state: ResizeState, input: ResizeMoveInput): ResizeR
     }
   }
 
-  return { state: { ...s, prev: box }, box, guideX2, guideY2, controllingAxis, frozen: false, segment: g };
+  return { state: { ...s, prev: box }, box, guideX2, guideY2, controllingAxis, frozen: false, ratioUndefined: false, segment: g };
 }
 
 /** Steps 3 and 4: one free (snapping) or centred axis. */

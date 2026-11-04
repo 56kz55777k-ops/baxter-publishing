@@ -9,8 +9,16 @@
  *
  * Quantizing happens at the COMMIT boundary; the schema itself stores plain
  * finite numbers and does not enforce a grid. Every model value produced by
- * committing code therefore sits on one of these grids, which is what makes
- * the fixed-edge identity in contract #9's resize maths exact (Slice D).
+ * committing code therefore sits on one of these grids.
+ *
+ * The grids alone do not make resize arithmetic exact: subtracting doubles
+ * does not (0.03 − 0.01 is 0.019999999999999997). The fixed-edge identity in
+ * contract #9's resize maths is exact because Slice D computes it in integer
+ * hundredths of a millimetre (`hundredths.ts`, plan §3.1) and stores
+ * `h / 100`. A floating-point reconstruction from stored values, such as
+ * `x + w`, is not bit-identical: for canonical values it is within 1e-9 mm
+ * of the integer edge, and a legacy non-canonical value is within 0.005 mm
+ * (plan §3.7, G1).
  *
  * `-0` is normalised to `0`: it round-trips through JSON as `0` anyway, and
  * an unnormalised `-0` would make two otherwise equal documents compare
