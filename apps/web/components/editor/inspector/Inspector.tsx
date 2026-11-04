@@ -30,7 +30,7 @@ import {
   GEOMETRY_BOUNDS,
   NumField,
   PERCENT_BOUNDS,
-  SIZE_BOUNDS,
+  sizeBounds,
 } from './NumField';
 import type { ArrangeOp } from '@baxter/domain';
 
@@ -144,14 +144,14 @@ function SingleObjectPanel({
               <NumField
                 label="W"
                 value={(element as { width: number }).width}
-                bounds={SIZE_BOUNDS}
+                bounds={sizeBounds((element as { width: number }).width)}
                 disabled={mutationsDisabled}
                 onCommit={(width) => patch({ width }, 'Set width')}
               />
               <NumField
                 label="H"
                 value={(element as { height: number }).height}
-                bounds={SIZE_BOUNDS}
+                bounds={sizeBounds((element as { height: number }).height)}
                 disabled={mutationsDisabled}
                 onCommit={(height) => patch({ height }, 'Set height')}
               />

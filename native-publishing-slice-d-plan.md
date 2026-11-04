@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stage 2 (the domain maths and its tests) and its review correction, implemented on `slice-d-resize` and back at the stage 2 checkpoint (§6.2, §6.3).**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2 and 3 implemented on `slice-d-resize`; at the stage 3 review checkpoint (§6.4).**
+- **Stage 3 (2026-11-04):** Ben accepted Codex's stage 2 sign-off at `df0bad3`, approved the zero-H rule, and authorized stage 3 only (§0.7). Stage 3 adds the D-1 inspector W/H floor and the creation-pill correction, and corrects the zero-H explanation (§3.2: Konva may skip or call `boundBoxFunc`; fixture observations). Stage 4 (resize session, Konva wiring) needs Ben's separate go.
 - **Stage 2 correction (2026-11-04):** Codex reviewed stage 2 (`9e69c1c`) and Ben accepted the review and the S2-1 recommendation (§0.6). The correction defines resize for a positive stored size that rounds to 0 H (§3.2), aligns §3.2's centre-target wording with the implementation, completes C16's `precision.ts` comment, and adds Ben's S2-1 wording to G9 and a snap-enabled hold example for the harness (§8.2).
 - **Stage 2 (2026-11-04):** `hundredths.ts`, `minimums.ts` and `resize.ts` in `packages/domain`, with `slice-d-resize-math.test.ts` (57 tests) and a test-only Konva port fixture. The production maths reproduces the evidence script's B1–B9 and E1–E13 exactly, and section F's 4,000 gestures move by move. Two discrepancies found while doing so, for Codex and Ben (§6.2): Konva's anchor-unchanged return (F2) is not always outcome-neutral, and section F's published counts are doubled. No UI, session or Konva wiring exists yet.
 - **r6 (2026-11-04):** Codex reviewed the stage 1 probe (`e7c1831`) and Ben accepted that review. Ben decided F1 (G9's "Not covered" wording, replaced with his text) and F4 (the `destroy()` wording in §4.1 and §4.4), and authorized **stage 2 only** (§0.5). r6 records those decisions and aligns the stage 2 test expectations with them (§7, §10.2 choice 19). The maths (§3.1–§3.6) and the evidence script are unchanged.
@@ -12,10 +13,10 @@
 - Correcting the Konva model (finding 1) **exposed two further defects** in the proposed algorithm: re-anchoring after a ratio crossing, and centre creep across anchor renames. Both are revised and re-evidenced here (§0.2 rows N1 and N2).
 - **Decisions D-1…D-6 were approved by Ben on 2026-10-22** (§1).
 - Open product questions: **Q2** (Space during an active resize) and **Q7** (the ratio-crossing behaviour proposed in N1). Both are recommendations awaiting Ben's approval, not approvals. Exercising the proposed ratio behaviour in a stage 2 fixture does not settle Q7.
-- **Stage 2 (domain maths and its tests, §6) is authorized (Ben, 2026-11-04), implemented, reviewed and corrected; it stops at its review checkpoint. Stage 3 onward is NOT authorized.** **Q1 and Q6 remain prerequisites for any production-write test.**
-- Stage 2 adds domain code and tests only: nothing in the app imports it yet, and no dependency, CI or bundle changes (§6.2). No production-write test has been run for D.
+- **Stages 2 and 3 are authorized (Ben, 2026-11-04) and implemented; stage 3 stops at its review checkpoint. Stage 4 onward is NOT authorized.** **Q1 and Q6 remain prerequisites for any production-write test.**
+- Stage 2 is domain code and tests; stage 3 is the first user-visible change (inspector W/H floor, creation pill). No dependency or CI change; no Konva wiring (§6.2–§6.4). No production-write test has been run for D.
 
-**Base:** `main` = `790ddf9875f7ea4d35e594c52fc6eb1fdb218467` (PR #19 merge, Next.js 15.5.28), tree `db54dbef235a7a4d771f6e48a158f20f1e110677`. Branch: `slice-d-resize`. r1 = `8042cc8`, r2 = `b30373c`, r3 = `d1f0f3d`, r4 = `8b9b7d2`, r5 = `acca04e`, stage 1 probe and results = `e7c1831` (`e7c18318111b1f85cd5c4fe5c1edfa1e001a8b64`); r6 = `2d8ed45` (`2d8ed45b141e8de1be5a54b5da6ce35240928217`), stage 2 = `9e69c1c` (`9e69c1c2c7db97254e4f0057cc3419b7daf7d25a`); the stage 2 correction is the next commit on the branch.
+**Base:** `main` = `790ddf9875f7ea4d35e594c52fc6eb1fdb218467` (PR #19 merge, Next.js 15.5.28), tree `db54dbef235a7a4d771f6e48a158f20f1e110677`. Branch: `slice-d-resize`. r1 = `8042cc8`, r2 = `b30373c`, r3 = `d1f0f3d`, r4 = `8b9b7d2`, r5 = `acca04e`, stage 1 probe and results = `e7c1831` (`e7c18318111b1f85cd5c4fe5c1edfa1e001a8b64`); r6 = `2d8ed45` (`2d8ed45b141e8de1be5a54b5da6ce35240928217`), stage 2 = `9e69c1c` (`9e69c1c2c7db97254e4f0057cc3419b7daf7d25a`); stage 2 correction = `df0bad3` (`df0bad37b1c9b130c2d6847b050028c1c5b0be16`); stage 3 is the next commit on the branch.
 **Supersedes for planning purposes:** `native-publishing-slice-d-readiness.md` (2026-10-06), which stays as the historical readiness record, unaltered.
 **Scope (production handoff Part 11):** Transformer resize + numeric consistency — `boundResize` (edge-diff, ratio, minimums, quantization, stored-box commit), the live pill, the anchor no-op rule, cursor ownership. Acceptance: preview == commit property tests, the R9 matrix including off-grid positions, cursor table tests. Plus the six approved decisions.
 **Contracts:** #2 · #4 · #5 · #9 · #10 · #11 · #18 · #19 · #20 · #21 · #24 · #25 · #26 (and #3 for the creation-pill correction).
@@ -121,6 +122,15 @@ Ben accepted Codex's stage 2 review and the S2-1 recommendation, and authorized 
 | 1 | A schema-valid rect at x = 0, width 0.004 mm, height 20 mm has a start width of 0 H; `ratioMinimumBox` returned NaN. | Define resize when one or both positive stored sizes round to 0 H; finite results; original values kept on a no-op; D-1 grandfathering kept. | §3.2 "Zero-H axes"; `ratioDefined`, `ratioMinimumBox`, `boundResize` (`ratioUndefined`); regressions for width only, height only and both, with payloads (§6.3). |
 | 2 | §3.2 said a centre target is `2·toH(x) + toH(w)`; the implementation uses the sum of the two rounded edges. | Keep the implementation's rule (halfway between the rounded edges) and align §3.2. | §3.2 reworded; regression x 20.004, w 10.004 → centre target 25.005 mm (§6.3). |
 | 3 | C16's `precision.ts` comment correction (planned for stage 2) was not made. | Complete it. | Comment attributes exact fixed-edge arithmetic to integer hundredths and keeps §3.7's float-reconstruction tolerance. |
+
+### 0.7 Codex's stage 2 sign-off at `df0bad3`; Ben's decisions (2026-11-04)
+
+- **Stage 2 signed off** by Codex at `df0bad37b1c9b130c2d6847b050028c1c5b0be16`; accepted by Ben.
+- **Zero-H rule approved (Ben):** when either dimension at the start of a resize rounds to 0 H, a proportional corner drag holds the previous box, and a no-op release preserves the original stored dimensions exactly (§3.2).
+- **Zero-H explanation corrected** (Ben's instruction): Konva can skip such a move or call `boundBoxFunc`; when it calls `boundBoxFunc`, the domain guard holds the previous box, and the guard stays. Side-handle skips on a shape below one screen pixel, and free corner growth, are recorded as fixture observations (§3.2), not as decided behaviour.
+- **Stage 3 authorized** (only): the stage 3 row of §6 — the D-1 inspector W/H floor with the shared domain minimum, and the creation-pill correction.
+- **Creation under the click threshold:** asked and confirmed (Ben, 2026-11-04): anchor dot only, no box and no pill (§4.9, choice #12 unchanged).
+- Stage 4 (resize session, Konva wiring) needs Ben's separate go. Q2 and Q7 open; Q1 and Q6 gate production-write tests.
 
 ---
 
@@ -231,9 +241,13 @@ Helpers (new `packages/domain/src/editor/hundredths.ts`; pure):
 - **Zero-H axes (stage 2 correction).** The schema accepts any positive stored size, so an axis can be positive in mm and still have `start.w = 0` or `start.h = 0` after edge rounding (x 0, width 0.004 mm). Such an axis is defined and finite:
   - its floor is `min(400, 0) = 0`, so D-1 grandfathering holds: it never shrinks below its start and can grow;
   - free, side and centred (Alt) moves work as for any axis; an edge dragged through the fixed edge freezes as usual (§3.5 step 1);
-  - **ratio needs a proportion**, so when either start axis is 0 H a ratio move (corner + Keep proportions/Shift, with or without Alt) **holds the previous box**: no snap, no guide (`ratioUndefined`). `ratioMinimumBox` is the start box. Real Konva behaves the same way in practice: its ratio projection of such a node proposes under 1 px on the 0 H axis and it skips the move;
+  - **ratio needs a proportion**, so when either start axis is 0 H a ratio move (corner + Keep proportions/Shift, with or without Alt) **holds the previous box**: no snap, no guide (`ratioUndefined`). `ratioMinimumBox` is the start box. **Approved by Ben, 2026-11-04.** Konva can either skip such a move (its proposed extent is under 1 px) or call `boundBoxFunc`; when it calls `boundBoxFunc`, this domain guard holds the previous box, and the guard stays;
   - a release whose box equals the start in H commits nothing, and the payload keeps the original stored numbers (§3.9), so a 0 H axis is never written as 0. A move that gives it size commits a canonical value.
-  - **For someone resizing such a shape:** it behaves like any other shape with free and side handles, and growing it works. With Keep proportions or Shift, the corner handles do not change it; turning proportions off, or using a side handle, gives it size first.
+  - **Fixture observations** (the test-only Konva port, stage 3 correction; to confirm in the browser harness). The port draws the node from the H box (0 px on a 0 H axis); real Konva draws the stored 0.004 mm, which is 0.014 px at 100 % and 0.11 px at 800 %, so both are under 1 px:
+    - **ratio:** on a shape with one 0 H axis, Konva skips an ordinary drag (5 mm: proposed 0.017 px). A very long drag (800 %, 200 mm) reaches `boundBoxFunc` (proposed 1.2 px), and the guard holds. On a shape with both axes 0 H, Konva's ratio basis is ~1:1 from the stored 0.004 × 0.004 mm, so it calls `boundBoxFunc` on every move, and the guard holds;
+    - **free side handles:** the side handle that grows the 0 H axis proceeds (width 0 → right handle +5 mm → 5 × 20). A side handle that moves only the other axis is skipped, because the untouched 0 H axis is under 1 px on screen. On a shape with both sides under 1 px, every side handle is skipped for that reason;
+    - **free corner handles** proceed and grow both axes together (0 × 0 → 5 × 3).
+  - **For someone resizing such a shape:** a corner handle with proportions off grows it in both directions; the side handle on its thin side widens it. With Keep proportions or Shift on, the corners do not change it, and a side handle along its long side does nothing until the thin side has some size.
 - **`targets`** — H2 values from `buildTargets` geometry: page edges, centre lines and margins, plus every other element on the unit (locked included, #20), excluding only the resized element. Element edges are `2·toH(edge)`. An element's centre target is **halfway between its two rounded edges**: `toH(left) + toH(right)` in H2, exact at a half-hundredth (stage 2 correction). For canonical values this equals `2·toH(x) + toH(w)`; for a legacy non-canonical element it can differ by half a hundredth (x 20.004, w 10.004: rounded edges 20.00 and 30.01 → centre 25.005 mm, where `2·toH(x) + toH(w)` would give 25.00). They are built once at gesture start. The snap radius stays 1.6 mm (`SNAP_RADIUS_MM`), applied in mm through the existing `bestSnap`. Its tie rule — smaller correction, then the lower target value — is unchanged and deterministic.
 - **`raw`** — Konva's proposed box (absolute stage px), converted to unit-space mm with the existing inverse `mm = (px − view.x|y) / view.scale` (contract #9). **Only the raw edges on the active anchor's side are read** (§3.4). Konva's own fixed edges and centre are never used.
 - **Modifiers and anchor** — `ratio = (keepProportions ∨ shiftKey) ∧ isCorner(anchor)` and `alt = altKey`, sampled from the same DOM event Konva uses. `anchor = tr.getActiveAnchor()`, which reflects Konva's rename on drag-through.
@@ -507,7 +521,7 @@ Today the creation pill and preview show the **unquantized** box, while `onUp` c
 Creation's guide can still sit up to 0.05 mm from the committed edge, because creation commits on the accepted 0.1 grid (#19 / D-035). The pill no longer pretends otherwise.
 
 ### 4.10 Inspector (D-1 floor, D-2 toggle)
-- **Floor:** `SIZE_BOUNDS` (`{ min: 2 }`) becomes `sizeBounds(current) = { min: effectiveMin(current, 4), step: 1, shiftStep: 5 }`. NumField's existing clamp-at-bounds and no-op rules then deliver D-1's typed and stepped behaviour unchanged. NumField already quantizes to 0.01 through `quantizeInspector` and displays through `formatNum`, both consistent with §3.1 (exhaustively checked).
+- **Floor:** `SIZE_BOUNDS` (`{ min: 2 }`) becomes `sizeBounds(current) = { min: effectiveMin(current, 4), step: 1, shiftStep: 5 }`. NumField's existing clamp-at-bounds and no-op rules then deliver D-1's typed and stepped behaviour unchanged. **Stage 3 addition:** `commitNum` and `stepNum` never return a value below the declared minimum after rounding to the 0.01 grid. Only an off-grid minimum is affected — a grandfathered legacy value such as 2.504 mm, which would otherwise round a shrink attempt to 2.5 — and the result is the minimum itself, i.e. the current value: a no-op. A stored 0.004 mm is likewise never written as 0. NumField already quantizes to 0.01 through `quantizeInspector` and displays through `formatNum`, both consistent with §3.1 (exhaustively checked).
 - **Typed W/H stay independent:** typing W pins the left edge, as today.
 - **Keep proportions** (proposed wording and placement; Ben may adjust the words without reopening D-2):
   - **Placement:** single-object inspector → *Position & Size*, a full-width row directly under the X/Y/W/H grid.
@@ -584,7 +598,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **0** | The plan (docs only). r1 `8042cc8`, r2 `b30373c`, r3 `d1f0f3d` and r4 `8b9b7d2` reviewed by Codex; **r5 (this)**. | **Codex re-reviews r5 → Ben authorizes the stage 1 probe and implementation.** |
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
-| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | — |
+| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); awaiting Codex's review.** |
 | **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **The Space-mid-resize policy and its tests are written only after Ben answers Q2, and the ratio clamp is activated only after Ben answers Q7. Stage 4 cannot be marked complete before both.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
@@ -757,7 +771,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 - ratio, with and without Alt, with snap targets in range: box held, no guide, `ratioUndefined`; release payload identical to the stored numbers (`Object.is`);
 - free and side moves: width only → right edge to 5 → 5 × 20 (x and height keep their numbers); ratio off corner → 3 × 4 (the 20 mm axis keeps its 4 mm floor); height only → 20 × 7.5; both → 6 × 4; Alt on the 0 H axis → centred, finite;
 - a move leaving the 0 H axis at 0 H is a no-op with the original 0.004 kept; an edge dragged through the fixed edge freezes;
-- through the Konva port with the stored basis: ratio moves are held (Konva skips, or the maths holds), free moves proceed;
+- through the Konva port with the stored basis: ratio moves are held (Konva skips, or calls `boundBoxFunc` and the maths holds); free corner moves proceed (the stage 3 correction adds the side-handle and long-drag observations, §3.2);
 - property: 3,000 random gestures from 0 H starts (all anchors and modes, toggles, zooms, snap targets): always finite, never negative, never below floors, ratio never changes the box, the payload never writes a size ≤ 0, a release equal to the start keeps the stored numbers.
 
 **Other regressions:** the legacy centre target (x 20.004, w 10.004 → 25.005 mm; `2·toH(x) + toH(w)` = 25.00 is not a target); the S2-1 harness example as a fixture test (§8.2).
@@ -765,6 +779,26 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 **Negative controls:** removing the zero-H rule fails 4 tests; switching `resizeTargetsH2` to `2·toH(x) + toH(w)` fails the legacy centre test.
 
 **Verification** and the commit ID are reported with the commit (HANDOFF; the review briefing). **Checkpoint:** stage 3 requires Ben's explicit go. Q2 and Q7 remain open; Q1 and Q6 still gate production-write testing.
+
+### 6.4 Stage 3 — inspector floor and creation readout (2026-11-04; awaiting Codex's review)
+
+**Scope.** Stage 3 only (§0.7), from `df0bad3`. No resize session, Konva wiring, toggle (stage 6) or production write.
+
+**Changes:**
+- `packages/domain/src/editor/num-field.ts` — `commitNum`/`stepNum` never return below the declared minimum after rounding (off-grid minimums only; §4.10).
+- `apps/web/components/editor/inspector/NumField.tsx` — `SIZE_BOUNDS` replaced by `sizeBounds(current)`, using the domain `effectiveMin` (D-1).
+- `apps/web/components/editor/inspector/Inspector.tsx` — W/H use `sizeBounds(value)`.
+- `apps/web/components/editor/use-stage-gestures.ts` — `creationGeometry` and `createdElement`: one function feeds release, preview and pill; `MIN_SHAPE_MM` now comes from the domain (re-exported for existing imports).
+- `packages/domain/src/editor/resize.ts` — comment only (zero-H explanation corrected).
+- Tests: new `slice-d-inspector.test.tsx` (11) and `slice-d-creation-readout.test.tsx` (9); `slice-d-resize-math.test.ts` +1 (zero-H fixture observations; one test renamed); `slice-b-numfield.test.tsx` — two expectations updated from the old 2 mm floor to D-1's 4 mm.
+
+**User-visible behaviour:**
+- **Inspector W/H:** a shape at 4 mm or more cannot be typed or stepped below 4 mm (typing 3 gives 4). A smaller (grandfathered) side can grow — 2.5 → 3.2 — and never shrink: typing 2, or ↓, leaves 2.5 with no history entry and no save. After a change, the new size is the floor for the next edit. Typed W and H stay independent.
+- **Creation:** past 3 mm, the preview shape and the `W × H mm` pill show exactly what release creates: 0.1 mm-quantized position and size, each side at least 4 mm. A drag of 30.33 × 20.27 mm now reads 30.3 × 20.3, the size that is created (before, the pill read 30.33 × 20.27). Under 3 mm only the anchor dot shows; release creates the default-size shape at the press point. Creation snapping can carry a short move past 3 mm, and the preview then shows the box.
+
+**Negative controls:** a fixed 2 mm floor fails 10 stage 3 tests; removing the minimum guard after rounding fails 3; the raw-drag preview fails 5.
+
+**Checkpoint.** Codex reviews stage 3; stage 4 needs Ben's separate go.
 
 ---
 
@@ -899,7 +933,7 @@ Property tests use a small seeded PRNG written inside the test (no `fast-check`)
 - All existing rows unchanged.
 
 **`slice-d-inspector.test.tsx`**
-- Floor matrix: normal 10 → type 3 → 4; step down from 4.3 → 4; undersized 2.5 → type 2 = no-op; type 3 → 3; ↑ → 3.5; ↓ = no-op.
+- Floor matrix: normal 10 → type 3 → 4; step down from 4.3 → 4; undersized 2.5 → type 2 = no-op; type 3 → 3; ↑ → 3.5; ↓ = no-op. *(Stage 3 adds: 2.5 → 3.2, then 2.8 = no-op; legacy 2.504 and 0.004 never rounded below themselves; no history entry and an unchanged document through the shell.)*
 - Keep proportions: session state; not in history; not autosaved; disabled when locked; caption present; W/H independent.
 
 **`slice-d-creation-readout.test.tsx`**
@@ -1260,6 +1294,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 - **r6 (2026-11-04):** Ben's decisions on F1 and F4 and the stage 2 authorization are recorded (§0.5); the evidence script and the probe are unchanged.
 - **Stage 2 (2026-11-04):** §6.2 records the implementation, its verification and the two discrepancies; §3.8 is annotated (S2-2). `HANDOFF.md` is brought to the stage 2 checkpoint.
 - **Stage 2 correction (2026-11-04):** §0.6, §3.2, G9, §6.3, §8.2 and §11 C16. `HANDOFF.md` updated.
+- **Stage 3 (2026-11-04):** §0.7, §3.2 (zero-H explanation), §4.10, §6.4, §7. `HANDOFF.md` updated and propagated where accessible.
 - **Stage 1 (2026-10-23):** the isolated probe `docs/evidence/slice-d-konva-probe/` and its results are committed beside the evidence script, and §6.1 records them. `HANDOFF.md` is brought to the stage 1 checkpoint and propagated with checksums.
 - **Stage 0, r5:**
   - This plan is revised in place on `slice-d-resize`; r1 (`8042cc8`), r2 (`b30373c`), r3 (`d1f0f3d`) and r4 (`8b9b7d2`) remain in history.

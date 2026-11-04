@@ -15,6 +15,11 @@
  *   negative page-relative values are first-class (contract #2).
  * - Every typed-reachable bound is step-reachable: stepping clamps, so a
  *   0.5 mm stroke steps down to exactly 0 (which nulls the stroke, #18).
+ * - A result is never below the declared minimum, even after rounding to the
+ *   0.01 grid. That matters only for a minimum off the grid — a grandfathered
+ *   size (D-1, Slice D) whose stored value predates the grid, e.g. 2.504 mm:
+ *   typing 2 then resolves to 2.504, the current value, which is a no-op —
+ *   never to 2.5, which would shrink it.
  * - Display equals the model exactly: ≤ 2 dp, trailing zeros stripped,
  *   `-0` normalised.
  *
@@ -67,7 +72,7 @@ export function clampNum(value: number, bounds: NumFieldBounds): number {
 export function commitNum(draft: string, bounds: NumFieldBounds): number | null {
   const parsed = parseNum(draft);
   if (parsed === null) return null;
-  return quantizeDisplay(clampNum(parsed, bounds));
+  return atLeastMin(quantizeDisplay(clampNum(parsed, bounds)), bounds);
 }
 
 /** One arrow press. Clamps, so declared bounds are always step-reachable. */
@@ -78,7 +83,16 @@ export function stepNum(
   shift: boolean
 ): number {
   const delta = (shift ? bounds.shiftStep : bounds.step) * direction;
-  return quantizeDisplay(clampNum(current + delta, bounds));
+  return atLeastMin(quantizeDisplay(clampNum(current + delta, bounds)), bounds);
+}
+
+/**
+ * Rounding to the 0.01 grid can land just under an off-grid minimum (2.504 →
+ * 2.5). The minimum wins: the result is the minimum itself. On-grid minimums
+ * (0, 4) are unaffected — rounding a value ≥ them never goes below them.
+ */
+function atLeastMin(value: number, bounds: NumFieldBounds): number {
+  return bounds.min !== undefined && value < bounds.min ? bounds.min : value;
 }
 
 /**

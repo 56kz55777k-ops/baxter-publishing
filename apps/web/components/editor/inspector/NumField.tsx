@@ -28,7 +28,7 @@
  *   which an external change never yanks.
  */
 import { useRef, useState } from 'react';
-import { commitNum, formatNum, stepNum, type NumFieldBounds } from '@baxter/domain';
+import { commitNum, effectiveMin, formatNum, stepNum, type NumFieldBounds } from '@baxter/domain';
 
 export function NumField({
   label,
@@ -157,8 +157,17 @@ export function NumField({
 
 /** Ordinary geometry field: ±1, Shift ±5. */
 export const GEOMETRY_BOUNDS: NumFieldBounds = { step: 1, shiftStep: 5 };
-/** Width/height carry the inspector's 2 mm floor (#19). */
-export const SIZE_BOUNDS: NumFieldBounds = { min: 2, step: 1, shiftStep: 5 };
+/**
+ * Width/height (D-1, Slice D; amends #19's former 2 mm floor): the floor of an
+ * axis is the smaller of 4 mm and the axis's size when the edit starts, i.e.
+ * its current model value at each commit. A normal axis cannot go below 4 mm;
+ * a grandfathered (undersized) axis can grow — 2.5 → 3.2 — and never shrink:
+ * 2.5 → 2 resolves to 2.5, a no-op with no history entry and no save. The new
+ * value is the floor for the next edit.
+ */
+export function sizeBounds(current: number): NumFieldBounds {
+  return { min: effectiveMin(current), step: 1, shiftStep: 5 };
+}
 /** Fine field: ±0.1, Shift ±1 — the contract states both rates literally. */
 export const FINE_BOUNDS: NumFieldBounds = { min: 0, step: 0.1, shiftStep: 1 };
 /** Opacity is edited as a percentage; the model stores 0–1. */

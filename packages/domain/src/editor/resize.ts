@@ -30,12 +30,17 @@
  * can be positive in mm and still round to 0 H at the edges (a 0.004 mm
  * width at x = 0). Such an axis is defined, finite and grandfathered: its
  * floor is 0, so it never shrinks and can grow; free, side and centred moves
- * work as usual. Ratio mode has no proportion to keep when either start axis
- * is 0 H, so a ratio move HOLDS the previous box (`ratioUndefined`), and
- * `ratioMinimumBox` is the start box. Real Konva does the same in practice:
- * its ratio projection of such a box proposes under 1 px and it skips the
- * move. A release equal to the start in H commits nothing and the original
- * stored numbers are kept (`resizePayload`), so a 0 H axis never writes 0.
+ * work as usual in this maths. Ratio mode has no proportion to keep when
+ * either start axis is 0 H, so a ratio move HOLDS the previous box
+ * (`ratioUndefined`), and `ratioMinimumBox` is the start box (Ben, 2026-11-04).
+ * Konva may skip such a move itself (a proposed extent under 1 px), or it may
+ * call `boundBoxFunc` (a long drag, or a shape with both sides under 1 px,
+ * whose ratio basis is ~1:1); this guard is what holds the box then.
+ * A release equal to the start in H commits nothing and the original stored
+ * numbers are kept (`resizePayload`), so a 0 H axis never writes 0.
+ * Konva-level behaviour — e.g. a side handle that moves only the non-zero
+ * axis being skipped because the untouched 0 H axis is under 1 px — is
+ * described in plan §3.2 as fixture observations; it is not decided here.
  *
  * What this module does not do: the D-5 intent threshold, the ratio anchor
  * clamp's application to Konva's anchor, cancel and commit are the resize

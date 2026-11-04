@@ -911,7 +911,7 @@ describe('Slice D — a positive stored size that rounds to 0 H (stage 2 correct
     expect([through.frozen, arr(through.box)]).toEqual([true, arr(w.start)]);
   });
 
-  it('through the Konva port (ratio basis from the stored 0.004 mm, as real Konva reads it): ratio moves are skipped by Konva itself; free moves proceed', () => {
+  it('through the Konva port (ratio basis from the stored 0.004 mm, as real Konva reads it): ratio moves are held — Konva skips, or calls boundBoxFunc and the guard holds; free corner moves proceed', () => {
     for (const c of cases) {
       const basis = { w: c.stored.width, h: c.stored.height };
       const G = newGesture(c.start, NO_TARGETS, 'bottom-right', V100, true, true, basis);
@@ -927,6 +927,50 @@ describe('Slice D — a positive stored size that rounds to 0 H (stage 2 correct
       const f = driveMove(G, { x: corner.x + 7, y: corner.y + 3 }, false, false);
       expect([f.cls, allFinite(f.box), f.box.w >= G.state.floors.w && f.box.h >= G.state.floors.h, f.box.w > S.w || f.box.h > S.h]).toEqual(['proceed', true, true, true]);
     }
+  });
+
+  it('fixture observations (stage 3 correction): which moves Konva skips and which reach boundBoxFunc, per mode, on 0 H shapes', () => {
+    // [shape, mode, Konva result, guard held, box after one move] — the port draws the node from the H box (0 px on a 0 H axis);
+    // real Konva draws the stored 0.004 mm, still under 1 px at every zoom (0.11 px at 800 %).
+    const V800: View = { scale: 27.2, vx: 0, vy: 0 };
+    const modes = [
+      ['ratio, 100 %, corner +5/+5 mm', V100, 'bottom-right', { x: 5, y: 5 }, true],
+      ['ratio, 800 %, corner +5/+200 mm', V800, 'bottom-right', { x: 5, y: 200 }, true],
+      ['free, right side +5 mm', V100, 'middle-right', { x: 5, y: 0 }, false],
+      ['free, bottom side +5 mm', V100, 'bottom-center', { x: 0, y: 5 }, false],
+      ['free, corner +5/+3 mm', V100, 'bottom-right', { x: 5, y: 3 }, false],
+    ] as const;
+    const got = cases.flatMap((c) =>
+      modes.map(([mode, view, anchor, d, ratio]) => {
+        const S = c.start;
+        const G = newGesture(S, NO_TARGETS, anchor, view, true, true, { w: c.stored.width, h: c.stored.height });
+        const ax = anchorAxes(anchor);
+        const from = {
+          x: (ax.xs > 0 ? S.x + S.w : S.x + S.w / 2) / 100,
+          y: (ax.ys > 0 ? S.y + S.h : S.y + S.h / 2) / 100,
+        };
+        const m = driveMove(G, { x: from.x + d.x, y: from.y + d.y }, ratio, false);
+        const konva = m.cls === 'skip' ? `skip (${m.skippedOn})` : m.cls === 'proceed' ? 'boundBoxFunc' : m.cls;
+        return [c.name, mode, konva, m.result?.ratioUndefined ?? false, arr(m.box)];
+      })
+    );
+    expect(got).toEqual([
+      ['width only', 'ratio, 100 %, corner +5/+5 mm', 'skip (width)', false, [0, 0, 0, 2000]],
+      ['width only', 'ratio, 800 %, corner +5/+200 mm', 'boundBoxFunc', true, [0, 0, 0, 2000]],
+      ['width only', 'free, right side +5 mm', 'boundBoxFunc', false, [0, 0, 500, 2000]],
+      ['width only', 'free, bottom side +5 mm', 'skip (width)', false, [0, 0, 0, 2000]],
+      ['width only', 'free, corner +5/+3 mm', 'boundBoxFunc', false, [0, 0, 500, 2300]],
+      ['height only', 'ratio, 100 %, corner +5/+5 mm', 'skip (height)', false, [1000, 0, 2000, 0]],
+      ['height only', 'ratio, 800 %, corner +5/+200 mm', 'boundBoxFunc', true, [1000, 0, 2000, 0]],
+      ['height only', 'free, right side +5 mm', 'skip (height)', false, [1000, 0, 2000, 0]],
+      ['height only', 'free, bottom side +5 mm', 'boundBoxFunc', false, [1000, 0, 2000, 500]],
+      ['height only', 'free, corner +5/+3 mm', 'boundBoxFunc', false, [1000, 0, 2500, 300]],
+      ['both axes', 'ratio, 100 %, corner +5/+5 mm', 'boundBoxFunc', true, [0, 0, 0, 0]],
+      ['both axes', 'ratio, 800 %, corner +5/+200 mm', 'boundBoxFunc', true, [0, 0, 0, 0]],
+      ['both axes', 'free, right side +5 mm', 'skip (height)', false, [0, 0, 0, 0]],
+      ['both axes', 'free, bottom side +5 mm', 'skip (width)', false, [0, 0, 0, 0]],
+      ['both axes', 'free, corner +5/+3 mm', 'boundBoxFunc', false, [0, 0, 500, 300]],
+    ]);
   });
 
   it('property: 3,000 random gestures from 0 H starts (all modes, toggles, zooms, snap targets) stay finite, never negative, never below their floors; a ratio move never changes the box', () => {

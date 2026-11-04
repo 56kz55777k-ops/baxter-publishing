@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildTargets,
   dragDelta,
+  MIN_SHAPE_MM,
   newEllipseElement,
   newRectElement,
   quantizeCreate,
@@ -45,8 +46,8 @@ import type { Box } from './StageOverlays';
 export const CREATE_CLICK_THRESHOLD_MM = 3;
 /** Contract #6: marquee movement under this is a click (deselect). */
 export const MARQUEE_CLICK_THRESHOLD_MM = 2;
-/** Contract #11: shapes are at least this per axis. Applied to the preview so preview == commit. */
-export const MIN_SHAPE_MM = 4;
+/** Contract #11 / D-1: shapes are at least this per axis — the shared domain minimum (Slice D). */
+export { MIN_SHAPE_MM };
 /**
  * A press on an object becomes a drag only once the pointer has travelled
  * this far on screen — a click with hand jitter must never move (or snap)
@@ -131,6 +132,55 @@ function boxOf(el: EditorElement): Box | null {
     };
   }
   return null; // text has no stored height (contract #15) — Slice G supplies it
+}
+
+/**
+ * What a creation gesture commits, as page-relative geometry (Slice D stage 3,
+ * plan §4.9). Release and the live preview/pill both call this, so they
+ * cannot disagree:
+ *
+ * - **Under the click threshold** (`tiny`): release is a click and creates the
+ *   default-size element at the quantized press point (#3). The preview shows
+ *   only the anchor dot — no box, no pill (plan choice #12; Ben, 2026-11-04).
+ * - **Past it:** positions quantized page-relative on the 0.1 creation grid,
+ *   sizes `quantizeCreate(max(4, size))` (#19 / D-035). The preview converts
+ *   this box back to unit space and the pill prints these numbers.
+ *
+ * Creation's guide can still sit up to 0.05 mm from the committed edge: it
+ * commits on the 0.1 grid; the readout no longer pretends otherwise.
+ */
+export type CreationGeometry =
+  | { tiny: true; at: { x: number; y: number } }
+  | { tiny: false; x: number; y: number; width: number; height: number };
+
+export function creationGeometry(
+  geom: UnitGeometry,
+  pageIndex: number,
+  anchor: { x: number; y: number },
+  end: { x: number; y: number }
+): CreationGeometry {
+  const dx = Math.abs(end.x - anchor.x);
+  const dy = Math.abs(end.y - anchor.y);
+  if (Math.max(dx, dy) < CREATE_CLICK_THRESHOLD_MM) {
+    const at = unitToPageMm(geom, pageIndex, anchor);
+    return { tiny: true, at: { x: quantizeCreate(at.x), y: quantizeCreate(at.y) } };
+  }
+  const unitBox = normalizedBox(anchor, end);
+  const at = unitToPageMm(geom, pageIndex, { x: unitBox.x, y: unitBox.y });
+  return {
+    tiny: false,
+    x: quantizeCreate(at.x),
+    y: quantizeCreate(at.y),
+    width: quantizeCreate(Math.max(MIN_SHAPE_MM, unitBox.width)),
+    height: quantizeCreate(Math.max(MIN_SHAPE_MM, unitBox.height)),
+  };
+}
+
+/** The element a creation gesture commits. */
+export function createdElement(shape: 'rect' | 'ellipse', g: CreationGeometry): EditorElement {
+  const at = g.tiny ? g.at : { x: g.x, y: g.y };
+  const base = shape === 'rect' ? newRectElement(at) : newEllipseElement(at);
+  return g.tiny ? base : { ...base, width: g.width, height: g.height };
 }
 
 export function rectsIntersect(a: Box, b: Box): boolean {
@@ -347,27 +397,8 @@ export function useStageGestures(args: {
       }
 
       if (g.kind === 'create') {
-        const dx = Math.abs(end.x - g.anchor.x);
-        const dy = Math.abs(end.y - g.anchor.y);
-        const tiny = Math.max(dx, dy) < CREATE_CLICK_THRESHOLD_MM;
-        const gm = geomRef.current;
-
-        const unitBox = tiny ? null : normalizedBox(g.anchor, end);
-        const at = unitToPageMm(gm, g.pageIndex, tiny ? g.anchor : { x: unitBox!.x, y: unitBox!.y });
-
-        const base =
-          g.shape === 'rect'
-            ? newRectElement({ x: quantizeCreate(at.x), y: quantizeCreate(at.y) })
-            : newEllipseElement({ x: quantizeCreate(at.x), y: quantizeCreate(at.y) });
-
-        const element: EditorElement = tiny
-          ? base
-          : {
-              ...base,
-              width: quantizeCreate(Math.max(MIN_SHAPE_MM, unitBox!.width)),
-              height: quantizeCreate(Math.max(MIN_SHAPE_MM, unitBox!.height)),
-            };
-
+        // The same function the preview and pill use (plan §4.9): what was shown is what commits.
+        const element = createdElement(g.shape, creationGeometry(geomRef.current, g.pageIndex, g.anchor, end));
         onCreate(g.pageIndex, element, g.shape === 'rect' ? 'Create rectangle' : 'Create ellipse');
         reset();
         return;
@@ -439,14 +470,18 @@ export function useStageGestures(args: {
     () => (dragIds && drag ? { ids: new Set(dragIds), dx: drag.dx, dy: drag.dy } : null),
     [dragIds, drag]
   );
-  const previewBox =
-    creating && liveBox
-      ? {
-          ...liveBox,
-          width: Math.max(MIN_SHAPE_MM, liveBox.width),
-          height: Math.max(MIN_SHAPE_MM, liveBox.height),
-        }
-      : null;
+  // Preview == commit (plan §4.9): past the click threshold the box and the pill are the committed
+  // element's geometry (drawn in unit space); under it, only the anchor dot shows.
+  const created = creating && current ? creationGeometry(geom, creating.pageIndex, creating.anchor, current) : null;
+  const committedBox = created && !created.tiny ? created : null;
+  const previewBox = committedBox
+    ? pageBoxToUnit(geom, creating!.pageIndex, {
+        x: committedBox.x,
+        y: committedBox.y,
+        width: committedBox.width,
+        height: committedBox.height,
+      })
+    : null;
 
   return {
     previewBox,
@@ -455,7 +490,7 @@ export function useStageGestures(args: {
     marqueeBox: marqueeing && liveBox ? liveBox : null,
     guideX: guides.x,
     guideY: guides.y,
-    readout: previewBox ? { widthMm: previewBox.width, heightMm: previewBox.height } : null,
+    readout: committedBox ? { widthMm: committedBox.width, heightMm: committedBox.height } : null,
     dragPreview,
     dragging: dragging !== null,
     onStagePointerDown,

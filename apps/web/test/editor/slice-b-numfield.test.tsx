@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { NumField, SIZE_BOUNDS, FINE_BOUNDS, GEOMETRY_BOUNDS } from '@/components/editor/inspector/NumField';
+import { NumField, sizeBounds, FINE_BOUNDS, GEOMETRY_BOUNDS } from '@/components/editor/inspector/NumField';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -164,18 +164,19 @@ describe('arrow stepping — each press is one deliberate entry', () => {
   });
 
   it('stepping at a bound writes nothing — no entry for a no-op press', () => {
-    const input = render(2, SIZE_BOUNDS);
+    // Slice D D-1: the W/H floor is 4 mm (was 2 under #19 before D-1)
+    const input = render(4, sizeBounds(4));
     focus(input);
     key(input, 'ArrowDown');
     expect(commits).toEqual([]);
   });
 
   it('clamps a typed value below the declared floor', () => {
-    const input = render(20, SIZE_BOUNDS);
+    const input = render(20, sizeBounds(20));
     focus(input);
     type(input, '0.5');
     key(input, 'Enter');
-    expect(commits).toEqual([2]);
+    expect(commits).toEqual([4]); // Slice D D-1: 4 mm (was 2)
   });
 });
 
