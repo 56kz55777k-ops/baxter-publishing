@@ -148,6 +148,13 @@ Ben accepted Codex's stage 2 review and the S2-1 recommendation, and authorized 
 - **Two non-blocking notes** — the typed-shrink-then-blur test pressed Enter first; HANDOFF's stale resume heading and "Stage 3 onward is NOT authorized" — addressed in §6.6 at Ben's instruction.
 - **Q2 and Q7 presented to Ben for decision (2026-11-12). Stage 4 is not authorized** until he answers both and gives an explicit go.
 
+### 0.10 Ben's decisions on Q2 and Q7 (2026-11-12)
+
+Presented with options (a)/(b)/(c) for Q2 and (a)/(b) for Q7; Ben answered **"a"**, confirmed as **"a for both"**.
+- **Q2 — decided: (a) finish the resize, then pan.** Pressing Space during an active resize session does not change it: the shape keeps following the handle and release commits one history entry, exactly as without Space. If Space is still held at release (or cancel), Space panning is available from then on; if it was released, the editor returns to normal. The viewport freeze (§4.6) holds for the whole session. Rejected: (b) cancel the resize on Space; (c) switch to panning mid-gesture.
+- **Q7 — decided: (a) hold the fixed corner.** With Keep proportions or Shift on and Alt not held, a corner dragged past the fixed corner never re-anchors: the box keeps following the pointer's distance on the other axis, becomes the minimum box when the pointer is past both axes, and returns exactly when the pointer comes back (the ratio anchor clamp, §3.5, E1–E4, E12). Rejected: (b) re-anchor at the far corner. Free (non-ratio) handles keep the accepted #11 behaviour and centred (Alt) crossings stay continuous, unchanged by this decision.
+- These answers remove the Q2/Q7 blocks on completing stage 4. **Stage 4 is still not authorized until Ben's explicit go.**
+
 ---
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
@@ -486,7 +493,7 @@ D adds a guard fed by a shared `gestureActiveRef`, which the stage sets for the 
 - Every document-mutating, tool-switching and unit-navigating key is ignored.
 - **Escape** is handled by the session's capture listener (cancel).
 - **Native activation is blocked:** today `isControlTarget` lets Space and Enter activate a focused button or checkbox natively (C-6). During a session, the session's capture listener calls `preventDefault` for Space and Enter on such targets, on both keydown and keyup (browsers differ on which one activates), so a focused toolbar control (fit, zoom, unit navigation) cannot fire mid-gesture.
-- **Space:** keydown/keyup always keep `spaceHeld` accurate (so it never sticks). **What Space does to an active resize is not decided — Q2.** Until Ben answers, no Space-mid-resize behaviour is implemented (§6 stage 4).
+- **Space:** keydown/keyup always keep `spaceHeld` accurate (so it never sticks). **Q2 decided (Ben, 2026-11-12, §0.10): finish the resize, then pan** — Space does not affect an active session; if still held at release or cancel, Space panning is available from then on.
 
 Whether the same guard (and the viewport freeze of §4.6) should also cover Slice C's drag, creation and marquee is **Q3** (§10.3). The default in this plan is resize only.
 
@@ -615,7 +622,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
 | **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); **signed off by Codex and accepted by Ben 2026-11-12 (§0.9)**; cleanup (§6.6).** |
-| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **The Space-mid-resize policy and its tests are written only after Ben answers Q2, and the ratio clamp is activated only after Ben answers Q7. Stage 4 cannot be marked complete before both.** |
+| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **Q2 and Q7 answered by Ben 2026-11-12 (§0.10): finish-then-pan; hold the fixed corner. Not authorized until Ben's explicit go.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
 | **7** | D-6 chrome: multi dashed union border, lock indicator. | — |
@@ -843,7 +850,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 - Evidence: against `f367b58`'s source the three blur-only shrink tests fail (2.51 / 0.01 / 4 committed on blur) — 32 of 48 fail in the file; with `NumField`'s blur commit removed, the new control fails (the shrink tests alone could not detect that).
 - HANDOFF: the stale 2026-11-04 resume heading and "Stage 3 onward is NOT authorized" replaced with the accepted stage 3 checkpoint and "Stage 4 onward is NOT authorized"; §8, §9, §11 brought up to date.
 
-**Checkpoint.** Stage 4 needs Ben's answers to Q2 and Q7 and his explicit go.
+**Checkpoint.** Stage 4 needs Ben's answers to Q2 and Q7 and his explicit go. *(Q2 and Q7 answered 2026-11-12, §0.10; the go is still required.)*
 
 ---
 
@@ -1272,7 +1279,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
   - From r4: when an outcome is unknown, cleanup may spend up to two of its C writes on a fence (a marker created and deleted). Any outcome that stays unknown leaves the run "recovery pending" and blocks new runs until an approved recovery run resolves it.
   - From r5: an ambiguous creation or an unattributed id stops the suite; the held writes are aborted before they leave the browser and stay charged.
   - Not approved yet; no production-write test runs before Q1 **and** Q6 are approved.
-- **Q2 — Ben; unresolved product question; blocks completion of stage 4 (the Space policy, its tests and AC-23).** What happens when Space is pressed **during** an active resize?
+- **Q2 — DECIDED by Ben 2026-11-12 (§0.10): (a) finish the current resize; if Space is still held after release, enable panning.** *(The question as it was asked:)* What happens when Space is pressed **during** an active resize?
   - **Codex recommends:** *"Finish the current resize; if Space is still held after release, enable panning."*
   - Alternatives: cancel the resize when Space is pressed; or switch to panning mid-gesture (which would also need a commit-or-discard rule).
   - Slice C's drag currently behaves like the recommendation, but that is existing behaviour, not a decision for resize.
@@ -1289,7 +1296,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 - **Q6 — Ben; blocks the whole production suite (stage 8B) and any automatic cleanup.** Add `data-unit-element-ids` (every element id on the shown unit) and `data-selected-ids` (the current selection) to the stage wrapper as internal test instrumentation, like the approved `data-view`?
   - From r5, ownership comes only from attributing a declared creation with these two attributes (the unit's ids before and after, and the selection), registered before any save containing the id is forwarded (§8.5). No further attribute is requested.
   - **If Q6 is not approved, automatic cleanup and the production suite stay blocked**; the geometry fallback has been removed.
-- **Q7 — Ben; product behaviour; blocks activating the ratio clamp (completion of stage 4).** When the dragged corner passes the fixed corner **with Keep proportions or Shift on (no Alt)**, should the box:
+- **Q7 — DECIDED by Ben 2026-11-12 (§0.10): (a) hold the fixed corner.** *(The question as it was asked:)* When the dragged corner passes the fixed corner **with Keep proportions or Shift on (no Alt)**, should the box:
   - **(a) hold the fixed corner** — proposed (N1). The box keeps following the pointer's distance on the other axis, becomes the minimum box when the pointer is past both axes, never re-anchors, and returns exactly when the pointer comes back; or
   - **(b) re-anchor at its far corner** as r2 would have — evidenced as defective: jumps of 9.5–15.8 mm in one 0.2 mm step, the original corner lost, no exact return (§3.8 E1–E4, E12)?
   - Free (non-ratio) handles keep the accepted #11 behaviour either way, and centred (Alt) crossings are continuous either way.
