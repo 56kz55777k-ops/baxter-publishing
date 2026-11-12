@@ -132,6 +132,14 @@ Ben accepted Codex's stage 2 review and the S2-1 recommendation, and authorized 
 - **Creation under the click threshold:** asked and confirmed (Ben, 2026-11-04): anchor dot only, no box and no pill (§4.9, choice #12 unchanged).
 - Stage 4 (resize session, Konva wiring) needs Ben's separate go. Q2 and Q7 open; Q1 and Q6 gate production-write tests.
 
+### 0.8 Codex review of stage 3 `f367b58` (2026-11-12) — answered in the stage 3 correction
+
+- **One P2 finding: an off-grid floor that rounds upward.** `commitNum`/`stepNum` clamped to the minimum, then rounded, then guarded only against results *below* the minimum. A grandfathered 2.506 typed to 2 or stepped down became 2.51 (0.006 → 0.01; 3.999 → 4): a changed value, a history entry and a save — contrary to D-1 and §6.4. Stage 3's tests covered only values that round downward (2.504, 0.004).
+- **The same growth by a second route:** focus shows the rounded display ("2.51"); leaving the field without editing committed that text.
+- **Ben's instruction (2026-11-12):** shrink attempts preserve the exact stored value with no history entry or save; regression tests for 2.506, 0.006 and 3.999 covering typing, ArrowDown, and untouched focus/blur; do not start stage 4.
+- Codex's other results: inspector W/H minima independent and correct on-grid; creation release, preview and pill share `creationGeometry` with no defect; the two Slice B expectation changes legitimate; scope confined to the 11 stated files.
+- Answered in §6.5.
+
 ---
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
@@ -598,7 +606,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **0** | The plan (docs only). r1 `8042cc8`, r2 `b30373c`, r3 `d1f0f3d` and r4 `8b9b7d2` reviewed by Codex; **r5 (this)**. | **Codex re-reviews r5 → Ben authorizes the stage 1 probe and implementation.** |
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
-| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); awaiting Codex's review.** |
+| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); awaiting Codex's review of the correction.** |
 | **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **The Space-mid-resize policy and its tests are written only after Ben answers Q2, and the ratio clamp is activated only after Ben answers Q7. Stage 4 cannot be marked complete before both.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
@@ -780,7 +788,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 **Verification** and the commit ID are reported with the commit (HANDOFF; the review briefing). **Checkpoint:** stage 3 requires Ben's explicit go. Q2 and Q7 remain open; Q1 and Q6 still gate production-write testing.
 
-### 6.4 Stage 3 — inspector floor and creation readout (2026-11-04; awaiting Codex's review)
+### 6.4 Stage 3 — inspector floor and creation readout (2026-11-04; reviewed by Codex 2026-11-12; corrected in §6.5)
 
 **Scope.** Stage 3 only (§0.7), from `df0bad3`. No resize session, Konva wiring, toggle (stage 6) or production write.
 
@@ -799,6 +807,25 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 **Negative controls:** a fixed 2 mm floor fails 10 stage 3 tests; removing the minimum guard after rounding fails 3; the raw-drag preview fails 5.
 
 **Checkpoint.** Codex reviews stage 3; stage 4 needs Ben's separate go.
+
+### 6.5 Stage 3 correction (2026-11-12; at the stage 3 checkpoint)
+
+**Scope.** Codex's stage 3 finding only (§0.8), from `f367b58`. No resize session, Konva wiring, toggle, dependency, CI or production write.
+
+**Changes:**
+- `packages/domain/src/editor/num-field.ts` — one `resolveNum` for typing and stepping: clamp; **a value at or below the minimum resolves to the minimum itself, before rounding** (so an off-grid floor is never rounded up or down); a value above the minimum that rounds below it is still held at the minimum (2.5041 at a 2.504 floor → 2.504). On-grid minimums (0, 4) behave as before. `commitNum` takes an optional `current`: **a draft equal to `formatNum(current)` is unedited and resolves to `current`** — so focus then blur or Enter without editing writes nothing, even when the stored value is off the grid.
+- `apps/web/components/editor/inspector/NumField.tsx` — passes the model value as `current` (not when mixed).
+- `apps/web/test/editor/slice-d-inspector.test.tsx` — +36 tests (11 → 47).
+
+**The unedited rule applies to every numeric field**, not only W/H: a legacy off-grid X (20.004, shown "20") left unedited also stays 20.004. That is contract #19's existing statement ("visiting a field and leaving creates no history entry and no autosave"), which off-grid values had violated. Typing exactly the displayed text (e.g. "2.51" at a stored 2.506) is therefore a no-op; any other text is parsed as before.
+
+**Codex's table, after the correction** (typed 0 / ArrowDown / untouched focus-blur): 2.504 → 2.504 · 2.506 → 2.506 · 0.004 → 0.004 · 0.006 → 0.006 · 3.999 → 3.999, each with no patch, no history entry and the same document reference. Growth is unchanged: 2.506 ↑ → 3.51, typed 3 → 3.
+
+**Tests:** pure rule (typed shrinks incl. 0 and −1; ↓ and Shift+↓; the unedited display text, with surrounding whitespace; growth; the downward cases kept; the rule is display-exact only); Inspector (no patch for typed shrink, ↓, Shift+↓, focus+blur, focus+Enter); real shell — for each of 2.506, 0.006, 3.999 on both W and H: typed shrink + Enter, typed shrink + blur, ↓, Shift+↓, untouched focus+blur, untouched focus+Enter → history 0, `state.doc` the same reference, both dimensions `Object.is` the stored value; plus a control that a real growth still commits one entry.
+
+**Red, then negative controls:** the new tests against `f367b58`'s source: 32 of 47 fail. Rounding before the floor check (floor-first removed): 23 fail. The unedited rule removed from the domain: 26 fail. `NumField` not passing `current`: 22 fail.
+
+**Checkpoint.** Codex reviews the correction; stage 4 needs Ben's separate go.
 
 ---
 

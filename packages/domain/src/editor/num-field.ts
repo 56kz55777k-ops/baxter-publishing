@@ -15,11 +15,17 @@
  *   negative page-relative values are first-class (contract #2).
  * - Every typed-reachable bound is step-reachable: stepping clamps, so a
  *   0.5 mm stroke steps down to exactly 0 (which nulls the stroke, #18).
- * - A result is never below the declared minimum, even after rounding to the
- *   0.01 grid. That matters only for a minimum off the grid — a grandfathered
- *   size (D-1, Slice D) whose stored value predates the grid, e.g. 2.504 mm:
- *   typing 2 then resolves to 2.504, the current value, which is a no-op —
- *   never to 2.5, which would shrink it.
+ * - A result that reaches the declared minimum IS the minimum, exactly — it is
+ *   returned before rounding, so rounding can neither lower it (2.504 → 2.5)
+ *   nor raise it (2.506 → 2.51). That matters only for a minimum off the grid
+ *   — a grandfathered size (D-1, Slice D) whose stored value predates the
+ *   grid: typing 2 at 2.506 resolves to 2.506, the current value, a no-op.
+ *   A result above the minimum that rounds below it is also held at the
+ *   minimum (2.5041 at a 2.504 floor → 2.504).
+ * - An unedited draft is a no-op. Focus shows `formatNum(current)`, which for
+ *   an off-grid stored value is not the value itself (2.506 shows "2.51");
+ *   committing that same text returns `current` unchanged, so visiting a
+ *   field and leaving it writes nothing (#19/#24).
  * - Display equals the model exactly: ≤ 2 dp, trailing zeros stripped,
  *   `-0` normalised.
  *
@@ -69,10 +75,21 @@ export function clampNum(value: number, bounds: NumFieldBounds): number {
  * with the current model value: equality is the no-op signal, and an
  * identical-value commit creates nothing (#19/#24).
  */
-export function commitNum(draft: string, bounds: NumFieldBounds): number | null {
+export function commitNum(
+  draft: string,
+  bounds: NumFieldBounds,
+  /**
+   * The current model value, when there is one (not mixed). A draft equal to
+   * its formatted display is unedited and resolves to `current` itself.
+   */
+  current?: number
+): number | null {
+  if (current !== undefined && Number.isFinite(current) && draft.trim() === formatNum(current)) {
+    return current;
+  }
   const parsed = parseNum(draft);
   if (parsed === null) return null;
-  return atLeastMin(quantizeDisplay(clampNum(parsed, bounds)), bounds);
+  return resolveNum(parsed, bounds);
 }
 
 /** One arrow press. Clamps, so declared bounds are always step-reachable. */
@@ -83,16 +100,25 @@ export function stepNum(
   shift: boolean
 ): number {
   const delta = (shift ? bounds.shiftStep : bounds.step) * direction;
-  return atLeastMin(quantizeDisplay(clampNum(current + delta, bounds)), bounds);
+  return resolveNum(current + delta, bounds);
 }
 
 /**
- * Rounding to the 0.01 grid can land just under an off-grid minimum (2.504 →
- * 2.5). The minimum wins: the result is the minimum itself. On-grid minimums
- * (0, 4) are unaffected — rounding a value ≥ them never goes below them.
+ * Clamp, then round to the 0.01 grid — except at the floor.
+ *
+ * - A value at or below the minimum resolves to the minimum itself, before
+ *   rounding: an off-grid minimum (a grandfathered 2.506 or 0.006, a 3.999)
+ *   would otherwise round UP (2.51, 0.01, 4) and a shrink attempt would write
+ *   a growth (Codex stage 3 review, 2026-11-12).
+ * - A value above the minimum that rounds below it (2.5041 at a 2.504 floor →
+ *   2.5) is held at the minimum.
+ * On-grid minimums (0, 4) behave exactly as before.
  */
-function atLeastMin(value: number, bounds: NumFieldBounds): number {
-  return bounds.min !== undefined && value < bounds.min ? bounds.min : value;
+function resolveNum(value: number, bounds: NumFieldBounds): number {
+  const clamped = clampNum(value, bounds);
+  if (bounds.min !== undefined && clamped <= bounds.min) return bounds.min;
+  const rounded = quantizeDisplay(clamped);
+  return bounds.min !== undefined && rounded < bounds.min ? bounds.min : rounded;
 }
 
 /**

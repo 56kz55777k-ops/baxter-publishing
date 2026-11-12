@@ -20,6 +20,7 @@ import {
   addElement,
   commitNum,
   findElement,
+  formatNum,
   getFormatPreset,
   newEditorDoc,
   newEllipseElement,
@@ -98,6 +99,60 @@ describe('D-1 floor — the pure rule (sizeBounds + the numeric field rules)', (
   });
 });
 
+/*
+ * Codex stage 3 review (2026-11-12): an off-grid floor that rounds UP. At
+ * f367b58 a shrink clamped to the floor and then rounded, so 2.506 → 2.51,
+ * 0.006 → 0.01 and 3.999 → 4: a changed value, a history entry and a save.
+ * And focus shows the rounded display, so focus/blur without editing
+ * committed the same growth. Both must leave the stored value exactly.
+ */
+const UPWARD = [
+  { stored: 2.506, shown: '2.51', shrink: '2', grow: '3', grown: 3, up: 3.51 },
+  { stored: 0.006, shown: '0.01', shrink: '0', grow: '1', grown: 1, up: 1.01 },
+  { stored: 3.999, shown: '4', shrink: '0', grow: '5', grown: 5, up: 5 },
+] as const;
+
+describe('D-1 floor — an off-grid floor that rounds upward is kept exactly (Codex stage 3 finding)', () => {
+  it.each(UPWARD)('$stored: typed shrinks resolve to the exact stored value', ({ stored, shrink }) => {
+    for (const d of [shrink, '0', '-1', String(stored)]) {
+      expect(Object.is(typed(stored, d), stored)).toBe(true);
+    }
+  });
+
+  it.each(UPWARD)('$stored: ArrowDown and Shift+ArrowDown resolve to the exact stored value', ({ stored }) => {
+    expect(Object.is(step(stored, -1), stored)).toBe(true);
+    expect(Object.is(step(stored, -1, true), stored)).toBe(true);
+  });
+
+  it.each(UPWARD)('$stored: the unedited display text "$shown" resolves to the stored value', ({ stored, shown }) => {
+    expect(formatNum(stored)).toBe(shown); // the display is rounded — the hazard
+    expect(Object.is(commitNum(shown, sizeBounds(stored), stored), stored)).toBe(true);
+    expect(Object.is(commitNum(` ${shown} `, sizeBounds(stored), stored), stored)).toBe(true);
+  });
+
+  it.each(UPWARD)('$stored: growth still works (typed $grow → $grown; ↑ → $up)', ({ stored, grow, grown, up }) => {
+    expect(commitNum(grow, sizeBounds(stored), stored)).toBe(grown);
+    expect(step(stored, 1)).toBe(up);
+  });
+
+  it('values that round DOWN keep their existing protection (2.504, 0.004)', () => {
+    expect(Object.is(typed(2.504, '2'), 2.504)).toBe(true);
+    expect(Object.is(typed(2.504, '2.5041'), 2.504)).toBe(true);
+    expect(Object.is(step(2.504, -1), 2.504)).toBe(true);
+    expect(Object.is(typed(0.004, '0'), 0.004)).toBe(true);
+    expect(Object.is(commitNum('0', sizeBounds(0.004), 0.004), 0.004)).toBe(true);
+  });
+
+  it('the unedited rule is display-exact only: any other text is parsed as before', () => {
+    expect(commitNum('2.5', sizeBounds(2.506), 2.506)).toBe(2.506); // a shrink → the floor
+    expect(commitNum('2.52', sizeBounds(2.506), 2.506)).toBe(2.52);
+    expect(commitNum('abc', sizeBounds(2.506), 2.506)).toBeNull(); // invalid → restore
+    expect(commitNum('2.51', sizeBounds(2.506))).toBe(2.51); // no current (mixed): parsed
+    // an unbounded off-grid X (legacy 20.004 shows "20"): leaving it unedited keeps it
+    expect(Object.is(commitNum('20', { step: 1, shiftStep: 5 }, 20.004), 20.004)).toBe(true);
+  });
+});
+
 /* -------------------------------------------------------------------------- */
 /* DOM helpers                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -127,6 +182,23 @@ function enter(input: HTMLInputElement, text: string) {
   });
   act(() => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  });
+}
+
+/** Focus, then leave without editing: blur, or Enter (which keeps focus). */
+function visit(input: HTMLInputElement, leave: 'blur' | 'Enter') {
+  act(() => input.focus());
+  act(() => {
+    if (leave === 'blur') input.blur();
+    else input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  });
+  if (leave === 'Enter') act(() => input.blur());
+}
+
+function arrowShift(input: HTMLInputElement) {
+  act(() => input.focus());
+  act(() => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true, cancelable: true }));
   });
 }
 
@@ -182,6 +254,21 @@ describe('D-1 floor — the Inspector patches only real changes', () => {
     arrow(field('num-w'), 'ArrowUp');
     expect(patches).toEqual([[{ width: 3.5 }, 'Set width']]);
   });
+
+  it.each(UPWARD)(
+    'upward-rounding $stored: typed shrink, ↓, Shift+↓, and focus then blur/Enter patch nothing',
+    ({ stored, shrink, shown }) => {
+      render({ ...newRectElement({ x: 10, y: 10 }), width: stored, height: 20 });
+      enter(field('num-w'), shrink);
+      arrow(field('num-w'), 'ArrowDown');
+      arrowShift(field('num-w'));
+      visit(field('num-w'), 'blur');
+      visit(field('num-w'), 'Enter');
+      expect(patches).toEqual([]);
+      act(() => field('num-w').blur());
+      expect(field('num-w').value).toBe(shown);
+    }
+  );
 });
 
 /* -------------------------------------------------------------------------- */
@@ -249,5 +336,45 @@ describe('D-1 floor — through the shell: a no-op creates no history entry and 
     expect(state.history).toHaveLength(0);
     expect(state.doc).toBe(before);
     expect(Object.is((findElement(state.doc, A.id) as { width: number }).width, 0.004)).toBe(true);
+  });
+
+  const widthOf = (id: string) => (findElement(state.doc, id) as { width: number }).width;
+  const actions: [string, (input: HTMLInputElement, shrink: string) => void][] = [
+    ['typing a shrink + Enter', (i, shrink) => enter(i, shrink)],
+    ['typing a shrink + blur', (i, shrink) => {
+      enter(i, shrink);
+      act(() => i.blur());
+    }],
+    ['ArrowDown', (i) => arrow(i, 'ArrowDown')],
+    ['Shift+ArrowDown', (i) => arrowShift(i)],
+    ['focus then blur, untouched', (i) => visit(i, 'blur')],
+    ['focus then Enter, untouched', (i) => visit(i, 'Enter')],
+  ];
+
+  for (const { stored, shrink } of UPWARD) {
+    for (const [what, act_] of actions) {
+      it(`width ${stored}, H ${stored}: ${what} → no history entry, same document, exact value`, () => {
+        const A = { ...newRectElement({ x: 10, y: 10 }), width: stored, height: stored };
+        mount(A);
+        const before = state.doc;
+        act_(field('num-w'), shrink);
+        act_(field('num-h'), shrink);
+        expect(state.history).toHaveLength(0);
+        expect(state.doc).toBe(before);
+        expect(Object.is(widthOf(A.id), stored)).toBe(true);
+        expect(Object.is((findElement(state.doc, A.id) as { height: number }).height, stored)).toBe(true);
+      });
+    }
+  }
+
+  it('control: after the no-ops, a real growth from 2.506 still commits one entry', () => {
+    const A = { ...newRectElement({ x: 10, y: 10 }), width: 2.506, height: 20 };
+    mount(A);
+    visit(field('num-w'), 'blur');
+    arrow(field('num-w'), 'ArrowDown');
+    expect(state.history).toHaveLength(0);
+    enter(field('num-w'), '3');
+    expect(state.history).toHaveLength(1);
+    expect(widthOf(A.id)).toBe(3);
   });
 });

@@ -19,7 +19,9 @@
  *   selection — it is a field-level cancel, not an editor-level one.
  * - **No-ops write nothing:** a commit equal to the current model value
  *   returns early, so visiting a field and leaving creates no history entry
- *   and no autosave.
+ *   and no autosave — including an off-grid stored value whose display is
+ *   rounded (2.506 shows "2.51"): the unedited draft resolves to the model
+ *   value itself (`commitNum`'s `current`).
  * - **No native spinners** (`appearance: textfield`): permanent +/- controls
  *   are barred without a new decision, and the arrow keys are the accepted
  *   stepping affordance.
@@ -85,7 +87,9 @@ export function NumField({
   const restored = mixed ? '' : formatNum(value);
 
   function commit(raw: string) {
-    const next = commitNum(raw, bounds);
+    // An unedited draft (focus then blur/Enter) resolves to the model value
+    // itself, so an off-grid stored size that displays rounded is never written.
+    const next = commitNum(raw, bounds, mixed ? undefined : value);
     if (next === null) {
       setDraft(restored); // invalid draft → restore the last valid value
       return;
