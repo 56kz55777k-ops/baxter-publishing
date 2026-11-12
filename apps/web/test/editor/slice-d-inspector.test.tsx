@@ -173,13 +173,19 @@ afterEach(() => {
 
 const field = (testId: string) => container.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
 
-function enter(input: HTMLInputElement, text: string) {
+/** Focus and type, with no commit boundary: the draft is left in the field. */
+function typeOnly(input: HTMLInputElement, text: string) {
   act(() => input.focus());
   act(() => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     setter.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+/** Type, then Enter (which commits and keeps focus). */
+function enter(input: HTMLInputElement, text: string) {
+  typeOnly(input, text);
   act(() => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   });
@@ -341,8 +347,9 @@ describe('D-1 floor — through the shell: a no-op creates no history entry and 
   const widthOf = (id: string) => (findElement(state.doc, id) as { width: number }).width;
   const actions: [string, (input: HTMLInputElement, shrink: string) => void][] = [
     ['typing a shrink + Enter', (i, shrink) => enter(i, shrink)],
+    // blur is the first and only commit boundary for the typed draft (no Enter)
     ['typing a shrink + blur', (i, shrink) => {
-      enter(i, shrink);
+      typeOnly(i, shrink);
       act(() => i.blur());
     }],
     ['ArrowDown', (i) => arrow(i, 'ArrowDown')],
@@ -366,6 +373,16 @@ describe('D-1 floor — through the shell: a no-op creates no history entry and 
       });
     }
   }
+
+  it('control: a typed growth committed by blur alone (no Enter) writes one entry — blur is a real boundary', () => {
+    const A = { ...newRectElement({ x: 10, y: 10 }), width: 2.506, height: 20 };
+    mount(A);
+    typeOnly(field('num-w'), '3');
+    expect(state.history).toHaveLength(0); // typing alone commits nothing
+    act(() => field('num-w').blur());
+    expect(state.history).toHaveLength(1);
+    expect(widthOf(A.id)).toBe(3);
+  });
 
   it('control: after the no-ops, a real growth from 2.506 still commits one entry', () => {
     const A = { ...newRectElement({ x: 10, y: 10 }), width: 2.506, height: 20 };

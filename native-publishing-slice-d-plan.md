@@ -140,6 +140,14 @@ Ben accepted Codex's stage 2 review and the S2-1 recommendation, and authorized 
 - Codex's other results: inspector W/H minima independent and correct on-grid; creation release, preview and pill share `creationGeometry` with no defect; the two Slice B expectation changes legitimate; scope confined to the 11 stated files.
 - Answered in §6.5.
 
+### 0.9 Codex sign-off of the stage 3 correction `2186526`; Ben's acceptance (2026-11-12)
+
+- **Signed off for the stage 3 checkpoint; the P2 finding is resolved; no blocking findings.** Accepted by Ben 2026-11-12.
+- Codex accepted the display-text no-op rule across numeric fields as text equality (retyping exactly the displayed text is a no-op), not edit tracking; mixed fields receive no current value.
+- Codex's limits, recorded: the shell tests assert history and document identity with autosave mocked, so they are not HTTP-request assertions and do not prove an already-pending save cannot occur; the audit increase is not independently triaged, and an unchanged lockfile alone does not establish its cause.
+- **Two non-blocking notes** — the typed-shrink-then-blur test pressed Enter first; HANDOFF's stale resume heading and "Stage 3 onward is NOT authorized" — addressed in §6.6 at Ben's instruction.
+- **Q2 and Q7 presented to Ben for decision (2026-11-12). Stage 4 is not authorized** until he answers both and gives an explicit go.
+
 ---
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
@@ -606,7 +614,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **0** | The plan (docs only). r1 `8042cc8`, r2 `b30373c`, r3 `d1f0f3d` and r4 `8b9b7d2` reviewed by Codex; **r5 (this)**. | **Codex re-reviews r5 → Ben authorizes the stage 1 probe and implementation.** |
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
-| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); awaiting Codex's review of the correction.** |
+| **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); **signed off by Codex and accepted by Ben 2026-11-12 (§0.9)**; cleanup (§6.6).** |
 | **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **The Space-mid-resize policy and its tests are written only after Ben answers Q2, and the ratio clamp is activated only after Ben answers Q7. Stage 4 cannot be marked complete before both.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
@@ -808,7 +816,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 **Checkpoint.** Codex reviews stage 3; stage 4 needs Ben's separate go.
 
-### 6.5 Stage 3 correction (2026-11-12; at the stage 3 checkpoint)
+### 6.5 Stage 3 correction `2186526` (2026-11-12; signed off by Codex, accepted by Ben — §0.9)
 
 **Scope.** Codex's stage 3 finding only (§0.8), from `f367b58`. No resize session, Konva wiring, toggle, dependency, CI or production write.
 
@@ -825,7 +833,17 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 **Red, then negative controls:** the new tests against `f367b58`'s source: 32 of 47 fail. Rounding before the floor check (floor-first removed): 23 fail. The unedited rule removed from the domain: 26 fail. `NumField` not passing `current`: 22 fail.
 
-**Checkpoint.** Codex reviews the correction; stage 4 needs Ben's separate go.
+**Checkpoint.** Codex reviews the correction; stage 4 needs Ben's separate go. *(Signed off and accepted 2026-11-12, §0.9.)*
+
+### 6.6 Stage 3 cleanup (2026-11-12; Codex's non-blocking notes, at Ben's instruction)
+
+**Scope.** Test coverage and documentation only. No production code, dependency, CI or production write; no stage 4 work.
+
+- `slice-d-inspector.test.tsx`: a `typeOnly` helper (focus and type, no commit boundary); `enter` now types through it, then presses Enter. The shell action "typing a shrink + blur" uses `typeOnly` then blur, so **blur is the first and only commit boundary** for the typed shrink. New control: a typed growth (2.506 → 3) committed by blur alone writes exactly one entry, and typing alone writes none. 47 → 48 tests.
+- Evidence: against `f367b58`'s source the three blur-only shrink tests fail (2.51 / 0.01 / 4 committed on blur) — 32 of 48 fail in the file; with `NumField`'s blur commit removed, the new control fails (the shrink tests alone could not detect that).
+- HANDOFF: the stale 2026-11-04 resume heading and "Stage 3 onward is NOT authorized" replaced with the accepted stage 3 checkpoint and "Stage 4 onward is NOT authorized"; §8, §9, §11 brought up to date.
+
+**Checkpoint.** Stage 4 needs Ben's answers to Q2 and Q7 and his explicit go.
 
 ---
 
