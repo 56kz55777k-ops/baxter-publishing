@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2 and 3 implemented on `slice-d-resize`; at the stage 3 review checkpoint (§6.4).**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2, 3 and 4 implemented on `slice-d-resize`; at the stage 4 review checkpoint (§6.7).**
+- **Stage 4 (2026-11-12):** Ben accepted Codex's stage 3 correction review, the cleanup `17b38cb` and the Q2/Q7 record `201a474`, made four plan clarifications (§0.11), and authorized **stage 4 only**: the Konva-free resize session controller and its policies (§4.3–§4.6, §6.7). Stage 5 (Konva wiring) needs Ben's separate go after Codex's review of stage 4.
 - **Stage 3 (2026-11-04):** Ben accepted Codex's stage 2 sign-off at `df0bad3`, approved the zero-H rule, and authorized stage 3 only (§0.7). Stage 3 adds the D-1 inspector W/H floor and the creation-pill correction, and corrects the zero-H explanation (§3.2: Konva may skip or call `boundBoxFunc`; fixture observations). Stage 4 (resize session, Konva wiring) needs Ben's separate go.
 - **Stage 2 correction (2026-11-04):** Codex reviewed stage 2 (`9e69c1c`) and Ben accepted the review and the S2-1 recommendation (§0.6). The correction defines resize for a positive stored size that rounds to 0 H (§3.2), aligns §3.2's centre-target wording with the implementation, completes C16's `precision.ts` comment, and adds Ben's S2-1 wording to G9 and a snap-enabled hold example for the harness (§8.2).
 - **Stage 2 (2026-11-04):** `hundredths.ts`, `minimums.ts` and `resize.ts` in `packages/domain`, with `slice-d-resize-math.test.ts` (57 tests) and a test-only Konva port fixture. The production maths reproduces the evidence script's B1–B9 and E1–E13 exactly, and section F's 4,000 gestures move by move. Two discrepancies found while doing so, for Codex and Ben (§6.2): Konva's anchor-unchanged return (F2) is not always outcome-neutral, and section F's published counts are doubled. No UI, session or Konva wiring exists yet.
@@ -12,9 +13,9 @@
 - Codex then reviewed r2. It independently ran the r2 evidence script and **accepted** the centre capture, the controlling-axis ratio calculation, the integer arithmetic and the preview/commit payload approach. It left three findings, answered here (§0.2).
 - Correcting the Konva model (finding 1) **exposed two further defects** in the proposed algorithm: re-anchoring after a ratio crossing, and centre creep across anchor renames. Both are revised and re-evidenced here (§0.2 rows N1 and N2).
 - **Decisions D-1…D-6 were approved by Ben on 2026-10-22** (§1).
-- Open product questions: **Q2** (Space during an active resize) and **Q7** (the ratio-crossing behaviour proposed in N1). Both are recommendations awaiting Ben's approval, not approvals. Exercising the proposed ratio behaviour in a stage 2 fixture does not settle Q7.
-- **Stages 2 and 3 are authorized (Ben, 2026-11-04) and implemented; stage 3 stops at its review checkpoint. Stage 4 onward is NOT authorized.** **Q1 and Q6 remain prerequisites for any production-write test.**
-- Stage 2 is domain code and tests; stage 3 is the first user-visible change (inspector W/H floor, creation pill). No dependency or CI change; no Konva wiring (§6.2–§6.4). No production-write test has been run for D.
+- **Q2 and Q7 were decided by Ben on 2026-11-12 (§0.10), with clarifications (§0.11).** *(Before that they were open recommendations; exercising the proposed ratio behaviour in a fixture did not settle Q7.)*
+- **Stages 2, 3 and 4 are authorized and implemented; stage 4 stops at its review checkpoint. Stage 5 onward is NOT authorized.** **Q1 and Q6 remain prerequisites for any production-write test.**
+- Stage 2 is domain code and tests; stage 3 is the first user-visible change (inspector W/H floor, creation pill); stage 4 is the Konva-free session controller, not yet connected to the editor. No dependency or CI change; no Konva wiring (§6.2–§6.7). No production-write test has been run for D.
 
 **Base:** `main` = `790ddf9875f7ea4d35e594c52fc6eb1fdb218467` (PR #19 merge, Next.js 15.5.28), tree `db54dbef235a7a4d771f6e48a158f20f1e110677`. Branch: `slice-d-resize`. r1 = `8042cc8`, r2 = `b30373c`, r3 = `d1f0f3d`, r4 = `8b9b7d2`, r5 = `acca04e`, stage 1 probe and results = `e7c1831` (`e7c18318111b1f85cd5c4fe5c1edfa1e001a8b64`); r6 = `2d8ed45` (`2d8ed45b141e8de1be5a54b5da6ce35240928217`), stage 2 = `9e69c1c` (`9e69c1c2c7db97254e4f0057cc3419b7daf7d25a`); stage 2 correction = `df0bad3` (`df0bad37b1c9b130c2d6847b050028c1c5b0be16`); stage 3 is the next commit on the branch.
 **Supersedes for planning purposes:** `native-publishing-slice-d-readiness.md` (2026-10-06), which stays as the historical readiness record, unaltered.
@@ -152,8 +153,22 @@ Ben accepted Codex's stage 2 review and the S2-1 recommendation, and authorized 
 
 Presented with options (a)/(b)/(c) for Q2 and (a)/(b) for Q7; Ben answered **"a"**, confirmed as **"a for both"**.
 - **Q2 — decided: (a) finish the resize, then pan.** Pressing Space during an active resize session does not change it: the shape keeps following the handle and release commits one history entry, exactly as without Space. If Space is still held at release (or cancel), Space panning is available from then on; if it was released, the editor returns to normal. The viewport freeze (§4.6) holds for the whole session. Rejected: (b) cancel the resize on Space; (c) switch to panning mid-gesture.
-- **Q7 — decided: (a) hold the fixed corner.** With Keep proportions or Shift on and Alt not held, a corner dragged past the fixed corner never re-anchors: the box keeps following the pointer's distance on the other axis, becomes the minimum box when the pointer is past both axes, and returns exactly when the pointer comes back (the ratio anchor clamp, §3.5, E1–E4, E12). Rejected: (b) re-anchor at the far corner. Free (non-ratio) handles keep the accepted #11 behaviour and centred (Alt) crossings stay continuous, unchanged by this decision.
+- **Q7 — decided: (a) hold the fixed corner.** With Keep proportions or Shift on and Alt not held, a corner dragged past the fixed corner never re-anchors: the box keeps following the pointer's distance on the other axis, becomes the minimum box when the pointer is past both axes, and returns exactly when the pointer comes back (the ratio anchor clamp, §3.5, E1–E4, E12) — subject to F1, S2-1 and the zero-H rule (§0.11 clarification 3). Rejected: (b) re-anchor at the far corner. Free (non-ratio) handles keep the accepted #11 behaviour and centred (Alt) crossings stay continuous, unchanged by this decision.
 - These answers remove the Q2/Q7 blocks on completing stage 4. **Stage 4 is still not authorized until Ben's explicit go.**
+
+### 0.11 Ben's stage 4 authorization and clarifications (2026-11-12)
+
+Ben accepted Codex's review of the cleanup `17b38cb` and of the Q2/Q7 record `201a474`, and authorized **stage 4 only**, from `201a474`. Q2 (a) and Q7 (a) stay decided and are not reopened. Clarifications, recorded in his words where given:
+
+1. **Escape and window blur differ.**
+   - Escape cancels the resize, preserves the selection, and may preserve a held Space.
+   - Window blur cancels the resize and clears Space under contract #26. Returning focus must not leave panning stuck.
+   - Pan becoming available after release or Escape means a **new** pointer gesture; the existing resize drag is never transferred into panning.
+2. **Release commits at most once:** only after the 3 px threshold is crossed and the final geometry differs from the start in H. Clicks, unchanged geometry and cancelled sessions create no history entry and no new save.
+3. **Q7 (a) retains F1, S2-1 and the zero-H rule.** The minimum-box / exact-return wording is not an unconditional guarantee: Konva's accepted skips (F1; a grandfathered axis small enough on screen), its unchanged-anchor hold (S2-1) and the zero-H ratio hold (§3.2) still apply.
+4. The stale "written after Q2" lines (§7 session tests, §8.2 harness) and the unresolved-Q2 reference in §4.6 are replaced with the decided behaviour (done in this revision).
+
+**Stage 4 scope and boundary (Ben):** the Konva-free session controller and its tests — threshold-pending and active lifecycle; segments, fixed references and centre carry; the Q7 ratio anchor clamp; synchronous bounded geometry and payload; release, cancellation and idempotent cleanup; keyboard suppression and accurate Space tracking; viewport-freeze policy and deferred-refit bookkeeping. Explicit inputs and callbacks, no Konva import; shared helpers may be extracted where resting behaviour is preserved; tests exercise the production policies stage 5 will consume. **Stage 5 stays unauthorized:** no real Transformer, no live node mutation or preview layer, no shell `onResize`, no live wheel/refit/pan integration. **Q3 stays at its default: resize only.** The release-point rule stays: commit the last synchronously processed bounded payload, not Slice C's mouseup-coordinate behaviour.
 
 ---
 
@@ -179,7 +194,7 @@ The left column is Ben's decision as approved. The right column is how this plan
 ### 2.1 In scope
 - Konva Transformer resize for **one** selected, **unlocked**, **non-line** element (rect, ellipse), using the Select tool, with the phase writable.
 - The pure `boundResize` maths in integer hundredths (§3), the live `W × H mm` pill, snap guides, and the anchor no-op rule.
-- Cursor chain extension (#21) and Hand/Space inertness (D-4); Space during an active resize once Q2 is answered.
+- Cursor chain extension (#21) and Hand/Space inertness (D-4); Space during an active resize as decided in Q2 (§0.10, §0.11).
 - Cancel (D-3), the intent threshold (D-5), and the 4 mm floor with grandfathering in both resize and inspector (D-1).
 - The Keep-proportions toggle (D-2), multi dashed border and lock indicator (D-6).
 - The **creation-pill correction**: creation's preview box and pill show exactly what creation commits (§4.9).
@@ -228,7 +243,7 @@ Each criterion is proved by the tests named in §7 and the browser cases in §8.
 | AC-20 | **Viewport freeze:** from anchor press (threshold-pending included) to release or cancel, wheel pan/zoom changes nothing and the viewport-size refit is deferred to session end. Normal wheel behaviour and any deferred refit apply immediately after release, Escape, blur or unmount. | — | Codex finding 4 |
 | AC-21 | **Grandfathering in a real browser** (local harness): an undersized axis enlarges, cannot shrink, does not jump at press or crossing; ratio on an undersized shape scales up only; inspector edits per D-1. | #11, #19 | D-1, Codex finding 6 |
 | AC-22 | **Production writes** (only when Q1 and Q6 are approved): attempted / admitted / blocked counted per phase; **admitted** writes never exceed A = 24 (actions) or C = 8 (cleanup) per browser, including under concurrency. Every admitted write's outcome is recorded as committed, not-committed, not-forwarded or unknown, and nothing treats a lost response as non-commit. The action phase settles before going offline. Cleanup runs in a fresh context and fences unknown outcomes with a committed write. **Ownership comes only from attributed declared creations**, registered before any save containing the id is forwarded, in a registry kept apart from the write journal; ambiguous attribution stops the suite with nothing forwarded. Automatic deletion only of registered ids on their recorded unit; unrelated elements (other pages, other people's, unregistered `B0` ids) never enter the registry and are never deleted or changed by cleanup. "Clean" only when nothing remains unknown and no registered id remains; otherwise the journal stays unfinished and recovery is pending. | security-operations §8 | r1 finding 7; r2 findings 2–3; r3 finding 2; r4 finding 1 |
-| AC-23 | **Space during an active resize** behaves as Ben decides in Q2. The criterion is written when Q2 is answered. | #26 | D-4 (open part) |
+| AC-23 | **Space during an active resize** (Q2 (a), §0.10–§0.11): it does not change the session — threshold-pending or active; release commits at most once; Escape cancels with zero commit, selection kept, Space kept if held; window blur cancels with zero commit, selection kept, Space cleared. Panning is available only to a **new** pointer press after the session ends; Space held before the anchor press means no session starts (D-4). | #26 | D-4 |
 | AC-24 | **Ratio crossing** (one-edge ratio: corner + Keep proportions/Shift, no Alt), subject to Q7. The dragged anchor never crosses the fixed corner's minimum-box extent: no freeze, no anchor rename, the fixed corner never moves. The box is continuous across the crossing; beyond both axes it is the minimum box. Returning the pointer to an earlier position restores the earlier box exactly. Centred crossings (Alt) stay continuous and recover exactly with the centre carried. | #10, #11 | r2 finding 1; N1, N2 |
 
 **R9 cases not in D:** T12a–c (text, Slice G) and T14 (image frames, Slice E). Its "top/left resize commits x/y" regression is covered here with rect and ellipse. T15 (multi union move) shipped in Slice C.
@@ -489,11 +504,12 @@ The pill, the guides and an `ElementsLayer` **`resizePreview` override** (like S
 ### 4.5 Keyboard during an active resize session
 `use-editor-keyboard.ts` has **no gesture guard today**: ⌘Z, Delete, the arrows, ⌘D/C/X/V/A and the tool letters act even mid-drag (§11 C4). For resize this would break AC-8 — for example, an undo mid-gesture followed by a commit onto the undone document.
 
-D adds a guard fed by a shared `gestureActiveRef`, which the stage sets for the whole resize session (press to release or cancel). While it is set:
+D adds a guard for the whole resize session (press to release or cancel). **As implemented in stage 4 (implementation choice 26, §10.2):** the session itself registers capture-phase `keydown`/`keyup`/`click` listeners and a `blur` listener on `window` at the press and calls `stopImmediatePropagation`, so no key reaches the shell's bubble-phase handlers; no shared `gestureActiveRef` is needed. While the session lives:
 - Every document-mutating, tool-switching and unit-navigating key is ignored.
 - **Escape** is handled by the session's capture listener (cancel).
 - **Native activation is blocked:** today `isControlTarget` lets Space and Enter activate a focused button or checkbox natively (C-6). During a session, the session's capture listener calls `preventDefault` for Space and Enter on such targets, on both keydown and keyup (browsers differ on which one activates), so a focused toolbar control (fit, zoom, unit navigation) cannot fire mid-gesture.
-- **Space:** keydown/keyup always keep `spaceHeld` accurate (so it never sticks). **Q2 decided (Ben, 2026-11-12, §0.10): finish the resize, then pan** — Space does not affect an active session; if still held at release or cancel, Space panning is available from then on.
+- **Space:** the session's capture listeners track Space on keydown and keyup **whatever the focused target** (a focused button included, where the shell hook returns early), so the session knows whether Space is held at its end; the key never reaches the shell's handlers mid-session. **Q2 decided (Ben, 2026-11-12, §0.10–§0.11): finish the resize, then pan.** Space does not affect the session. At the end the session reports `spaceHeld`: release and Escape report the tracked value (a held Space stays held); window blur reports `false` (contract #26). Panning then needs a **new** pointer press (`panMayStart`, stage 4); the resize drag is never converted into a pan.
+- **After the session:** a Space, Enter or Escape keydown the session swallowed has its keyup (and a keyboard-initiated `click`, `detail === 0`, on the same target) suppressed after the session ends, so a focused control cannot activate on keyup and a held Escape's auto-repeat never reaches the resting-state deselect. These residual suppressions end on that keyup, window blur or `dispose()`.
 
 Whether the same guard (and the viewport freeze of §4.6) should also cover Slice C's drag, creation and marquee is **Q3** (§10.3). The default in this plan is resize only.
 
@@ -507,7 +523,7 @@ The screen-to-model mapping (`view.x`, `view.y`, `view.scale`) must not change w
 | Keyboard: tool letters, unit navigation, ⌘ chords (`use-editor-keyboard.ts`) | Ignored by the key guard (§4.5). | Normal. |
 | Focused toolbar control activated by Space/Enter (fit page/unit, 100%, unit navigation in `EditorShell`) | Native activation blocked (§4.5). | Normal. |
 | Toolbar or pointer clicks elsewhere | Impossible without releasing the button, which ends the session first. | — |
-| Hand / Space drag-pan | Not startable: `enabled` gates new gestures, and the anchor press owns the pointer. Space-mid-resize semantics are Q2. | Per D-4. |
+| Hand / Space drag-pan | Not startable: `enabled` gates new gestures, and the anchor press owns the pointer (`panMayStart` is false while a session lives). Space pressed mid-session does not change the session (Q2 (a), §0.10–§0.11). | A **new** pointer press may pan if Space is held (release, Escape) or Hand is active; blur clears Space (#26). Per D-4. |
 | `readOnly` (conflict, window closed) | Cancels the resize (§4.4). | — |
 | Device-pixel-ratio change (window moved between displays) | No mapping change (CSS px). Konva redraws. | — |
 | Safari trackpad pinch (WebKit `GestureEvent`; the editor does not handle it today) | Visual-viewport zoom only: layout, the stage rect and client coordinates stay consistent, so the mapping holds. Not intercepted. Cannot be driven in the VM's Playwright WebKit; recorded, not tested. | — |
@@ -622,7 +638,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
 | **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); **signed off by Codex and accepted by Ben 2026-11-12 (§0.9)**; cleanup (§6.6).** |
-| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **Q2 and Q7 answered by Ben 2026-11-12 (§0.10): finish-then-pan; hold the fixed corner. Not authorized until Ben's explicit go.** |
+| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **Q2 and Q7 answered by Ben 2026-11-12 (§0.10). Authorized by Ben 2026-11-12 (stage 4 only, §0.11). Implemented 2026-11-12 (§6.7); awaiting Codex's review.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
 | **7** | D-6 chrome: multi dashed union border, lock indicator. | — |
@@ -854,6 +870,42 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 ---
 
+### 6.7 Stage 4 — the resize session controller (2026-11-12; awaiting Codex's review)
+
+**Scope.** Stage 4 only (§0.11), from `201a474`. Konva-free; **not connected to the editor**. No Transformer, node mutation, preview layer, shell `onResize`, or live wheel/refit/pan integration (stage 5). Q3 at its default (resize only). No dependency, lockfile, CI, persistence or production write.
+
+**Files:**
+- `apps/web/components/editor/resize-session.ts` (new) — `ResizeSession` and the pure policies `resizeMayStart`, `panMayStart`, `ratioAnchorClamp`.
+- `apps/web/components/editor/geometry.ts` — `INTENT_THRESHOLD_PX`, `pastIntentThreshold` (shared, choice 30).
+- `apps/web/components/editor/use-stage-gestures.ts` — the drag threshold uses the shared helper (behaviour identical).
+- `apps/web/test/editor/support/slice-d-konva-port.ts` — the clamp is the production function (choice 31).
+- Tests: `slice-d-resize-session.test.tsx` (57), `slice-d-viewport-freeze.test.tsx` (18).
+
+**Interfaces (what stage 5 will wire):**
+- `new ResizeSession(input, { onPreview, onCommit, onEnd })` at `transformstart` — input: element id, stored geometry, page offset (H), targets (H2), the active anchor, the frozen view, the press point (stage px), Keep proportions, the key target (`window`).
+- `anchorBound(oldAbs, proposed, pointer, mods, activeAnchor)` ← `anchorDragBoundFunc`; `boxBound(oldBox, raw, activeAnchor, mods)` ← `boundBoxFunc`.
+- `release()` ← mouseup; `transformEnd(hadMouseUp)` ← `transformend`; `cancel('readOnly' | …)`; `dispose()` ← unmount.
+- `handleWheel(evt)` ← `SpreadStage.onWheel` (true = consumed); `noteViewportSize(size)` ← the refit effect (true = deferred; `onEnd.refit` carries the latest size).
+- `onEnd({ reason, committed, spaceHeld, refit })`, exactly once except after `dispose()`.
+- `resizeMayStart({ spaceHeld, tool, readOnly, selectionCount, locked })`; `panMayStart({ spaceHeld, tool, session })`.
+
+**Behaviour proved in jsdom:**
+- Threshold at zoom 0.15 / 1 / 8, the full displacement on crossing, the latch; an anchor click commits nothing.
+- Every bounded box equals the stage 2 port's after the crossing, move by move, on E1–E10 (≥ 300 moves each), plus E12, E13 (the centre carried across 6 renames, ≤ 0.005 mm), Shift transitions, and the clamp on the crossing move itself and on a Shift press past the corner.
+- Release commits the last `boxBound` payload object (`Object.is`) with no coordinates; at most once; nothing when unchanged in H, uncrossed or cancelled (Escape, blur, readOnly, transformend without mouseup); reentrant and repeated termination commit nothing more; `dispose()` calls nothing.
+- The real `useEditorKeyboard` mounted beside the session: 17 shortcuts (⌘Z, ⇧⌘Z, Ctrl+Z, Delete, Backspace, four arrows, ⌘D/C/X/V/A, V, H, R) reach no handler in pending and active sessions, and do after the session ends; Escape and its auto-repeats never reach the resting-state deselect.
+- Q2 (a), pending and active: Space pressed and released mid-session leaves the resize identical to a control session; held through release → `spaceHeld: true`, at most one changed-only commit; held through Escape → zero commits, no deselect, `spaceHeld: true`; through blur → zero commits, no deselect, `spaceHeld: false`, no stuck pan after refocus; Space held before the press → `resizeMayStart` false. Pan is never allowed while a session lives.
+- A focused button: Space tracked though the shell hook ignores it; Space/Enter prevented on keydown and keyup; after release, Escape or readOnly, the keyup and a keyboard click cannot activate it, a pointer click still can; blur drops every residual.
+- Wheel blocked from the press (pending included) and released on every exit path; one deferred refit with the latest size; none without a size change; listener add/remove balanced on every exit.
+
+**Negative controls** (each a deliberate defect in `resize-session.ts`; failing tests out of 75): threshold removed 5 · commit despite unchanged H 2 · commit of a recomputed payload copy 1 · non-idempotent termination 2 · guard lets keys through 9 · blur keeps Space 2 · Escape not held as residual 2 · keyup activation not prevented 4 · no keyboard-click guard 3 · wheel blocked only after crossing 2 · refit keeps the first size 5 · `dispose()` dispatches 2 · clamp disabled 8 · Space not tracked 7 · pan allowed mid-session 5 · resize starts under Space 1 · listeners never detached 9 · no segment capture before Konva 2 · `boxBound` running before the crossing 1. **One equivalent mutant:** dropping `crossed` from the commit condition fails nothing, because `boxBound` cannot change the box before the crossing; the redundant check is kept as defence in depth.
+
+**Not executed:** real Konva (stage 5); native keyboard activation of a focused control and Firefox's Ctrl+wheel page zoom in a browser (stage 8A harness, Q5); Node 24 locally (hosted CI).
+
+**Checkpoint.** Codex reviews stage 4; stage 5 needs Ben's separate go.
+
+---
+
 ## 7 · Tests (Vitest, jsdom where needed; no new dependencies)
 
 Property tests use a small seeded PRNG written inside the test (no `fast-check`). Every failure prints its seed. All geometry assertions are stated per layer (§3.7): integer equality in H, `Object.is` on payload fields, string equality on text, and an explicit tolerance for float reconstruction.
@@ -933,7 +985,9 @@ Property tests use a small seeded PRNG written inside the test (no `fast-check`)
 - Shift sampled per move; corner vs side; toggle on + Shift.
 - **Ratio anchor clamp** in `anchorBound`: proposed anchors past the minimum extent on x, y or both are clamped to it, and nothing else changes. The clamp follows segment changes (Shift press/release, Alt press/release). It is inactive below the threshold and in free/centred modes.
 - **Key guard:** ⌘Z, Delete, arrows, V/H/R, unit navigation ignored mid-session; Space/Enter on a focused button do not activate it mid-session; Escape cancels.
-- **Space mid-resize:** written after Q2.
+- **Space mid-resize (Q2 (a), §0.11)** — each threshold-pending and after crossing: Space pressed then released mid-session → the resize continues unchanged, the viewport stays frozen, normal mode after exit; Space held through release → at most one changed-only commit, `spaceHeld` reported true, pan only for a new press; Space held through Escape → zero commits, selection kept, `spaceHeld` true, pan only for a new press; Space held through blur → zero commits, selection kept, `spaceHeld` false, no stuck pan; Space held before the anchor press → no session starts (`resizeMayStart`).
+- Repeated (auto-repeat) keydowns never restart or alter the session; a held Escape's repeats after its cancel never reach the shell's deselect; Space/Enter swallowed on a focused control cannot activate it on keyup after release or cancel.
+- Termination is idempotent: a second release/cancel/dispose commits nothing and leaks no listener or guard; `dispose()` on unmount calls no owner callback.
 
 **`slice-d-viewport-freeze.test.tsx`** (finding 4)
 - Wheel (plain and ctrl/⌘) during a **threshold-pending** session → no `SET_VIEW`, `preventDefault` called.
@@ -1042,7 +1096,7 @@ Two suites with different purposes and blast radii. **Interaction behaviour is p
   2. pointer out to (53.3, 43.34): the bottom edge snaps to 44.11, box 4.06 × 4.11, guide shown;
   3. pointer back to (51.5, 41.5): the box stays 4.06 × 4.11.
   Release → the PUT body carries 4.06 × 4.11. The fixture test in `slice-d-resize-math.test.ts` records the expected boxes.
-- **Space during an active resize:** written after Q2.
+- **Space during an active resize** (AC-23, Q2 (a)): in each browser, Space pressed and released mid-resize, held through release, held through Escape, and blur — the resize, commit count, selection and next-press pan behaviour as in §7. Native activation of a focused control by Space/Enter during and after the session is checked here; jsdom cannot prove it.
 
 **`editor-write-budget.harness.spec.ts` (r3; mocked persistence, no production):** the budget helper, the write journal and the ownership registry run against the real editor in three browsers. **Planned, not executed** (stage 8A, after Q5).
 - With A set small (e.g. 3): exhaustion stops the action within one await; the context goes offline and then closes; the mock receives zero requests after going offline, including the `pagehide` keepalive flush of unsaved changes.
@@ -1242,7 +1296,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 ## 10 · Decisions, implementation choices, open questions
 
 ### 10.1 Approved (not reopened)
-- D-1…D-6 as in §1, except the D-4 interpretation that is open as Q2.
+- D-1…D-6 as in §1; the D-4 interpretation for Space during a resize was decided as Q2 (a) (§0.10, §0.11).
 - Contract #11's accepted drag-through behaviour, kept as is. Ben's recorded "hold at minimum" alternative is not adopted, per #11.
 
 ### 10.2 Implementation choices made by this plan (Codex/Ben may object; each has a reason)
@@ -1271,6 +1325,13 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 23. **The fence: the first committed cleanup write**, or an explicit marker create-and-delete when there is nothing else to write. It relies on the route's conditional update to make every older write permanently unable to commit (§8.5).
 24. **Write journal and ownership registry kept apart** (r5; replaces r4's "owned ids taken from each outgoing body"). Every outgoing body is journaled before it is forwarded, for reconciliation and consistency only. Ownership comes only from attributing a declared creation, registered before the first save containing the id is released, with saves held while a creation is pending (§8.5; r4 review finding 1).
 25. **An unattributed-id guard on the target unit** (r5): an outgoing body with an id on the unit that is neither in the page's `B0` nor registered is aborted unforwarded and stops the suite. Defence in depth; it never grants ownership (§8.5).
+
+26. **The key guard is session-owned capture listeners, not a shared `gestureActiveRef` read by `use-editor-keyboard.ts`** (stage 4, §4.5). The session that owns the gesture also owns its keyboard policy and removes its own listeners on every exit path, so the shell hook is unchanged and no flag can be left set after an exit. Every non-modifier key is stopped mid-session; page defaults are prevented for Space, Escape, Enter, arrows, Delete/Backspace, Tab and the editor's ⌘ chords.
+27. **Residual suppression after the session** (stage 4, §4.5): a Space/Enter/Escape swallowed mid-session keeps its keyup — and a keyboard `click` (`detail === 0`) on the same control within the same task — suppressed after the session ends, and Escape/Enter auto-repeats stay swallowed until the keyup. A fresh (non-repeat) press ends the residual (a missed keyup); window blur and `dispose()` end all residuals. Space's keyup after the session still reaches the shell (it clears the shell's Space state).
+28. **The session reports Space at its end (`onEnd.spaceHeld`); the owner syncs its own Space state from it in stage 5.** Mid-session the shell never sees Space, so its `spaceHeld` cannot flip `SpreadStage` into pan mode under a live resize.
+29. **`dispose()` is silent**: unmount ends the session and its residuals with no owner callback (no preview clear, no end, no refit), because the owner is gone. Plan §4.4's "Unmount → cancel" is satisfied without dispatching.
+30. **The intent threshold is one shared helper** (`pastIntentThreshold`, `INTENT_THRESHOLD_PX = 3` in `geometry.ts`); Slice C's drag now calls it (`DRAG_THRESHOLD_PX` is the same constant), with identical behaviour (Euclidean, inclusive at 3 px).
+31. **The stage 2 test port's ratio clamp now calls the production `ratioAnchorClamp`** (stage 4), so the fixture carries no copy of the policy; every stage 2 expectation is unchanged.
 
 ### 10.3 Genuinely open
 - **Q1 — Ben; blocks stage 8B.** Approve D's production-write allowances?

@@ -57,6 +57,18 @@ export function screenToUnitMm(view: ViewTransform, screen: { x: number; y: numb
 }
 
 /**
+ * The intent threshold (contract #8 drag; Slice D decision D-5 resize): a
+ * press becomes a gesture only once the pointer has travelled this far on
+ * SCREEN, so a click with hand jitter moves nothing, at every zoom.
+ */
+export const INTENT_THRESHOLD_PX = 3;
+
+/** True once the pointer is at least `INTENT_THRESHOLD_PX` from the press point (Euclidean, screen px). */
+export function pastIntentThreshold(press: { x: number; y: number }, point: { x: number; y: number }): boolean {
+  return Math.hypot(point.x - press.x, point.y - press.y) >= INTENT_THRESHOLD_PX;
+}
+
+/**
  * Which page of the unit owns a unit-space x. Points left of the first page
  * or right of the last clamp to the nearest page: an element created from the
  * pasteboard still belongs to exactly one page (contract #2).

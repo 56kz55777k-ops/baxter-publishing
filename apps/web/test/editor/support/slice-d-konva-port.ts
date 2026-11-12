@@ -28,15 +28,16 @@
  * Konva-boundary effect, not a difference in `boundResize`.
  *
  * The D-5 threshold and cancel are the session's (stage 4) and are not here.
- * The ratio anchor clamp (plan §3.5 step 0) is applied when `clamp` is on; its
- * product behaviour is Q7, which a fixture does not settle.
+ * The ratio anchor clamp (plan §3.5 step 0; Q7 (a), decided 2026-11-12) is
+ * applied when `clamp` is on — through the PRODUCTION `ratioAnchorClamp`
+ * (stage 4, `resize-session.ts`), so the fixture never carries its own copy.
  */
+import { ratioAnchorClamp } from '@/components/editor/resize-session';
 import {
   anchorAxes,
   boundResize,
   createResizeState,
   ratioApplies,
-  ratioMinimumBox,
   withSegment,
   type BoxH,
   type ResizeAnchor,
@@ -265,25 +266,16 @@ export function driveMovePx(G: Gesture, targetIn: PxPoint, ratioRequested: boole
   G.state = withSegment(G.state, G.anchor, ratioRequested, alt);
   const g = G.state.segment!;
   const ratio = ratioApplies(G.anchor, ratioRequested);
-  const { xs, ys } = anchorAxes(G.anchor);
 
-  // anchorBound: the ratio anchor clamp in one-edge ratio (plan §3.5 step 0).
-  const target = { ...targetIn };
+  // anchorBound: the ratio anchor clamp in one-edge ratio (plan §3.5 step 0) — the production function.
+  let target = { ...targetIn };
   let clamped = false;
   let minExtentPx: { w: number; h: number } | null = null;
   if (G.clamp && ratio && !alt) {
-    const min = ratioMinimumBox(G.state);
-    minExtentPx = { w: (min.w / 100) * v.scale, h: (min.h / 100) * v.scale };
-    const Fx = mmToPxX(g.fixedX! / 100, v);
-    const Fy = mmToPxY(g.fixedY! / 100, v);
-    if (xs * (target.x - Fx) < minExtentPx.w) {
-      target.x = Fx + xs * minExtentPx.w;
-      clamped = true;
-    }
-    if (ys * (target.y - Fy) < minExtentPx.h) {
-      target.y = Fy + ys * minExtentPx.h;
-      clamped = true;
-    }
+    const c = ratioAnchorClamp(G.state, { x: v.vx, y: v.vy, scale: v.scale }, targetIn)!;
+    target = c.target;
+    clamped = c.clamped;
+    minExtentPx = c.minExtentPx;
   }
 
   const prev = G.state.prev;

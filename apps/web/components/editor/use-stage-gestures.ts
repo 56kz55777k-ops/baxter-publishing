@@ -32,8 +32,10 @@ import {
   type SnapTargets,
 } from '@baxter/domain';
 import {
+  INTENT_THRESHOLD_PX,
   pageBoxToUnit,
   pageIndexForUnitX,
+  pastIntentThreshold,
   pageWidthMm,
   screenToUnitMm,
   unitToPageMm,
@@ -53,7 +55,7 @@ export { MIN_SHAPE_MM };
  * this far on screen — a click with hand jitter must never move (or snap)
  * anything. Screen px, so it feels the same at every zoom.
  */
-export const DRAG_THRESHOLD_PX = 3;
+export const DRAG_THRESHOLD_PX = INTENT_THRESHOLD_PX;
 
 export interface ElementBox {
   id: string;
@@ -348,7 +350,7 @@ export function useStageGestures(args: {
         setGuides({ x: sx?.guide ?? null, y: sy?.guide ?? null });
       } else if (g.kind === 'drag') {
         const p = pointFromEvent(ev);
-        if (!dragRef.current && Math.hypot(p.x - g.screen.x, p.y - g.screen.y) < DRAG_THRESHOLD_PX) return;
+        if (!dragRef.current && !pastIntentThreshold(g.screen, p)) return;
         performance.mark('baxter:editor:drag-move');
         // The union box snaps (#8); the SAME delta function previews and
         // commits, so what is shown at release is exactly what is written.
