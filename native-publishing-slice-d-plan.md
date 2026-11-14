@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2, 3 and 4 implemented on `slice-d-resize`; at the stage 4 review checkpoint (§6.7).**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2, 3 and 4 implemented on `slice-d-resize`; at the stage 4 correction checkpoint (§6.8).**
+- **Stage 4 correction (2026-11-14):** Codex reviewed stage 4 (`8d2cd0c`) with one P2 lifecycle finding — an owner that disposes the session inside a termination callback still received the later callbacks (§0.12). Corrected in §6.8. Stage 5 needs Codex's review of the correction, Ben's acceptance and his separate go.
 - **Stage 4 (2026-11-12):** Ben accepted Codex's stage 3 correction review, the cleanup `17b38cb` and the Q2/Q7 record `201a474`, made four plan clarifications (§0.11), and authorized **stage 4 only**: the Konva-free resize session controller and its policies (§4.3–§4.6, §6.7). Stage 5 (Konva wiring) needs Ben's separate go after Codex's review of stage 4.
 - **Stage 3 (2026-11-04):** Ben accepted Codex's stage 2 sign-off at `df0bad3`, approved the zero-H rule, and authorized stage 3 only (§0.7). Stage 3 adds the D-1 inspector W/H floor and the creation-pill correction, and corrects the zero-H explanation (§3.2: Konva may skip or call `boundBoxFunc`; fixture observations). Stage 4 (resize session, Konva wiring) needs Ben's separate go.
 - **Stage 2 correction (2026-11-04):** Codex reviewed stage 2 (`9e69c1c`) and Ben accepted the review and the S2-1 recommendation (§0.6). The correction defines resize for a positive stored size that rounds to 0 H (§3.2), aligns §3.2's centre-target wording with the implementation, completes C16's `precision.ts` comment, and adds Ben's S2-1 wording to G9 and a snap-enabled hold example for the harness (§8.2).
@@ -170,6 +171,14 @@ Ben accepted Codex's review of the cleanup `17b38cb` and of the Q2/Q7 record `20
 
 **Stage 4 scope and boundary (Ben):** the Konva-free session controller and its tests — threshold-pending and active lifecycle; segments, fixed references and centre carry; the Q7 ratio anchor clamp; synchronous bounded geometry and payload; release, cancellation and idempotent cleanup; keyboard suppression and accurate Space tracking; viewport-freeze policy and deferred-refit bookkeeping. Explicit inputs and callbacks, no Konva import; shared helpers may be extracted where resting behaviour is preserved; tests exercise the production policies stage 5 will consume. **Stage 5 stays unauthorized:** no real Transformer, no live node mutation or preview layer, no shell `onResize`, no live wheel/refit/pan integration. **Q3 stays at its default: resize only.** The release-point rule stays: commit the last synchronously processed bounded payload, not Slice C's mouseup-coordinate behaviour.
 
+
+### 0.12 Codex review of stage 4 `8d2cd0c` (2026-11-12) — answered in the stage 4 correction
+
+- **One P2 finding: disposal during termination did not stop owner callbacks.** `finish()` called `onCommit` → `onPreview(null)` → `onEnd` in sequence without checking whether an earlier callback had disposed the session. An owner that unmounts synchronously inside `onCommit` (its cleanup calling `dispose()`) still received `onPreview(null)` and `onEnd`; disposing inside `onPreview(null)` still received `onEnd` — so a deferred refit or a Space sync could reach a dead owner, contrary to §0.11 and choice 29. Codex reproduced both orders against the committed controller. Required: track disposal separately; stop every later owner callback after a disposing callback; keep the at-most-once commit and the normal order; regressions for disposal from `onCommit` and from `onPreview(null)` on release and cancel, with a pending refit and held-key residuals; no callbacks after disposal, no refit, listeners and timers cleared, later terminations no-ops; ordinary reentrancy unchanged.
+- Codex's other conclusions: the stage 4 / stage 5 boundary is respected; threshold, segment capture before Konva, ratio clamp, synchronous payload, changed-only commit, Escape/blur and deferred refit match the authorized design; the session-owned capture guard is an acceptable alternative to a shared ref; Space's keyup reaching the shell is intended; silent disposal is right; the `crossed` equivalent mutant is reasonable.
+- **Carried into stage 5 (Codex):** preserve the guard's ownership and residual cleanup — do not dispose the session routinely on release if that would discard required residual suppression; prove that syncing `onEnd.spaceHeld` and the later Space keyup cannot leave the shell's Space stuck; port/session agreement is not an independent proof of the clamp (it now shares the production function), so the numerical cases, the stage 1 evidence and the clamp negative control stay.
+- Hosted CI on `8d2cd0c` (read by Codex): Node 24.22.2, 41 files / 629 tests, build, budget +986 B of +1024 B — all passed.
+- Answered in §6.8.
 ---
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
@@ -638,7 +647,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 | **1** | **Konva probe** — no production code. A throwaway page in the Mac VM, run under Playwright with the installed Konva 10.3.0 in Chromium/Firefox/WebKit. It records:<br>• boundBox coordinate space with a zoomed parent `Group`;<br>• the threshold via `anchorDragBoundFunc`;<br>• drag-through rename and the negative extent passed to `boundBoxFunc`;<br>• Alt mirroring about the current node box;<br>• the `keepRatio` default;<br>• `listening(false)` and inner-cursor clearing;<br>• layer hit order;<br>• scale normalisation in `transform`;<br>• wheel events delivered during a transform.<br>**Added in r3:** every crossing path of §3.8 E1–E13 replayed with real pointer events — ratio with and without Alt; crossing x, y and both; out and back; one fast move past the corner. For each move it records the anchor name, the raw box passed to `boundBoxFunc` (or a skip), and the bounded box, and compares them with the evidence script's port (a mismatch stops the plan). It also measures the ratio clamp (no rename, no skip, exact return) and the px agreement between our fixed corner and Konva's `comparePoint` (expected ≤ 1e-6 px; the clamp needs well under the minimum extent).<br>**Added in r4:** the early-return boundary — width and height at exactly −1, 0 and +1 px and their 2^-20 neighbours, with the other dimension outside [−1, 1). It records whether `boundBoxFunc` is called, with which extent and anchor name, and compares with the port's section H. Exact sub-pixel pointer positions are produced by placing the node at controlled fractional coordinates; if a browser cannot deliver them, that case is recorded NOT EXECUTED with the reason, and the port remains the evidence. | Findings reported to Codex. If any contradicts §4.1 or the port, **stop and amend the plan** before stage 2. **Ran 2026-10-23: results and findings in §6.1. Codex reviewed them; Ben accepted the review and recorded F1 and F4 on 2026-11-04 (§0.5).** |
 | **2** | Domain: `hundredths.ts`, `minimums.ts`, `resize.ts`, and the maths tests (R9 matrix, §3.8 examples, sequence and property tests). The production code must reproduce the evidence script's B1–B9 outputs and its E1–E13 results exactly when driven by the same Konva port (now a test fixture). The fixture also models Konva's anchor-unchanged early return (F2) and carries Ben's regression cases (§7). | **Authorized by Ben 2026-11-04 (stage 2 only). Implemented 2026-11-04 (§6.2); reviewed by Codex; corrected (§0.6, §6.3).** **Codex reviews the maths before any UI exists.** |
 | **3** | Visible small changes: D-1 inspector floor + tests; creation-pill correction + tests. | **Authorized by Ben 2026-11-04 (stage 3 only). Implemented 2026-11-04 (§6.4); reviewed by Codex 2026-11-12 (one finding, §0.8); corrected (§6.5); **signed off by Codex and accepted by Ben 2026-11-12 (§0.9)**; cleanup (§6.6).** |
-| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **Q2 and Q7 answered by Ben 2026-11-12 (§0.10). Authorized by Ben 2026-11-12 (stage 4 only, §0.11). Implemented 2026-11-12 (§6.7); awaiting Codex's review.** |
+| **4** | Resize session controller + tests: segments (centre carry), threshold, ratio anchor clamp, cancel, release point, one commit, key guard, viewport freeze. | **Q2 and Q7 answered by Ben 2026-11-12 (§0.10). Authorized by Ben 2026-11-12 (stage 4 only, §0.11). Implemented 2026-11-12 (§6.7); reviewed by Codex (one P2 finding, §0.12); corrected 2026-11-14 (§6.8); awaiting Codex's review of the correction.** |
 | **5** | Konva wiring: `SelectionTransformer`, `SpreadStage`, `ElementsLayer`, shell `onResize`, cursor chain, Hand/Space inertness, outlines under Hand, wheel suppression and deferred refit. | — |
 | **6** | D-2 toggle (UI state + inspector). | — |
 | **7** | D-6 chrome: multi dashed union border, lock indicator. | — |
@@ -870,7 +879,7 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 ---
 
-### 6.7 Stage 4 — the resize session controller (2026-11-12; awaiting Codex's review)
+### 6.7 Stage 4 — the resize session controller (2026-11-12; reviewed by Codex — one finding, §0.12; corrected in §6.8)
 
 **Scope.** Stage 4 only (§0.11), from `201a474`. Konva-free; **not connected to the editor**. No Transformer, node mutation, preview layer, shell `onResize`, or live wheel/refit/pan integration (stage 5). Q3 at its default (resize only). No dependency, lockfile, CI, persistence or production write.
 
@@ -903,6 +912,20 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 **Not executed:** real Konva (stage 5); native keyboard activation of a focused control and Firefox's Ctrl+wheel page zoom in a browser (stage 8A harness, Q5); Node 24 locally (hosted CI).
 
 **Checkpoint.** Codex reviews stage 4; stage 5 needs Ben's separate go.
+
+---
+
+### 6.8 Stage 4 correction — disposal during termination (2026-11-14; awaiting Codex's review)
+
+**Scope.** Codex's finding only (§0.12), from `8d2cd0c`. Still Konva-free and unconnected; no stage 5 work.
+
+**Change (`resize-session.ts`):** a separate `disposed` flag, set only by `dispose()`. `finish()` keeps its order — commit → preview cleared → end — but checks `disposed` before each owner callback, so once a callback disposes the session no later callback runs (the deferred refit and the Space report included). `phase = 'ended'` still makes every later termination a no-op, and `dispose()` still clears residuals, the click-guard timer and every listener. `boxBound` returns the old box if the owner disposes the session inside a move's preview.
+
+**Tests (+10; `slice-d-resize-session.test.tsx` 57 → 67):** for release (disposed in `onCommit`; in `onPreview(null)`) and for Escape, blur, readOnly and transformend (disposed in `onPreview(null)`), each with a pending refit, a held Enter residual and an armed click-guard timer: the callback log stops at the disposing callback; no `onEnd`, so no refit; the commit count is unchanged (1 on release, 0 on cancel); `listening` false, no residual keys, `vi.getTimerCount() === 0`; later `release`/`cancel`/`transformEnd`/`dispose`/`handleWheel`/`noteViewportSize` are no-ops with no callback; the shell's handlers run again. Controls: the normal order with no disposal (commit → preview cleared → end, refit delivered); disposal inside `onEnd`; disposal inside a move's preview (old box returned, later moves inert); ordinary reentrancy (release inside `onCommit`, cancel inside `onPreview(null)`) unchanged.
+
+**Red and negative controls (85 tests):** the new tests against `8d2cd0c`'s controller: 7 fail. No guard before `onPreview(null)`: 1. No guard before `onEnd`: 6. `dispose()` not marking disposal: 7. `boxBound` ignoring disposal: 1. **Equivalent mutant:** removing the guard before `onCommit` fails nothing — `onCommit` is the first callback, and a disposed session never reaches `finish`; kept for symmetry. The 19 stage 4 controls, rerun on the corrected code, still fail 1–10 tests each (the `crossed` mutant stays equivalent).
+
+**Checkpoint.** Codex reviews the correction; stage 5 needs Ben's acceptance and his separate go.
 
 ---
 

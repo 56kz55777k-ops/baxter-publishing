@@ -257,6 +257,13 @@ export class ResizeSession {
   private clickGuard: EventTarget | null = null;
   private clickGuardTimer: ReturnType<typeof setTimeout> | null = null;
   private listening = false;
+  /**
+   * Set by `dispose()` only. `phase === 'ended'` stops a second termination;
+   * this stops owner callbacks: once the owner disposes the session — even
+   * from inside one of its own callbacks while `finish` is running — no
+   * further callback reaches it (Codex stage 4 review, 2026-11-12).
+   */
+  private disposed = false;
 
   constructor(
     private readonly input: ResizeSessionInput,
@@ -326,6 +333,7 @@ export class ResizeSession {
     this.state = r.state;
     this.payload = resizePayload(this.input.stored, this.start, r.box, this.input.pageOffsetH);
     this.cb.onPreview({ box: { ...r.box }, payload: this.payload, guideX2: r.guideX2, guideY2: r.guideY2 });
+    if (this.disposed) return oldBox; // the owner unmounted inside the preview: nothing more to give it
     return {
       x: (r.box.x / 100) * v.scale + v.x,
       y: (r.box.y / 100) * v.scale + v.y,
@@ -357,6 +365,7 @@ export class ResizeSession {
    * no callback reaches a dead owner. Idempotent.
    */
   dispose(): void {
+    this.disposed = true;
     this.phase = 'ended';
     this.pendingRefit = null;
     this.residual.clear();
@@ -400,9 +409,11 @@ export class ResizeSession {
     const refit = this.pendingRefit;
     this.pendingRefit = null;
     this.maybeDetach();
-    if (commit) this.cb.onCommit(this.input.elementId, payload);
-    this.cb.onPreview(null);
-    this.cb.onEnd({ reason, committed: commit, spaceHeld: this.spaceHeld, refit });
+    // Normal order: commit → preview cleared → end. A callback may dispose the session (the owner
+    // unmounting synchronously); every later callback is then skipped, the deferred refit included.
+    if (commit && !this.disposed) this.cb.onCommit(this.input.elementId, payload);
+    if (!this.disposed) this.cb.onPreview(null);
+    if (!this.disposed) this.cb.onEnd({ reason, committed: commit, spaceHeld: this.spaceHeld, refit });
     return true;
   }
 

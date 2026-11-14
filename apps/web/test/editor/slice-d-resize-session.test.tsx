@@ -78,6 +78,9 @@ function rig(o: {
   keepProportions?: boolean;
   targets?: TargetsH2;
   onCommit?: (r: Rig) => void;
+  /** Runs after each preview is recorded (`p` null = the end-of-session clear). */
+  onPreview?: (r: Rig, p: ResizePreview | null) => void;
+  onEnd?: (r: Rig) => void;
 } = {}): Rig {
   const stored = o.stored ?? S40_STORED;
   const view = { x: 0, y: 0, scale: 3.4 * (o.zoom ?? 1) };
@@ -94,12 +97,18 @@ function rig(o: {
   r.s = new ResizeSession(
     { elementId: 'el-1', stored, pageOffsetH: 0, targets: o.targets ?? NO_TARGETS, anchor, view, pressPoint: press, keepProportions: r.keep, keyTarget: window },
     {
-      onPreview: (p) => void r.previews.push(p),
+      onPreview: (p) => {
+        r.previews.push(p);
+        o.onPreview?.(r, p);
+      },
       onCommit: (id, p) => {
         r.commits.push([id, p]);
         o.onCommit?.(r);
       },
-      onEnd: (e) => void r.ends.push(e),
+      onEnd: (e) => {
+        r.ends.push(e);
+        o.onEnd?.(r);
+      },
     }
   );
   live.push(r.s);
@@ -507,6 +516,118 @@ describe('stage 4 — release commits the last synchronously bounded payload, at
       add.mockRestore();
       rem.mockRestore();
     }
+  });
+});
+
+/* ========================================================================== */
+/* Disposal during termination (Codex stage 4 review, 2026-11-12)               */
+/* ========================================================================== */
+
+describe('stage 4 correction — an owner that disposes the session inside a callback receives nothing after it', () => {
+  type Ender = 'release' | 'escape' | 'blur' | 'readOnly' | 'transformend';
+  const CASES: [Ender, 'commit' | 'preview-null', string[]][] = [
+    ['release', 'commit', ['commit']],
+    ['release', 'preview-null', ['commit', 'preview-null']],
+    ['escape', 'preview-null', ['preview-null']],
+    ['blur', 'preview-null', ['preview-null']],
+    ['readOnly', 'preview-null', ['preview-null']],
+    ['transformend', 'preview-null', ['preview-null']],
+  ];
+
+  let button: HTMLButtonElement;
+  beforeEach(() => {
+    button = document.createElement('button');
+    document.body.appendChild(button);
+  });
+  afterEach(() => button.remove());
+
+  it.each(CASES)('%s, disposed inside %s: no later callback, no deferred refit, listeners and timers cleared, later terminations no-ops', (ender, disposeIn, expectedLog) => {
+    vi.useFakeTimers();
+    const calls: string[] = [];
+    const r = rig({
+      onCommit: (rr) => {
+        calls.push('commit');
+        if (disposeIn === 'commit') rr.s.dispose();
+      },
+      onPreview: (rr, p) => {
+        if (p !== null) return;
+        calls.push('preview-null');
+        if (disposeIn === 'preview-null') rr.s.dispose();
+      },
+      onEnd: () => void calls.push('end'),
+    });
+    move(r, { x: 150, y: 140 });
+    expect(r.s.noteViewportSize({ w: 1280, h: 720 })).toBe(true); // a pending refit
+    down(' ', {}, button);
+    up(' ', {}, button); // arms the keyboard-click guard timer
+    down('Enter', {}, button); // a held-key residual
+    expect(vi.getTimerCount()).toBe(1);
+
+    if (ender === 'release') r.s.release();
+    else if (ender === 'escape') down('Escape');
+    else if (ender === 'blur') blur();
+    else if (ender === 'readOnly') r.s.cancel('readOnly');
+    else r.s.transformEnd(false);
+
+    expect(calls).toEqual(expectedLog); // stops at the disposing callback
+    expect(r.ends).toEqual([]); // so no refit and no Space sync reached the owner
+    expect(r.commits).toHaveLength(ender === 'release' ? 1 : 0); // at-most-once unchanged
+    expect(r.s.snapshot()).toMatchObject({ phase: 'ended', listening: false, residualKeys: [] });
+    expect(vi.getTimerCount()).toBe(0);
+
+    // later terminations and inputs are no-ops, with no callback
+    expect([r.s.release(), r.s.cancel('escape'), r.s.transformEnd(true)]).toEqual([false, false, false]);
+    r.s.dispose();
+    expect(r.s.handleWheel({ preventDefault: vi.fn() })).toBe(false);
+    expect(r.s.noteViewportSize({ w: 1, h: 1 })).toBe(false);
+    expect(calls).toEqual(expectedLog);
+    // nothing intercepts keys any more: the shell runs them
+    up('Enter', {}, button);
+    down('z', { metaKey: true });
+    expect(log).toEqual(['undo']);
+  });
+
+  it('control: without disposal the order is commit → preview cleared → end, once each, with the refit', () => {
+    const calls: string[] = [];
+    const r = rig({
+      onCommit: () => void calls.push('commit'),
+      onPreview: (_rr, p) => void (p === null && calls.push('preview-null')),
+      onEnd: () => void calls.push('end'),
+    });
+    move(r, { x: 150, y: 140 });
+    r.s.noteViewportSize({ w: 1280, h: 720 });
+    r.s.release();
+    expect(calls).toEqual(['commit', 'preview-null', 'end']);
+    expect(r.ends[0]).toMatchObject({ committed: true, refit: { w: 1280, h: 720 } });
+  });
+
+  it('disposed inside onEnd: nothing follows anyway; later calls are no-ops', () => {
+    const r = rig({ onEnd: (rr) => rr.s.dispose() });
+    move(r, { x: 150, y: 140 });
+    r.s.release();
+    expect([r.commits.length, r.ends.length, r.s.release(), r.s.snapshot().listening]).toEqual([1, 1, false, false]);
+  });
+
+  it('disposed inside a move\'s preview (unmount mid-gesture): boxBound returns the old box; later moves and release do nothing', () => {
+    let previews = 0;
+    const r = rig({ onPreview: (rr, p) => void (p !== null && ++previews === 2 && rr.s.dispose()) });
+    move(r, { x: 150, y: 140 });
+    const before = { ...r.node };
+    expect(move(r, { x: 160, y: 150 })).toBe('proceed');
+    expect(r.node).toEqual(before); // the old box came back to Konva
+    expect(move(r, { x: 170, y: 160 })).toBe('pending-or-unchanged'); // anchorBound returns oldAbs once ended
+    r.s.release();
+    expect([r.commits, r.ends, r.previews.at(-1) === null]).toEqual([[], [], false]);
+  });
+
+  it('ordinary reentrancy still works: release inside onCommit and cancel inside onPreview(null) change nothing', () => {
+    const r = rig({
+      onCommit: (rr) => void rr.s.release(),
+      onPreview: (rr, p) => void (p === null && rr.s.cancel('blur')),
+    });
+    move(r, { x: 150, y: 140 });
+    expect(r.s.release()).toBe(true);
+    expect([r.commits.length, r.ends.length, r.ends[0]!.reason]).toEqual([1, 1, 'release']);
   });
 });
 
