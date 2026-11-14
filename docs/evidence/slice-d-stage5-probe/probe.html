@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Slice D stage 5 probe</title>
+<style>
+  /* The few layout utilities the shell's tree needs (Tailwind is not part of this standalone bundle). */
+  html, body { margin: 0; height: 100%; }
+  .flex { display: flex; } .flex-col { flex-direction: column; } .flex-1 { flex: 1 1 0%; }
+  .h-dvh { height: 100dvh; } .h-full { height: 100%; } .w-full { width: 100%; } .h-12 { height: 48px; }
+  .min-h-0 { min-height: 0; } .min-w-0 { min-width: 0; } .shrink-0 { flex-shrink: 0; }
+  .relative { position: relative; } .absolute { position: absolute; } .overflow-hidden { overflow: hidden; }
+  .pointer-events-none { pointer-events: none; }
+  #probe-button { position: fixed; right: 4px; bottom: 4px; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="root" style="height:100%"></div>
+<button id="probe-button" type="button">probe</button>
+<script src="./bundle.js"></script>
+</body>
+</html>

@@ -20,14 +20,22 @@
 import { memo } from 'react';
 import { Ellipse, Group, Rect } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import type { EditorElement, EditorPage } from '@baxter/domain';
+import type { EditorElement, EditorPage, StoredGeometry } from '@baxter/domain';
 import type { UnitGeometry } from './geometry';
+import { ellipseNodeAttrs, rectNodeAttrs } from './node-attrs';
 import type { DragPreview } from './use-stage-gestures';
+
+/** A live resize's bounded geometry for one element (Slice D; page-relative mm). Document untouched until COMMIT. */
+export interface ResizePreview {
+  id: string;
+  geometry: StoredGeometry;
+}
 
 export const ElementsLayer = memo(function ElementsLayer({
   pages,
   geom,
   dragPreview,
+  resizePreview = null,
   onElementPointerDown,
   onHoverChange,
 }: {
@@ -39,6 +47,12 @@ export const ElementsLayer = memo(function ElementsLayer({
    * single COMMIT at release (#7).
    */
   dragPreview: DragPreview | null;
+  /**
+   * A resize's bounded geometry (Slice D, like `dragPreview`): only that node
+   * receives it, so React re-renders it with exactly the attributes the
+   * resize adapter set on the live node — and restores the model's on cancel.
+   */
+  resizePreview?: ResizePreview | null;
   onElementPointerDown: (id: string, e: KonvaEventObject<MouseEvent>) => void;
   /** Hover reports only the id — lock state is looked up live (contract #21). */
   onHoverChange: (id: string | null) => void;
@@ -51,6 +65,7 @@ export const ElementsLayer = memo(function ElementsLayer({
             <ElementNode
               key={el.id}
               element={el}
+              geometry={resizePreview?.id === el.id ? resizePreview.geometry : null}
               dx={dragPreview?.ids.has(el.id) ? dragPreview.dx : 0}
               dy={dragPreview?.ids.has(el.id) ? dragPreview.dy : 0}
               onPointerDown={onElementPointerDown}
@@ -65,12 +80,15 @@ export const ElementsLayer = memo(function ElementsLayer({
 
 const ElementNode = memo(function ElementNode({
   element,
+  geometry,
   dx,
   dy,
   onPointerDown,
   onHoverChange,
 }: {
   element: EditorElement;
+  /** A resize preview's geometry, replacing the element's own while the gesture lives. */
+  geometry: StoredGeometry | null;
   dx: number;
   dy: number;
   onPointerDown: (id: string, e: KonvaEventObject<MouseEvent>) => void;
@@ -81,12 +99,12 @@ const ElementNode = memo(function ElementNode({
   const handleLeave = () => onHoverChange(null);
 
   if (element.type === 'rect') {
+    const a = rectNodeAttrs(geometry ?? element, dx, dy);
     return (
       <Rect
-        x={element.x + dx}
-        y={element.y + dy}
-        width={element.width}
-        height={element.height}
+        // The id the resize Transformer attaches by (Slice D plan §4.2).
+        id={element.id}
+        {...a}
         fill={element.fill}
         // `stroke: null` is None — Konva must receive undefined, not null,
         // or it paints a default hairline (contract #18: None ≠ thin).
@@ -103,14 +121,12 @@ const ElementNode = memo(function ElementNode({
   }
 
   if (element.type === 'ellipse') {
-    // Konva's Ellipse is centre-origin; the model is top-left like every
-    // other element, so the conversion happens here and nowhere else.
+    // Konva's Ellipse is centre-origin; `ellipseNodeAttrs` converts (via `nodeAttrsFor` the resize adapter uses the same).
+    const a = ellipseNodeAttrs(geometry ?? element, dx, dy);
     return (
       <Ellipse
-        x={element.x + dx + element.width / 2}
-        y={element.y + dy + element.height / 2}
-        radiusX={element.width / 2}
-        radiusY={element.height / 2}
+        id={element.id}
+        {...a}
         fill={element.fill}
         stroke={element.stroke ?? undefined}
         strokeWidth={element.stroke === null ? 0 : element.strokeWidth}

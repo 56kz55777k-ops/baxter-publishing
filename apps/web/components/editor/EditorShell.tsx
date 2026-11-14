@@ -31,6 +31,7 @@ import {
   type ClipboardItem,
   type EditorDoc,
   type EditorElement,
+  type StoredGeometry,
   type UnitLayout,
 } from '@baxter/domain';
 import { Inspector } from './inspector/Inspector';
@@ -158,6 +159,28 @@ export function EditorShell({ publication }: { publication: { id: string; title:
     [state.doc, unitLayout, ui.selection, dispatch]
   );
 
+  /**
+   * A completed resize (Slice D): the session's last bounded payload →
+   * `updateElement` (the element stays on its page, #2) → ONE COMMIT
+   * 'Resize' → one history entry → one autosave. The selection is unchanged.
+   * The session commits only a crossed, changed release; `updateElement`
+   * returns the same document for an identical or locked target, which
+   * commits nothing (#19, #20, #24).
+   */
+  const docRef = useRef(state.doc);
+  docRef.current = state.doc;
+  const selectionRef = useRef(ui.selection);
+  selectionRef.current = ui.selection;
+  const onResize = useCallback(
+    (id: string, payload: StoredGeometry) => {
+      const doc = docRef.current;
+      const nextDoc = updateElement(doc, id, payload);
+      if (nextDoc === doc) return;
+      dispatch({ type: 'COMMIT', nextDoc, selection: selectionRef.current, label: 'Resize' });
+    },
+    [dispatch]
+  );
+
   /* ------------------------------------------------------------------------ */
   /* Slice C object operations (contracts #5, #20, #24, #26; C-3, C-4)        */
   /* ------------------------------------------------------------------------ */
@@ -251,7 +274,7 @@ export function EditorShell({ publication }: { publication: { id: string; title:
     uiDispatch({ type: 'SET_SELECTION', ids: [...unitIds] });
   }, [unitIds, uiDispatch]);
 
-  const { spaceHeld } = useEditorKeyboard(uiDispatch, {
+  const { spaceHeld, syncSpaceHeld } = useEditorKeyboard(uiDispatch, {
     onUndo,
     onRedo,
     onDelete,
@@ -374,6 +397,8 @@ export function EditorShell({ publication }: { publication: { id: string; title:
             readOnly={readOnly}
             onCreate={onCreate}
             onMove={onMove}
+            onResize={onResize}
+            onSpaceSync={syncSpaceHeld}
           />
         </main>
         <Inspector

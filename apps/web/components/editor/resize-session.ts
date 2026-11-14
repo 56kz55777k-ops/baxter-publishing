@@ -45,11 +45,11 @@
  * owner syncs its own Space state from `onEnd`. Panning needs a NEW press
  * (`panMayStart`); a resize drag is never turned into a pan.
  *
- * NOT CONNECTED IN STAGE 4 (stage 5, unauthorized): nothing in the editor
- * creates a session yet. No Transformer calls these hooks, no node or
- * preview layer consumes `onPreview`, the shell's `onResize` is not wired
- * to `onCommit`, and `SpreadStage`'s wheel, refit and pan paths do not
- * consult `handleWheel`, `noteViewportSize` or `panMayStart`.
+ * Connected in stage 5: `SelectionTransformer` (the thin Konva adapter)
+ * calls the hooks; `useResizeHost` owns sessions and maps the callbacks to
+ * the preview, the shell's `onResize` COMMIT, Space sync and the deferred
+ * refit; `SpreadStage` routes wheel, refit and pan through `handleWheel`,
+ * `noteViewportSize` and `panMayStart`.
  */
 import {
   boundResize,

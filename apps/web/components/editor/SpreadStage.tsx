@@ -29,8 +29,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Group, Layer, Stage } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import type { EditorElement, EditorPage } from '@baxter/domain';
+import type { EditorElement, EditorPage, StoredGeometry } from '@baxter/domain';
 import { resolveCursor } from './cursor';
+import { panMayStart } from './resize-session';
+import { SelectionTransformer, type ResizableElement } from './SelectionTransformer';
+import { useResizeHost } from './use-resize-host';
 import { fitUnitView, panBy, zoomAt, type UnitGeometry } from './geometry';
 import { ElementsLayer } from './ElementsLayer';
 import { SizeReadout } from './SizeReadout';
@@ -51,6 +54,8 @@ export const SpreadStage = memo(function SpreadStage({
   readOnly,
   onCreate,
   onMove,
+  onResize,
+  onSpaceSync,
 }: {
   geom: UnitGeometry;
   pages: readonly EditorPage[];
@@ -59,6 +64,10 @@ export const SpreadStage = memo(function SpreadStage({
   readOnly: boolean;
   onCreate: (pageIndex: number, element: EditorElement, label: string) => void;
   onMove: (ids: readonly string[], dx: number, dy: number) => void;
+  /** Slice D: a resize release's bounded payload → the shell's one COMMIT 'Resize'. */
+  onResize: (id: string, payload: StoredGeometry) => void;
+  /** Slice D: Space as the resize session saw it at its end (it swallows Space while live). */
+  onSpaceSync: (held: boolean) => void;
 }) {
   const ui = useEditorUi();
   const uiDispatch = useEditorUiDispatch();
@@ -74,6 +83,32 @@ export const SpreadStage = memo(function SpreadStage({
 
   const size = useViewportMeasure(wrapRef, viewportRef);
   const boxes = useMemo(() => elementBoxes(pages, geom), [pages, geom]);
+
+  // --- Slice D resize: the session's owner (behaviour lives in ResizeSession) -------------
+  const resize = useResizeHost({
+    geom,
+    boxes,
+    view: ui.view,
+    pageIndexOf: (id) => pages.findIndex((p) => p.elements.some((e) => e.id === id)),
+    onResize,
+    onSpaceSync,
+    onRefit: (s) => uiDispatch({ type: 'SET_VIEW', view: fitUnitView(geomRef.current, s.w, s.h) }),
+  });
+  // Handles: exactly one selected rect/ellipse on the shown unit, unlocked, under Select or Hand,
+  // writable (plan §4.2). Under Hand or Space they stay visible but inactive (D-4).
+  const resizeTarget = useMemo((): ResizableElement | null => {
+    if (readOnly || ui.selection.length !== 1 || (ui.tool !== 'select' && ui.tool !== 'hand')) return null;
+    for (const page of pages) {
+      const el = page.elements.find((e) => e.id === ui.selection[0]);
+      if (el) return (el.type === 'rect' || el.type === 'ellipse') && !el.locked ? el : null;
+    }
+    return null;
+  }, [readOnly, ui.selection, ui.tool, pages]);
+  const handlesActive = ui.tool === 'select' && !spaceHeld;
+  // readOnly (a save conflict, a closed window) cancels a live resize (§4.4).
+  useEffect(() => {
+    if (readOnly) resize.liveRef.current?.cancel('readOnly');
+  }, [readOnly, resize.liveRef]);
 
   const onSelect = useCallback(
     (ids: readonly string[]) => uiDispatch({ type: 'SET_SELECTION', ids }),
@@ -107,10 +142,12 @@ export const SpreadStage = memo(function SpreadStage({
 
   // First measure + viewport resizes: fit the current unit. Unit NAVIGATION
   // fits arrive via SET_UNIT from the shell; commits never refit.
+  // A live resize defers it: one refit with the latest size after the session ends (§4.6).
   useEffect(() => {
     if (size.w === 0 || size.h === 0) return;
+    if (resize.liveRef.current?.noteViewportSize(size)) return;
     uiDispatch({ type: 'SET_VIEW', view: fitUnitView(geomRef.current, size.w, size.h) });
-  }, [size, uiDispatch]);
+  }, [size, uiDispatch, resize.liveRef]);
 
   // First painted frame (performance budget P1's end mark).
   useEffect(() => {
@@ -133,6 +170,7 @@ export const SpreadStage = memo(function SpreadStage({
     if (!el) return;
     const hovered = hoverId ? boxes.find((b) => b.id === hoverId) : undefined;
     el.style.cursor = resolveCursor({
+      resizing: resize.cursor,
       dragging: gestures.dragging,
       panning,
       handAvailable: spaceHeld || ui.tool === 'hand',
@@ -140,7 +178,7 @@ export const SpreadStage = memo(function SpreadStage({
       gestureActive: gestures.active,
       hoveredLocked: hovered?.locked,
     });
-  }, [gestures.dragging, panning, spaceHeld, ui.tool, gestures.active, hoverId, boxes]);
+  }, [resize.cursor, gestures.dragging, panning, spaceHeld, ui.tool, gestures.active, hoverId, boxes]);
 
   // Drag frame timing (blueprint performance budgets: measured from Slice C):
   // input (mousemove handler) → the next painted frame after React commits.
@@ -182,7 +220,8 @@ export const SpreadStage = memo(function SpreadStage({
     };
   }, [panning, uiDispatch]);
 
-  const panAvailable = spaceHeld || ui.tool === 'hand';
+  // A pan starts only on a new press, never while a resize session lives (Q2 (a), §0.11).
+  const panAvailable = panMayStart({ spaceHeld, tool: ui.tool, session: resize.liveRef.current });
 
   function startPan(e: KonvaEventObject<MouseEvent>) {
     panOrigin.current = {
@@ -201,7 +240,9 @@ export const SpreadStage = memo(function SpreadStage({
 
   function onStageMouseDown(e: KonvaEventObject<MouseEvent>) {
     if (e.evt.button !== 0) return;
-    if (panAvailable) {
+    // An anchor press belongs to the Transformer: it must never also start a marquee or a pan (§4.7).
+    if (e.target.findAncestor?.('Transformer', true)) return;
+    if (panMayStart({ spaceHeld, tool: ui.tool, session: resize.liveRef.current })) {
       startPan(e);
       return;
     }
@@ -222,6 +263,8 @@ export const SpreadStage = memo(function SpreadStage({
   );
 
   function onWheel(e: KonvaEventObject<WheelEvent>) {
+    // Viewport freeze (§4.6): from the anchor press, threshold-pending included.
+    if (resize.liveRef.current?.handleWheel(e.evt)) return;
     e.evt.preventDefault();
     const view = viewRef.current;
     if (e.evt.ctrlKey || e.evt.metaKey) {
@@ -237,19 +280,25 @@ export const SpreadStage = memo(function SpreadStage({
   }
 
   const view = ui.view;
-  // Outlines travel with a drag preview so the selection never lags its objects.
+  // Outlines travel with a drag or resize preview so the selection never lags its objects. They
+  // show under Select AND Hand — hidden only under creation tools (#4, D-4; plan §4.8, §11 C3).
+  const resizePreview = resize.preview;
   const selectedBoxes = useMemo(
     () =>
-      ui.tool === 'select'
+      !isCreationTool(ui.tool)
         ? boxes
             .filter((b) => ui.selection.includes(b.id))
-            .map((b) =>
-              dragPreview?.ids.has(b.id)
+            .map((b) => {
+              if (resizePreview?.id === b.id) {
+                const pi = pages.findIndex((p) => p.elements.some((e) => e.id === b.id));
+                return { ...resizePreview.geometry, x: resizePreview.geometry.x + (geom.pageOffsetsMm[pi] ?? 0) };
+              }
+              return dragPreview?.ids.has(b.id)
                 ? { ...b.box, x: b.box.x + dragPreview.dx, y: b.box.y + dragPreview.dy }
-                : b.box
-            )
+                : b.box;
+            })
         : [],
-    [boxes, ui.selection, ui.tool, dragPreview]
+    [boxes, ui.selection, ui.tool, dragPreview, resizePreview, pages, geom]
   );
 
   return (
@@ -277,6 +326,7 @@ export const SpreadStage = memo(function SpreadStage({
                 pages={pages}
                 geom={geom}
                 dragPreview={dragPreview}
+                resizePreview={resizePreview ? { id: resizePreview.id, geometry: resizePreview.geometry } : null}
                 onElementPointerDown={onElementPointerDown}
                 onHoverChange={setHoverId}
               />
@@ -294,15 +344,29 @@ export const SpreadStage = memo(function SpreadStage({
               )}
               <MarqueeRect box={gestures.marqueeBox} />
               <SnapGuides
-                x={gestures.guideX}
-                y={gestures.guideY}
+                x={gestures.guideX ?? resizePreview?.guideX ?? null}
+                y={gestures.guideY ?? resizePreview?.guideY ?? null}
                 extent={{ widthMm: geom.widthMm, heightMm: geom.heightMm, bleedMm: geom.bleedMm }}
               />
             </Group>
           </Layer>
+          {/* Resize handles: their own listening layer above the overlays, outside the zoomed Group (§4.2). */}
+          <Layer>
+            <SelectionTransformer
+              target={resizeTarget}
+              active={handlesActive}
+              startContext={{ spaceHeld, tool: ui.tool, readOnly, selectionCount: ui.selection.length }}
+              host={resize}
+            />
+          </Layer>
         </Stage>
       )}
-      <SizeReadout readout={gestures.readout} />
+      <SizeReadout
+        readout={
+          gestures.readout ??
+          (resizePreview ? { widthMm: resizePreview.geometry.width, heightMm: resizePreview.geometry.height } : null)
+        }
+      />
     </div>
   );
 });

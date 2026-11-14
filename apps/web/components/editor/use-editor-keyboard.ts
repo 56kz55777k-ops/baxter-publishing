@@ -70,7 +70,7 @@ export interface EditorKeyHandlers {
 export function useEditorKeyboard(
   uiDispatch: Dispatch<EditorUiAction>,
   handlers: EditorKeyHandlers
-): { spaceHeld: boolean } {
+): { spaceHeld: boolean; syncSpaceHeld: (held: boolean) => void } {
   const [spaceHeld, setSpaceHeld] = useState(false);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
@@ -152,5 +152,8 @@ export function useEditorKeyboard(
     };
   }, [uiDispatch]);
 
-  return { spaceHeld };
+  // Slice D: a resize session swallows Space while it lives and reports at its end whether Space is
+  // still held (`onEnd.spaceHeld`); the stage syncs that here. The later keyup (which the session
+  // lets through) or a window blur clears it as before, so it cannot stick.
+  return { spaceHeld, syncSpaceHeld: setSpaceHeld };
 }

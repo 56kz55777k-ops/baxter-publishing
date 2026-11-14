@@ -1,0 +1,131 @@
+{
+  "browser": "chromium 153.0.8010.12",
+  "results": [
+    {
+      "name": "R1 changed release (rect, bottom-right): pill = commit; one Resize; one save",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "scale 3.3464293968107235; pill during drag \"71.97 × 65.86 mm\"; cursor during drag \"nwse-resize\"; committed {\"x\":20,\"y\":20,\"width\":71.97,\"height\":65.86}; expected 71.97 × 65.86; history [\"Resize\"]; PUTs 1"
+      ],
+      "error": null
+    },
+    {
+      "name": "R2 anchor click (no movement): zero history, zero saves",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "history []; PUTs 0; geometry {\"x\":20,\"y\":20,\"width\":40,\"height\":30}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R3 out and back to the press point: unchanged in H → zero history, zero saves",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "history []; PUTs 0; geometry {\"x\":20,\"y\":20,\"width\":40,\"height\":30}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R4 Escape mid-drag: cancelled; later moves and mouseup do nothing; selection kept; zero saves",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "history []; selection [\"0ae82539-3a95-463e-9aca-512f82598e1e\"]; tool select; pill null; PUTs 0"
+      ],
+      "error": null
+    },
+    {
+      "name": "R5 Space held through release (Q2 a): one commit; handles then inactive — a new press on the anchor pans; after keyup it resizes again",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "after release: history [\"Resize\"], hover cursor \"grab\"; second press: view 179.36422463600647 48 3.3464293968107235 → 219.36422463600647 78 3.3464293968107235, cursor \"grabbing\", history [\"Resize\"]; after keyup: history [\"Resize\",\"Resize\"]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R6 Space held through Escape: zero commits, selection kept; a new press pans",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "history []; selection [\"a8939c38-d02d-4891-8a41-c2dfe29cfcdb\"]; cursor after Escape \"grab\"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235"
+      ],
+      "error": null
+    },
+    {
+      "name": "R7 Space held through window blur: zero commits, selection kept, Space cleared — the next anchor press resizes (no stuck pan)",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "after blur: history [], selection [\"5876e746-8e14-402a-a9d7-1722ae36155d\"], cursor \"default\"; next press: history [\"Resize\"] (blur and focus dispatched programmatically)"
+      ],
+      "error": null
+    },
+    {
+      "name": "R8 Q7 (a) with Shift: a fast drag far past the fixed corner holds it — the ratio minimum box 5.34 × 4.01",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "pill \"5.34 × 4.01 mm\"; committed {\"x\":20,\"y\":20,\"width\":5.34,\"height\":4.01}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R9 wheel during the resize is consumed (no pan, no zoom); after release it pans again",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "view at press 179.36422463600647 48 3.3464293968107235; during 179.36422463600647 48 3.3464293968107235; after release + wheel 179.36422463600647 -72 3.3464293968107235; history [\"Resize\"]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R10 ellipse, top-left: pill = commit; the fixed corner (bottom-right) unchanged",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "pill \"36.25 × 28 mm\"; committed {\"x\":17.75,\"y\":50,\"width\":36.25,\"height\":28}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R11 native control activation (Chromium): Space on a focused button during a resize, released after it, does not click",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "control click count 1; focus after the anchor press \"BODY\"; clicks after resize 1; history [\"Resize\"]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R12 native control activation (Chromium): Enter on a focused button during a resize does not click, during or after",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "control click count 1; clicks after resize 1; history [\"Resize\"]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R13 shortcuts mid-resize do nothing (⌘Z, Delete, H); they work after",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "mid: tool select, elements 2; after release + Ctrl+Z: history [], rect {\"x\":20,\"y\":20,\"width\":40,\"height\":30}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R14 Hand tool: handles visible but inactive — an anchor press pans, nothing resizes",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "hover cursor \"grab\"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235; history []"
+      ],
+      "error": null
+    }
+  ]
+}
