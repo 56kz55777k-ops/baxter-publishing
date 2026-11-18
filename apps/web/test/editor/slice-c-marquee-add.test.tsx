@@ -27,7 +27,7 @@ const boxes: ElementBox[] = [
   { id: 'b', locked: false, box: { x: 50, y: 10, width: 20, height: 20 } },
 ];
 
-const base: EditorUiState = { unitIndex: 0, view: { x: 0, y: 0, scale: 1 }, tool: 'select', selection: ['a'] };
+const base: EditorUiState = { unitIndex: 0, view: { x: 0, y: 0, scale: 1 }, tool: 'select', selection: ['a'], keepProportions: false };
 
 describe('selection reducer', () => {
   it('ADD_TO_SELECTION unions in order and never removes an already-selected id', () => {

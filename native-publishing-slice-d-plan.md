@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–5 implemented on `slice-d-resize`; stage 5 reviewed and corrected — at the stage 5 correction review checkpoint (§6.10).**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–6 implemented on `slice-d-resize`; at the stage 6 review checkpoint (§6.11).**
+- **Stage 6 (2026-11-18):** Ben accepted Codex's review of the stage 5 correction `9c378bd` (both P2 findings closed; §0.16) and authorized **stage 6 only** (§0.17): the D-2 Keep proportions checkbox, its editor-session UI state, and its wiring into Konva's `keepRatio` and the session. Implemented in §6.11; Q4 resolved with the primary caption. Stage 7 needs Codex's review, Ben's acceptance and his separate go.
 - **Stage 5 correction (2026-11-18):** Codex reviewed stage 5 (`3fcad11`): accept after corrections, two P2 findings (§0.14) — a cancel before the preview rendered left the live Konva node resized; the host's end callback went on after an owner callback unmounted the stage. Ben authorized the corrections only (§0.15). Corrected in §6.10, with the autosave test explanation corrected. Stage 6 needs Codex's review of the correction, Ben's acceptance and his separate go.
 - **Stage 5 (2026-11-14):** Ben accepted Codex's review of the stage 4 correction `fe5ca33` (the disposal finding closed) and authorized **stage 5 only** (§0.13): the Konva wiring. Resize now works in the editor for one selected, unlocked rect or ellipse; Shift supplies ratio mode. Stage 6 (the Keep proportions toggle) needs Codex's review of stage 5, Ben's acceptance and his separate go.
 - **Stage 4 correction (2026-11-14):** Codex reviewed stage 4 (`8d2cd0c`) with one P2 lifecycle finding — an owner that disposes the session inside a termination callback still received the later callbacks (§0.12). Corrected in §6.8. Stage 5 needs Codex's review of the correction, Ben's acceptance and his separate go.
@@ -201,6 +202,21 @@ Verdict: accept after corrections; two P2 findings, both reproduced by Codex. Ho
 
 - Fix the two findings, add the regressions, correct the autosave explanation; nothing else. (1) Cancellation restores authoritative model geometry and scale independently of whether React rendered a preview, refreshing the Transformer; from the current document, never stale captured geometry over a newer update. Rect and ellipse, before and after a rendered preview; live position, size/radii and scale asserted with document, history and preview; a later resize still works and a changed release commits once; a real Chromium/Konva regression for the same-task move/Escape, failing before and passing after. (2) Track host lifetime across callback boundaries; tests for unmount inside `onSpaceSync` and `onRefit`, the existing `onResize` case, normal order, deferred refit, exactly-once termination and residual suppression; valid under StrictMode; the injected reproduction distinguished from production behaviour. (3) Correct the autosave explanation in the briefing, test comments and handoff; no autosave behaviour change.
 - **Excluded:** stage 6, merging, deploying, dependency versions, any bundle-allowance increase.
+
+### 0.16 Codex review of the stage 5 correction `9c378bd` (2026-11-18) — accepted
+
+Verdict: accept `9c378bd` as stage 5; both P2 findings resolved; no new blocking findings. Codex checked all 14 checksums; reran the two changed suites (52 / 52) and the same tests against `3fcad11`'s source (11 fail, 41 pass); reran the full web suite (697); reran the probe in Chromium 157 (18 / 18); reran its host reproduction (`["space","unmounted"]`). Exact-SHA hosted CI passed (Node 24.22.2, 697 tests, budget +986 B of +1024 B, 38 B headroom). Qualifications recorded: skipping restoration on a committed release is necessary because the final model props may equal the preview props; `elementById` is a latest-rendered-state mechanism, not a view of queued state; the live-attribute fake models react-konva's non-strict update for these attributes only, with real Konva as the complementary evidence; "no double-save defect was demonstrated" is the bounded conclusion. Not executed by Codex: Firefox, WebKit, the deployed app, real OS focus loss, trackpad pinch, touch, production writes.
+
+### 0.17 Ben's acceptance and stage 6 authorization (2026-11-18)
+
+- Ben accepted that review; both stage 5 P2 findings are closed.
+- **Stage 6 only** authorized, from `9c378bd`: the D-2 Keep proportions checkbox, its client UI state, and its connection to the existing resize implementation.
+  - **State:** default OFF; in the existing ephemeral editor UI state; kept across selection changes in the editor session; reset on reload / a new editor session; never in the document, localStorage, history or save payloads; toggling never dirties the document, creates history or schedules a save.
+  - **UI:** a native checkbox labelled "Keep proportions", in the single-object inspector's Position & Size section directly below the X/Y/W/H grid; for rectangles and ellipses (no image support); disabled by the existing locked/read-only fieldset rules; the primary caption "Corner handles only. Shift does the same. W and H are typed separately." linked by `aria-describedby`, existing caption styling — **this resolves Q4**; native checkbox keyboard operation and editor shortcuts after checkbox interaction preserved.
+  - **Behaviour:** the same preference drives Konva's `keepRatio` and the `ResizeSession` input; ratio only for corner handles when Keep proportions OR Shift; Shift adds, never inverts; side handles independent even with the toggle and Shift; the gesture-start box's ratio; the preference fixed for the active session per the controller's input contract, no new mid-gesture toggle, Konva and the controller never disagreeing; typed and stepped W/H independent; Alt, Q7, F1, S2-1, zero-H, minimums and grandfathering preserved; the accepted controller/domain behaviour reused, any contradiction reported rather than silently redesigned.
+  - **Preserved:** the stage 5 corrections (uncommitted ends restore live geometry; committed releases keep theirs; host callbacks stop after synchronous unmount, StrictMode included) and keyboard cleanup, residual suppression, Space, wheel freeze and deferred refit.
+  - **Tests:** state/UI (A), behaviour through the editor wiring for rect and ellipse (B), the Chromium probe extended with real checkbox interaction, proportional resizing, toggle-enabled side handle, Alt and Q7, and toggle-enabled cancellation before and after a preview render with live node and Transformer fit (C); focused negative controls; synthetic events, injected unmounts and browser coverage labelled.
+- **Excluded:** stage 7 and later, the Q5 harness, Q6 instrumentation, production-write testing, merge, deployment, dependency, lockfile, persistence or CI-policy changes, any bundle-allowance change.
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
 
@@ -598,7 +614,7 @@ Creation's guide can still sit up to 0.05 mm from the committed edge, because cr
   - **Label:** **Keep proportions**.
   - **Caption** (caption style, ink-soft, linked by `aria-describedby`): **"Corner handles only. Shift does the same. W and H are typed separately."**
   - Shown for sized objects (rect, ellipse; images in E). Disabled with the fieldset when the object is locked. The state persists across selections for the session.
-  - **Alternative caption** if Ben prefers shorter: "For corner dragging. W and H stay independent."
+  - **Alternative caption** if Ben prefers shorter: "For corner dragging. W and H stay independent." *(Not chosen: Ben chose the primary caption on 2026-11-18, §0.17.)*
 
 ---
 
@@ -1000,7 +1016,43 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 **Not executed:** Firefox and WebKit; human-paced input for the before-render ordering (R15–R16 force it with synthetic events in one task, as Codex did); real OS focus loss and trackpad pinch; the Next app and Vercel deployment; any production write.
 
-**Checkpoint.** Codex reviews the correction; stage 6 needs Ben's acceptance and his separate go.
+**Checkpoint.** Codex reviews the correction; stage 6 needs Ben's acceptance and his separate go. *(Reviewed and accepted 2026-11-18, §0.16–§0.17.)*
+
+### 6.11 Stage 6 — D-2 Keep proportions (2026-11-18; awaiting Codex's review)
+
+**Scope.** Stage 6 only (§0.17), from `9c378bd`. No dependency, lockfile, CI, persistence or budget change; no stage 7.
+
+**Files:**
+- `state/editor-ui.ts` — `keepProportions: boolean` in `EditorUiState`; `SET_KEEP_PROPORTIONS` (returns the same state when unchanged). Selection actions spread the state, so the preference survives selection changes.
+- `state/editor-ui-context.tsx` — `INITIAL.keepProportions = false`: every new provider (a reload, a new editor session) starts OFF. Nothing reads or writes storage.
+- `inspector/Inspector.tsx` — `KeepProportions`: a native `<input type="checkbox">` in a `<label>` ("Keep proportions"), its caption `<p class="text-caption text-ink-soft">` linked by `aria-describedby` (ids from `useId`), the row directly after the X/Y/W/H grid inside the Position & Size `<fieldset>` — so the fieldset disables it for a locked object or a read-only editor. Rendered for `rect` and `ellipse` only (an image has W/H but no checkbox until Slice E). W and H `onCommit` are unchanged: `{ width }` / `{ height }` only.
+- `EditorShell.tsx` — passes `ui.keepProportions` and `onKeepProportions` → `uiDispatch(SET_KEEP_PROPORTIONS)`. No `COMMIT`, so no history entry, no dirty document and no save.
+- `SpreadStage.tsx` — passes `ui.keepProportions` to `SelectionTransformer`.
+- `SelectionTransformer.tsx` — at `transformstart` the adapter reads the preference once (`latest.current.keepProportions`), passes it as the session's `keepProportions` input, sets `tr.keepRatio(keep)` imperatively, and holds the Transformer's `keepRatio` prop at that value (`sessionKeep`) until the session ends (cleared in `onEnded`, or at once if no session starts). Between sessions `keepRatio` follows the preference. Implementation choice 38.
+- Tests: `slice-d-shell-resize.test.tsx` (35 → 63); two older tests gain the new field in typed UI-state literals (`slice-b-history.test.ts`, `slice-c-marquee-add.test.tsx`).
+- Evidence: probe R19–R28 (`docs/evidence/slice-d-stage5-probe/`; `page.tsx` also exposes `docDispatch` for R28).
+
+**How one value reaches both sides.**
+- Konva 10.3.0: `keepProportion = keepRatio() || evt.shiftKey` (`shiftBehavior` 'default', which the adapter sets), applied only in the corner branches of `_handleMouseMove`; the sin/cos of the ratio are taken at mousedown from the node's current size — the gesture-start box.
+- Session (stage 4, unchanged): ratio iff `(keepProportions || shift) && corner`, from the stored geometry captured at the press.
+- Both get the same boolean, read once at `transformstart`. A preference change during the gesture (not reachable by a user: the session swallows keys and the pointer is on the canvas) changes neither: the session's input is fixed, and the Transformer's `keepRatio` is pinned until the end.
+- No domain or controller code changed; no contradiction with the accepted contract was found.
+
+**Tests (jsdom, real shell and session, fake Konva Transformer — `slice-d-shell-resize.test.tsx`, +28):**
+- The fake now models `keepRatio()` (set by the prop when it changes, or by the adapter) and Konva's three-way `shiftBehavior` rule, and records Konva's `keepProportion` on each move (`lastKonvaKeep`), so a test can check that Konva and the session agree.
+- **A — state and UI (9):** default OFF (checkbox, UI state, Konva `keepRatio`); toggling keeps the same document reference, no history, `doc === savedDoc`, 0 PUTs; kept across another object, deselect and back; a remount starts OFF, localStorage unchanged, the document has no `keepProportions`; label, caption text, `aria-describedby`, `text-caption`, inside Position & Size directly after the grid; not for an image or a line; disabled for a locked object and after a save conflict; Space and Enter on the focused checkbox not prevented and no editor Space-pan; ⌘Z, H, V and Delete work with the checkbox focused (undo leaves the preference alone).
+- **B — behaviour (19):** for a 4:3 rect and a 2:1 ellipse each: OFF free (exact free box, Konva not proportional); ON (Konva proportional, the hand-checked AC-4 box 64.5 × 48.38 / 52.15 × 26.08, fixed corner pinned); OFF + Shift = the same box; ON + Shift = the same box (Shift adds); side handles independent with ON and with ON + Shift; ON: a click, an unchanged release and Escape → 0 history, 0 PUTs, then a changed release → one `Resize`, one PUT. Plus: a differently proportioned object uses its own ratio; after a free resize the gesture-start (new) ratio is used; typed W, ↑ on H and Shift+↓ on W stay independent; Konva and the session agree for a whole gesture when the preference changes mid-gesture (pinned `keepRatio`, ratio commit, back to the preference after release); ON + Alt centred and proportional; ON Q7 → 5.34 × 4.01 at (20, 20); ON Escape before the first preview render restores the live node, and the next resize commits once, drawn as committed.
+- **Negative controls (63 tests):** the stage not passing the preference 11 · session built OFF while Konva is ON 2 · Konva `keepRatio` never ON 3 · `keepRatio` not pinned during the session 1 · typed W coupling H 1 · stepped H coupling W 1 · default ON 23 · selection change resetting the preference 2 · toggle routed through a document COMMIT 6 · caption not linked 1 · checkbox outside the fieldset 2 · checkbox for images too 1 · Shift inverting the toggle (`shiftBehavior` 'inverted') 4. All caught.
+
+**Real Konva, Chromium 153 (probe R19–R28; 28 / 28 with R1–R18):**
+- R19 rect: a real click on the checkbox → checked; 0 history, 0 PUTs; a real bottom-right drag → 65.33 × 49 (4:3), pill = commit, one `Resize`, one PUT, live node = committed, scale 1, Transformer fitted. R20 ellipse: toggled with the rect selected, still checked after selecting the ellipse; a real top-left drag → 42 × 31.5, fixed corner (54, 78) kept, live and fit. R21 ON + real Shift → 65.33 × 49. R22 ON: middle-right → H unchanged; bottom-center + Shift → W unchanged. R23 ON + real Alt → 73.57 × 55.18, centre within 0.005 mm (doubled H). R24 ON, no Shift: Q7 → 5.34 × 4.01. R25 ON rect, before-render cancel (**mixed**: real press, then one synthetic `mousemove` + `Escape` in one task) → live = model, scale 1, fitted, 0 history; the next real resize commits once, proportional, drawn as committed. R26 ON ellipse, real Escape after a rendered preview → live = model, fitted, 0 PUTs. R27 the focused checkbox by real keys: Space toggles it natively; Ctrl+Z undoes; H selects Hand; focus stays on the checkbox. R28 a locked rect (lock applied by a programmatic COMMIT) → the checkbox is disabled.
+- **Probe negative controls:** the stage not passing the preference → **23 / 28** (R19, R20, R23, R24, R25 fail). Konva's `shiftBehavior` 'inverted' → **28 / 28**: with real Konva the session's own `keep || shift` still enforces the ratio from Konva's proposed box, so the disagreement does not show in the committed geometry; the jsdom check on Konva's own `keepProportion` catches it (4 failing).
+
+**Verification:** typecheck, test typecheck, lint, 44 files / 725 tests, build; bundle budget PASS — shared First-Load JS 343.1 kB, +986 B of +1024 B, unchanged (38 B headroom).
+
+**Not executed:** Firefox and WebKit; human-paced before-render ordering (R25 forces it with synthetic events in one task); real OS focus loss; trackpad and touch; screen-reader announcement of the caption (the association is asserted, not heard); the Next app and Vercel deployment; any production write.
+
+**Checkpoint.** Codex reviews stage 6; stage 7 needs Ben's acceptance and his separate go.
 
 ---
 
@@ -1437,6 +1489,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 35. **The shell's `onResize` reads the latest document and selection through refs**, not the render closure, so a release delivered before React has re-rendered commits against current state. (Codex, §0.14: the refs are updated during render, so "current" means the latest rendered state; they do not observe queued reducer actions before render.)
 36. **A cancel restores the live node imperatively** (stage 5 correction): every end that commits nothing writes the current element's `nodeAttrsFor` (scale 1) onto the node and refits the Transformer, because react-konva re-applies only changed props and a coalesced preview changes none. The current element comes from the latest rendered document (`elementById`), so a newer document is never overwritten with press-time geometry; a committed release is left to its render.
 37. **The host checks its own lifetime between `onEnd`'s steps** (stage 5 correction): a `mounted` ref set in the layout effect's setup and cleared in its cleanup; a synchronous unmount inside `onSpaceSync` or `onRefit` stops the rest.
+38. **Keep proportions is read once per gesture** (stage 6): at `transformstart` the adapter passes the editor-session preference to the session's `keepProportions` input and pins Konva's `keepRatio` to the same value until the session ends, so the two sides of the boundary cannot disagree mid-gesture; between gestures `keepRatio` follows the preference. The preference is editor UI state (`SET_KEEP_PROPORTIONS`), never a document change.
 
 ### 10.3 Genuinely open
 - **Q1 — Ben; blocks stage 8B.** Approve D's production-write allowances?
@@ -1450,7 +1503,7 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
   - Alternatives: cancel the resize when Space is pressed; or switch to panning mid-gesture (which would also need a commit-or-discard rule).
   - Slice C's drag currently behaves like the recommendation, but that is existing behaviour, not a decision for resize.
 - **Q3 — Ben; non-blocking; default resize only.** Extend the in-gesture keyboard guard (§4.5) **and the viewport freeze (§4.6)** to Slice C's drag, creation and marquee? Today ⌘Z, Delete, the arrows and the wheel act mid-drag (§11 C4, C14). Recommendation: yes, as one small separate commit in D, with regression tests.
-- **Q4 — Ben; non-blocking.** The caption wording for Keep proportions (§4.10).
+- **Q4 — RESOLVED by Ben 2026-11-18 (§0.17):** the primary caption, "Corner handles only. Shift does the same. W and H are typed separately." Implemented in stage 6 (§6.11).
 - **Q5 — Codex review + Ben's OK; blocks stage 8A.** The harness mechanism:
   - a `next.config.js` `pageExtensions` entry for `harness.tsx` active only under `BAXTER_E2E_HARNESS=1`;
   - the harness page under `app/(editor)/e2e-harness/`;

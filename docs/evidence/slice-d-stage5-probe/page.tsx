@@ -15,7 +15,7 @@ import { createRoot } from 'react-dom/client';
 import Konva from 'konva';
 import { addElement, getFormatPreset, newEditorDoc, newEllipseElement, newRectElement, type EditorDoc } from '@baxter/domain';
 import { EditorShell } from '@/components/editor/EditorShell';
-import { DocumentProvider, useDocumentState } from '@/components/editor/state/document-context';
+import { DocumentProvider, useDocumentDispatch, useDocumentState } from '@/components/editor/state/document-context';
 import { EditorUiProvider, useEditorUi, useEditorUiDispatch } from '@/components/editor/state/editor-ui-context';
 
 declare global {
@@ -25,6 +25,7 @@ declare global {
       state: () => ReturnType<typeof useDocumentState>;
       ui: () => ReturnType<typeof useEditorUi>;
       uiDispatch: ReturnType<typeof useEditorUiDispatch>;
+      docDispatch: ReturnType<typeof useDocumentDispatch>;
       ids: { rect: string; ellipse: string };
       clicks: number;
     };
@@ -52,6 +53,7 @@ function Probe() {
   latestState = useDocumentState();
   latestUi = useEditorUi();
   window.__probe.uiDispatch = useEditorUiDispatch();
+  window.__probe.docDispatch = useDocumentDispatch();
   return null;
 }
 
@@ -60,6 +62,7 @@ window.__probe = {
   state: () => latestState,
   ui: () => latestUi,
   uiDispatch: null as never,
+  docDispatch: null as never,
   ids: { rect: RECT.id, ellipse: ELLIPSE.id },
   clicks: 0,
 };

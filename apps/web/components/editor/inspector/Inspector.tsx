@@ -23,7 +23,7 @@
  * Geometry is implied-mm: units are written nowhere here, which is contract
  * #18's "consistent by absence".
  */
-import { useCallback } from 'react';
+import { useCallback, useId } from 'react';
 import type { EditorElement } from '@baxter/domain';
 import {
   FINE_BOUNDS,
@@ -53,6 +53,9 @@ export interface InspectorProps {
   onMultiOpacity?: (opacity: number) => void;
   onLockAll?: (locked: boolean) => void;
   onDeleteSelection?: () => void;
+  /** D-2 Keep proportions (Slice D stage 6): editor-session UI state, not a document property. */
+  keepProportions?: boolean;
+  onKeepProportions?: (value: boolean) => void;
 }
 
 export function Inspector(props: InspectorProps) {
@@ -98,6 +101,8 @@ function SingleObjectPanel({
   onPatch,
   onArrange,
   onSetLocked,
+  keepProportions = false,
+  onKeepProportions,
 }: InspectorProps & { element: EditorElement }) {
   const locked = element.locked;
   // Locked means untouchable, not unselectable (contract #20): the panel keeps
@@ -158,6 +163,9 @@ function SingleObjectPanel({
             </>
           )}
         </div>
+        {(element.type === 'rect' || element.type === 'ellipse') && onKeepProportions && (
+          <KeepProportions checked={keepProportions} onChange={onKeepProportions} />
+        )}
       </Fieldset>
 
       {(element.type === 'rect' || element.type === 'ellipse') && (
@@ -327,6 +335,37 @@ function MultiObjectPanel({
         Drag any one to move them together. Select a single object to edit its details.
       </p>
     </>
+  );
+}
+
+/**
+ * D-2 Keep proportions (plan §4.10): a native checkbox, a full-width row under
+ * the X/Y/W/H grid. It is a resize preference only — corner handles, as Shift —
+ * so it changes editor UI state and never the document: no history entry, no
+ * save. Disabled with the fieldset (locked object, read-only editor). Typed
+ * W and H stay independent of it.
+ */
+function KeepProportions({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+  const id = useId();
+  const captionId = `${id}-caption`;
+  return (
+    <div className="flex flex-col gap-1 pt-1">
+      <label htmlFor={id} className="flex items-center gap-2 text-caption text-ink">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.currentTarget.checked)}
+          aria-describedby={captionId}
+          data-testid="keep-proportions"
+          className="h-[14px] w-[14px] accent-accent"
+        />
+        Keep proportions
+      </label>
+      <p id={captionId} className="text-caption text-ink-soft">
+        Corner handles only. Shift does the same. W and H are typed separately.
+      </p>
+    </div>
   );
 }
 

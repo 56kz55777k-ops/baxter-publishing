@@ -234,6 +234,12 @@ export function EditorShell({ publication }: { publication: { id: string; title:
 
   const onDelete = useCallback(() => deleteSelection('Delete'), [deleteSelection]);
 
+  // D-2 Keep proportions (stage 6): a UI-state preference — no COMMIT, so no history entry and no save.
+  const onKeepProportions = useCallback(
+    (value: boolean) => uiDispatch({ type: 'SET_KEEP_PROPORTIONS', value }),
+    [uiDispatch]
+  );
+
   const onNudge = useCallback(
     (dx: number, dy: number) => {
       if (readOnly) return;
@@ -417,6 +423,8 @@ export function EditorShell({ publication }: { publication: { id: string; title:
           onMultiOpacity={onMultiOpacity}
           onLockAll={onLockAll}
           onDeleteSelection={onDelete}
+          keepProportions={ui.keepProportions}
+          onKeepProportions={onKeepProportions}
         />
       </div>
 

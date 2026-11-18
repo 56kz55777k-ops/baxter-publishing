@@ -369,6 +369,7 @@ export const SpreadStage = memo(function SpreadStage({
               startContext={{ spaceHeld, tool: ui.tool, readOnly, selectionCount: ui.selection.length }}
               host={resize}
               elementById={elementById}
+              keepProportions={ui.keepProportions}
             />
           </Layer>
         </Stage>

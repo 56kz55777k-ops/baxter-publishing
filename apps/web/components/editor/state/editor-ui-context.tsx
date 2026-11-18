@@ -20,6 +20,8 @@ const INITIAL: EditorUiState = {
   // Selection dies on reload by design (Part 6) — it is session state, not
   // document state, and is never persisted or restored from the server.
   selection: [],
+  // D-2: off for every new editor session (stage 6). Not persisted anywhere.
+  keepProportions: false,
 };
 
 export function EditorUiProvider({ children }: { children: ReactNode }) {

@@ -482,6 +482,184 @@ for (const [label, which] of [['R17', 'rect'], ['R18', 'ellipse']]) {
   });
 }
 
+/* ------------------------------------------- stage 6: D-2 Keep proportions (plan §6.11) */
+const keepSel = '[data-testid="keep-proportions"]';
+const keepState = (page) => S(page, (sel) => { const b = document.querySelector(sel); return b ? { checked: b.checked, disabled: b.matches(':disabled') } : null; }, keepSel);
+/** Ratio held within the derived axis's rounding (AC-4: one axis exact, the other derived within 0.005 mm). */
+const ratioHeld = (g, w0, h0) => Math.abs(g.height - (g.width * h0) / w0) <= 0.0051 || Math.abs(g.width - (g.height * w0) / h0) <= 0.0051;
+/** A real resize with real input; optional modifier key held through the drag. */
+async function realDrag(page, which, anchor, d, key) {
+  const I = await info(page);
+  const a = anchorAt(I, which, anchor);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  if (key) await page.keyboard.down(key);
+  await page.mouse.move(a.x + d.x, a.y + d.y, { steps: 10 });
+  const mid = await info(page);
+  await page.mouse.up();
+  if (key) await page.keyboard.up(key);
+  return { I, mid };
+}
+
+await check('R19 rect: a real click on Keep proportions → checked, no history, no save; a real corner drag keeps 4:3 (AC-4), one Resize, one save, live node and handles = committed', 'real', async (page, n) => {
+  await select(page, 'rect');
+  const k0 = await keepState(page);
+  await page.click(keepSel);
+  await settleSaves(page);
+  const T = await info(page);
+  const k1 = await keepState(page);
+  const { mid } = await realDrag(page, 'rect', 'bottom-right', { x: 100, y: 35 });
+  await settleSaves(page);
+  const J = await info(page);
+  const L = await live(page, 'rect');
+  const g = J.els[J.ids.rect];
+  n.push(`checkbox before ${JSON.stringify(k0)} after click ${JSON.stringify(k1)}; after toggling: history ${JSON.stringify(T.history)}, PUTs ${T.puts}; pill "${mid.pill}"; committed ${JSON.stringify(g)}; history ${JSON.stringify(J.history)}; PUTs ${J.puts}; live ${JSON.stringify(L.geom)} fit ${L.fits}`);
+  return k0?.checked === false && k1?.checked === true && T.history.length === 0 && T.puts === 0
+    && mid.pill === `${g.width} × ${g.height} mm` && ratioHeld(g, 40, 30) && g.width !== 40 && g.x === 20 && g.y === 20
+    && JSON.stringify(J.history) === '["Resize"]' && J.puts === 1 && sameGeom(L.geom, expectedGeom('rect', g)) && L.fits;
+});
+
+await check('R20 ellipse: toggled ON with the rect selected, it stays ON after selecting the ellipse; a real top-left drag keeps the ellipse\'s ratio, fixed corner kept', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  await select(page, 'ellipse');
+  const k = await keepState(page);
+  const { mid } = await realDrag(page, 'ellipse', 'top-left', { x: -80, y: -20 });
+  await settleSaves(page);
+  const J = await info(page);
+  const L = await live(page, 'ellipse');
+  const g = J.els[J.ids.ellipse];
+  n.push(`checkbox after selecting the ellipse ${JSON.stringify(k)}; pill "${mid.pill}"; committed ${JSON.stringify(g)}; history ${JSON.stringify(J.history)}; PUTs ${J.puts}; live ${JSON.stringify(L.geom)} fit ${L.fits}`);
+  return k?.checked === true && mid.pill === `${g.width} × ${g.height} mm` && ratioHeld(g, 24, 18) && g.width !== 24
+    && H(g.x + g.width) === H(54) && H(g.y + g.height) === H(78) && JSON.stringify(J.history) === '["Resize"]' && J.puts === 1
+    && sameGeom(L.geom, expectedGeom('ellipse', g)) && L.fits;
+});
+
+await check('R21 ON + Shift (real key): still proportional — Shift adds ratio, it does not invert the toggle', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  await realDrag(page, 'rect', 'bottom-right', { x: 100, y: 35 }, 'Shift');
+  const J = await info(page);
+  const g = J.els[J.ids.rect];
+  n.push(`committed ${JSON.stringify(g)}; history ${JSON.stringify(J.history)}`);
+  return ratioHeld(g, 40, 30) && g.width !== 40 && JSON.stringify(J.history) === '["Resize"]';
+});
+
+await check('R22 ON: side handles stay independent (middle-right, then bottom-center with Shift)', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  await realDrag(page, 'rect', 'middle-right', { x: 60, y: 40 });
+  const J = await info(page);
+  const g1 = J.els[J.ids.rect];
+  await realDrag(page, 'rect', 'bottom-center', { x: 40, y: 50 }, 'Shift');
+  const K = await info(page);
+  const g2 = K.els[K.ids.rect];
+  const L = await live(page, 'rect');
+  n.push(`after middle-right ${JSON.stringify(g1)}; after bottom-center + Shift ${JSON.stringify(g2)}; history ${JSON.stringify(K.history)}; live fit ${L.fits}`);
+  return g1.height === 30 && g1.width > 40 && g2.width === g1.width && g2.height > 30 && JSON.stringify(K.history) === '["Resize","Resize"]'
+    && sameGeom(L.geom, expectedGeom('rect', g2)) && L.fits;
+});
+
+await check('R23 ON + Alt (real key): centred and proportional — the centre (40, 35) kept', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  await realDrag(page, 'rect', 'bottom-right', { x: 70, y: 20 }, 'Alt');
+  const J = await info(page);
+  const g = J.els[J.ids.rect];
+  n.push(`committed ${JSON.stringify(g)}; doubled-H centre offset (${H(2 * g.x + g.width) - 8000}, ${H(2 * g.y + g.height) - 7000}) H/2`);
+  return ratioHeld(g, 40, 30) && g.width > 40 && Math.abs(H(2 * g.x + g.width) - 8000) <= 1 && Math.abs(H(2 * g.y + g.height) - 7000) <= 1 /* centre within 0.005 mm, compared in doubled H (AC-5) */
+    && JSON.stringify(J.history) === '["Resize"]';
+});
+
+await check('R24 ON, no Shift: Q7 — a fast drag far past the fixed corner holds it; the ratio minimum box 5.34 × 4.01', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  const { mid } = await realDrag(page, 'rect', 'bottom-right', { x: -300, y: -250 });
+  const J = await info(page);
+  const g = J.els[J.ids.rect];
+  n.push(`pill "${mid.pill}"; committed ${JSON.stringify(g)}`);
+  return mid.pill === '5.34 × 4.01 mm' && g.x === 20 && g.y === 20 && g.width === 5.34 && g.height === 4.01;
+});
+
+await check('R25 ON rect: a move and Escape in ONE browser task (before the preview renders) → the LIVE node = model, scale 1, handles fitted; the next real resize commits once, drawn as committed and proportional', 'mixed', async (page, n) => {
+  await select(page, 'rect');
+  await page.click(keepSel);
+  const I = await info(page);
+  const a = anchorAt(I, 'rect', 'bottom-right');
+  const model0 = I.els[I.ids.rect];
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down(); // real press
+  const during = await S(page, ({ a, w }) => { // synthetic: one task
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: a.x + 100, clientY: a.y + 35, bubbles: true, buttons: 1 }));
+    const node = window.__konva.stages[0].findOne('#' + window.__probe.ids[w]);
+    const mutated = { width: node.width(), height: node.height() };
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    return { mutated };
+  }, { a, w: 'rect' });
+  await page.waitForTimeout(100);
+  const L = await live(page, 'rect');
+  const J = await info(page);
+  await page.mouse.up();
+  await S(page, () => document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true, cancelable: true })));
+  await realDrag(page, 'rect', 'bottom-right', { x: 100, y: 35 });
+  await settleSaves(page);
+  const K2 = await info(page);
+  const L2 = await live(page, 'rect');
+  const g2 = K2.els[K2.ids.rect];
+  n.push(`mutated in the task ${JSON.stringify(during.mutated)} (proportional ${ratioHeld(during.mutated, 40, 30)}); after cancel live ${JSON.stringify(L.geom)} fit ${L.fits}; history ${JSON.stringify(J.history)}; pill ${J.pill}; next ${JSON.stringify(g2)}, history ${JSON.stringify(K2.history)}, PUTs ${K2.puts}, live fit ${L2.fits}`);
+  return during.mutated.width !== 40 && sameGeom(L.geom, expectedGeom('rect', model0)) && L.fits && J.history.length === 0 && J.pill === null
+    && JSON.stringify(K2.history) === '["Resize"]' && K2.puts === 1 && ratioHeld(g2, 40, 30) && sameGeom(L2.geom, expectedGeom('rect', g2)) && L2.fits;
+});
+
+await check('R26 ON ellipse: Escape (real key) AFTER a rendered preview → the LIVE node = model, scale 1, handles fitted; zero saves', 'real', async (page, n) => {
+  await select(page, 'ellipse');
+  await page.click(keepSel);
+  const I = await info(page);
+  const a = anchorAt(I, 'ellipse', 'bottom-right');
+  const model0 = I.els[I.ids.ellipse];
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x + 90, a.y + 20, { steps: 10 });
+  await page.waitForTimeout(100);
+  const mid = await info(page);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  const L = await live(page, 'ellipse');
+  await page.mouse.up();
+  await settleSaves(page);
+  const J = await info(page);
+  n.push(`pill during "${mid.pill}"; after Escape live ${JSON.stringify(L.geom)} fit ${L.fits}; history ${JSON.stringify(J.history)}; PUTs ${J.puts}`);
+  return mid.pill !== null && sameGeom(L.geom, expectedGeom('ellipse', model0)) && L.fits && J.history.length === 0 && J.puts === 0;
+});
+
+await check('R27 the checkbox by keyboard (real keys): Space on the focused checkbox toggles it natively; ⌘/Ctrl+Z and H from the checkbox still reach the editor', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await realDrag(page, 'rect', 'bottom-right', { x: 60, y: 40 });
+  await page.focus(keepSel);
+  await page.keyboard.press('Space');
+  const k1 = await keepState(page);
+  const J = await info(page);
+  await page.keyboard.press('Control+z');
+  const K = await info(page);
+  await page.keyboard.press('h');
+  const M = await info(page);
+  const focused = await S(page, (sel) => document.activeElement === document.querySelector(sel), keepSel);
+  n.push(`after Space ${JSON.stringify(k1)}, history ${JSON.stringify(J.history)}; after Ctrl+Z history ${JSON.stringify(K.history)}; after H tool ${M.tool}; checkbox focused ${focused}`);
+  return k1?.checked === true && JSON.stringify(J.history) === '["Resize"]' && K.history.length === 0 && M.tool === 'hand' && focused;
+});
+
+await check('R28 locked object: the checkbox is disabled; read-only (save conflict) is covered in jsdom only', 'real', async (page, n) => {
+  await select(page, 'rect');
+  await S(page, () => {
+    const st = window.__probe.state();
+    window.__probe.docDispatch({ type: 'COMMIT', nextDoc: { ...st.doc, pages: st.doc.pages.map((p) => ({ ...p, elements: p.elements.map((e) => e.id === window.__probe.ids.rect ? { ...e, locked: true } : e) })) }, selection: [window.__probe.ids.rect], label: 'Lock' });
+  }); // programmatic lock (the Lock button is covered in jsdom)
+  await page.waitForTimeout(50);
+  const k = await keepState(page);
+  n.push(`checkbox ${JSON.stringify(k)} (lock applied programmatically)`);
+  return k?.disabled === true;
+});
+
 /* ----------------------------------------------------------------- report */
 await browser.close();
 server.close();
@@ -500,7 +678,7 @@ const lines = [
   '|---|---|---|---|',
   ...results.map((r) => `| ${r.name} | ${r.kind} | ${r.pass ? 'PASS' : 'FAIL'} | ${(r.notes.join('; ') + (r.error ? ` ERROR ${r.error.split('\n')[0]}` : '')).replace(/\|/g, '/')} |`),
   '',
-  'Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering).',
+  'Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16 and R25: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering; R28: the lock is applied by a programmatic document COMMIT).',
 ];
 fs.writeFileSync(path.join(OUT, 'summary.md'), lines.join('\n') + '\n');
 fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ browser: `chromium ${version}`, results }, null, 2) + '\n');

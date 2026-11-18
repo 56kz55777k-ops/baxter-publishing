@@ -31,11 +31,18 @@
  * cleared (§4.7: the only write to it outside Konva, and it only clears).
  *
  * Konva's own options are set explicitly (its defaults are keepRatio,
- * flip and rotate ON). Ratio comes from Shift through Konva's
- * `keepProportion = keepRatio() || evt.shiftKey` and the session's own
- * `keepProportions || shift`; the Keep proportions toggle is stage 6.
+ * flip and rotate ON). Ratio for a corner drag comes from Keep proportions OR
+ * Shift, on both sides of the boundary from the same value:
+ *   Konva:   keepProportion = keepRatio() || evt.shiftKey   (shiftBehavior 'default'; corner branches only)
+ *   session: (keepProportions || shift) && corner            (stage 4)
+ * `keepRatio` and the session's `keepProportions` are both the preference as
+ * it was at the anchor press, and `keepRatio` is held at that value until the
+ * session ends, so the two can never disagree mid-gesture (stage 6). Shift
+ * adds ratio; it never inverts an enabled toggle. Side handles are always
+ * free. The ratio is the gesture-start box's: Konva takes it at mousedown,
+ * the session from the stored geometry at the press.
  */
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { Box } from 'konva/lib/shapes/Transformer';
@@ -63,13 +70,15 @@ export interface SelectionTransformerProps {
   /** The element with this id in the latest rendered document, if it is a rect or ellipse — the
    *  authoritative geometry a cancel restores (it may no longer be `target`: a conflict nulls it). */
   elementById: (id: string) => ResizableElement | null;
-  /** D-2 Keep proportions — stage 6. False until then. */
+  /** D-2 Keep proportions (stage 6): the editor-session preference, read at each anchor press. */
   keepProportions?: boolean;
 }
 
 export function SelectionTransformer({ target, active, startContext, host, elementById, keepProportions = false }: SelectionTransformerProps) {
   const trRef = useRef<Konva.Transformer | null>(null);
   const mods = useRef<ResizeModifiers>({ shift: false, alt: false });
+  /** Keep proportions as fixed at the live session's press; null between sessions (stage 6). */
+  const [sessionKeep, setSessionKeep] = useState<boolean | null>(null);
   const latest = useRef({ target, startContext, keepProportions, elementById });
   latest.current = { target, startContext, keepProportions, elementById };
 
@@ -100,12 +109,16 @@ export function SelectionTransformer({ target, active, startContext, host, eleme
       return;
     }
     const pointer = tr.getStage()?.getPointerPosition() ?? { x: 0, y: 0 };
-    host.begin({
+    // Konva reads keepRatio() on every move: pin it to the value the session is built with.
+    tr.keepRatio(keep);
+    setSessionKeep(keep);
+    const session = host.begin({
       element: t,
       anchor: anchorName(tr),
       pressPoint: { x: pointer.x, y: pointer.y },
       keepProportions: keep,
       onEnded: (end) => {
+        setSessionKeep(null);
         if (end.committed) return; // the COMMIT's render carries the new geometry as changed props
         // A cancel ends the session while Konva still holds the press: stop Konva too. Its eventless
         // transformend then reaches an ended session — a no-op.
@@ -113,6 +126,7 @@ export function SelectionTransformer({ target, active, startContext, host, eleme
         restoreLiveNode(tr, t.id);
       },
     });
+    if (!session) setSessionKeep(null); // no session (element not on the shown unit): nothing to pin
   }
 
   /** Write the element's current model geometry (scale 1) onto its live node; re-fit the handles. */
@@ -161,7 +175,7 @@ export function SelectionTransformer({ target, active, startContext, host, eleme
       listening={active}
       rotateEnabled={false}
       flipEnabled={false}
-      keepRatio={keepProportions}
+      keepRatio={sessionKeep ?? keepProportions}
       shiftBehavior="default"
       centeredScaling={false}
       ignoreStroke

@@ -39,6 +39,13 @@ export interface EditorUiState {
   tool: EditorTool;
   /** Element ids. Selection is ID-based, never object references (#4). */
   selection: readonly string[];
+  /**
+   * D-2 Keep proportions (Slice D stage 6): ratio for CORNER resize drags,
+   * as Shift. Client preference for the editor session: survives selection
+   * changes, resets on reload, never in the document, history, storage or a
+   * save. Typed W/H ignore it.
+   */
+  keepProportions: boolean;
 }
 
 export type EditorUiAction =
@@ -49,7 +56,8 @@ export type EditorUiAction =
   | { type: 'TOGGLE_SELECTION'; ids: readonly string[] }
   /** Union, order-preserving: never removes an id (Shift-marquee, contract #6). */
   | { type: 'ADD_TO_SELECTION'; ids: readonly string[] }
-  | { type: 'CLEAR_SELECTION' };
+  | { type: 'CLEAR_SELECTION' }
+  | { type: 'SET_KEEP_PROPORTIONS'; value: boolean };
 
 export function editorUiReducer(state: EditorUiState, action: EditorUiAction): EditorUiState {
   switch (action.type) {
@@ -85,6 +93,8 @@ export function editorUiReducer(state: EditorUiState, action: EditorUiAction): E
     }
     case 'CLEAR_SELECTION':
       return state.selection.length === 0 ? state : { ...state, selection: [] };
+    case 'SET_KEEP_PROPORTIONS':
+      return state.keepProportions === action.value ? state : { ...state, keepProportions: action.value };
   }
 }
 

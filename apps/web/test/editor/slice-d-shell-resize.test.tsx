@@ -34,6 +34,8 @@ import {
   getFormatPreset,
   newEditorDoc,
   newEllipseElement,
+  newImageElement,
+  newLineElement,
   newRectElement,
   type EditorDoc,
   updateElement,
@@ -68,6 +70,8 @@ const K = vi.hoisted(() => ({
   size: { w: 1000, h: 800 },
   setSize: null as null | ((s: { w: number; h: number }) => void),
   content: null as unknown as HTMLDivElement,
+  /** Konva's keepProportion on the last move (stage 6: must agree with the session's ratio mode). */
+  lastKonvaKeep: null as boolean | null,
 }));
 
 vi.mock('react-konva', async () => {
@@ -103,6 +107,8 @@ vi.mock('react-konva', async () => {
     Rect: shape('rect'),
     Ellipse: shape('ellipse'),
     Transformer: React.forwardRef(function FakeTransformer(p: Record<string, any>, ref: React.Ref<unknown>) {
+      // keepRatio as Konva holds it: react-konva applies the prop when it changes; the adapter may also set it.
+      if (!K.trProps || !Object.is(K.trProps.keepRatio, p.keepRatio)) K.tr.keep = !!p.keepRatio;
       K.trProps = p;
       React.useImperativeHandle(ref, () => K.tr, []);
       return null;
@@ -144,6 +150,15 @@ function makeTransformer() {
     },
     getStage: () => stage,
     getLayer: () => ({ batchDraw() {} }),
+    /** Konva's keepRatio() value. */
+    keep: false,
+    keepRatioCalls: [] as boolean[],
+    keepRatio(v?: boolean) {
+      if (v === undefined) return tr.keep;
+      tr.keepRatioCalls.push(v);
+      tr.keep = v;
+      return tr;
+    },
     forceUpdateCalls: 0,
     forceUpdate() {
       tr.forceUpdateCalls++;
@@ -245,7 +260,10 @@ function moveMm(mm: { x: number; y: number }, mods: { shiftKey?: boolean; altKey
   const oldAbs = anchorPositionPx(G!.box, K.tr.activeAnchor);
   const target = K.trProps!.anchorDragBoundFunc(oldAbs, p, { shiftKey: !!mods.shiftKey, altKey: !!mods.altKey });
   if (target.x === oldAbs.x && target.y === oldAbs.y) return 'unchanged';
-  const keep = !!K.trProps!.keepRatio || !!mods.shiftKey;
+  // Konva 10.3.0 `_handleMouseMove`: the keepProportion rule by `shiftBehavior` (the adapter sets 'default').
+  const sb = K.trProps!.shiftBehavior ?? 'default';
+  const keep = sb === 'inverted' ? K.tr.keep && !mods.shiftKey : sb === 'none' ? K.tr.keep : K.tr.keep || !!mods.shiftKey;
+  K.lastKonvaKeep = keep;
   const k = konvaStep(G!.box, K.tr.activeAnchor, target, keep, !!mods.altKey, G!.sin, G!.cos);
   if (k.skip) return 'skip';
   K.tr.activeAnchor = k.anchor;
@@ -304,6 +322,8 @@ beforeEach(() => {
   K.size = { w: 1000, h: 800 };
   K.content = document.createElement('div');
   K.tr = makeTransformer();
+  K.trProps = null;
+  K.lastKonvaKeep = null;
   G = null;
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -797,5 +817,325 @@ describe('stage 5 correction — a cancelled resize restores the LIVE node (Code
     });
     expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 20, y: 20, width: 40, height: 30 }));
     expect(state.history).toHaveLength(0);
+  });
+});
+
+/* ========================================================================== */
+/* Stage 6 — D-2 Keep proportions (plan §4.10, §0.17)                          */
+/* ========================================================================== */
+
+const keepBox = () => container.querySelector('[data-testid="keep-proportions"]') as HTMLInputElement | null;
+const numField = (name: 'w' | 'h') => container.querySelector(`[data-testid="num-${name}"]`) as HTMLInputElement;
+const clickKeep = () => act(() => keepBox()!.click());
+/** A 2:1 ellipse — a different ratio from the 4:3 rect. */
+/**
+ * Ratio mode (toggle or Shift) for the drag to (+30, +10) mm past the bottom-right corner. Checked by hand
+ * against AC-4: the controlling axis is the larger start axis (W), exact on the 0.01 grid; H is derived and
+ * rounded half-up — 64.5 × 3/4 = 48.375 → 48.38; 52.15 / 2 = 26.075 → 26.08. The fixed corner stays put.
+ */
+const ONEXP_RECT = { x: 20, y: 20, width: 64.5, height: 48.38 };
+const ONEXP_ELL = { x: 30, y: 60, width: 52.15, height: 26.08 };
+const WIDE = { ...newEllipseElement({ x: 30, y: 60 }), width: 24, height: 12 };
+
+/** One full corner gesture: press, one move to `to` (unit mm), release. */
+function drag(id: string, anchor: ResizeAnchor, to: { x: number; y: number }, mods: { shiftKey?: boolean; altKey?: boolean } = {}) {
+  act(() => press(id, anchor));
+  act(() => void moveMm(to, mods));
+  act(() => mouseup());
+}
+const ratioHeld = (g: { width: number; height: number }, w0: number, h0: number) =>
+  Math.abs(g.height - (g.width * h0) / w0) <= 0.011 || Math.abs(g.width - (g.height * w0) / h0) <= 0.011;
+
+describe('stage 6 — Keep proportions: state and inspector UI', () => {
+  it('defaults OFF: the checkbox is unchecked, the UI state false, Konva keepRatio false', () => {
+    mount();
+    expect(keepBox()).not.toBeNull();
+    expect(keepBox()!.checked).toBe(false);
+    expect(ui.keepProportions).toBe(false);
+    expect(K.trProps!.keepRatio).toBe(false);
+  });
+
+  it('toggling changes only UI state: same document reference, no history, not dirty, no save', async () => {
+    mount();
+    const doc0 = state.doc;
+    clickKeep();
+    expect(keepBox()!.checked).toBe(true);
+    expect(ui.keepProportions).toBe(true);
+    expect(K.trProps!.keepRatio).toBe(true);
+    clickKeep();
+    clickKeep();
+    expect(state.doc).toBe(doc0);
+    expect(state.history).toHaveLength(0);
+    expect(state.doc === state.savedDoc).toBe(true);
+    await flushSaves();
+    expect(puts).toEqual([]);
+  });
+
+  it('survives selection changes (other object, deselect, back) within the session', () => {
+    mount([RECT, WIDE], RECT.id);
+    clickKeep();
+    act(() => uiDispatch({ type: 'SET_SELECTION', ids: [WIDE.id] }));
+    expect(keepBox()!.checked).toBe(true);
+    act(() => uiDispatch({ type: 'CLEAR_SELECTION' }));
+    expect(keepBox()).toBeNull(); // the page panel has no checkbox
+    act(() => uiDispatch({ type: 'SET_SELECTION', ids: [RECT.id] }));
+    expect(keepBox()!.checked).toBe(true);
+    expect(ui.keepProportions).toBe(true);
+  });
+
+  it('a fresh editor session (remount) starts OFF again; nothing was stored', () => {
+    const before = { ...window.localStorage };
+    mount();
+    clickKeep();
+    expect(ui.keepProportions).toBe(true);
+    act(() => root.unmount());
+    root = createRoot(container);
+    mount();
+    expect(ui.keepProportions).toBe(false);
+    expect(keepBox()!.checked).toBe(false);
+    expect({ ...window.localStorage }).toEqual(before);
+    expect(JSON.stringify(state.doc)).not.toContain('keepProportions');
+  });
+
+  it('label, caption and aria-describedby; placed in Position & Size directly under the X/Y/W/H grid', () => {
+    mount();
+    const box = keepBox()!;
+    expect(box.type).toBe('checkbox');
+    expect(box.labels?.[0]?.textContent?.trim()).toBe('Keep proportions');
+    const caption = document.getElementById(box.getAttribute('aria-describedby')!)!;
+    expect(caption.textContent).toBe('Corner handles only. Shift does the same. W and H are typed separately.');
+    expect(caption.className).toContain('text-caption');
+    const fieldset = box.closest('fieldset')!;
+    expect(fieldset.querySelector('legend')!.textContent).toBe('Position & Size');
+    const grid = numField('h').closest('.grid')!;
+    expect(grid.nextElementSibling).toBe(box.closest('label')!.parentElement);
+  });
+
+  it('shown for rect and ellipse only: not for an image or a line', () => {
+    const img = { ...newImageElement({ x: 10, y: 10 }), width: 30, height: 20 };
+    const line = newLineElement({ x: 10, y: 10 });
+    mount([RECT, WIDE, img, line], img.id);
+    expect(numField('w')).not.toBeNull(); // the image has W/H …
+    expect(keepBox()).toBeNull(); // … but no Keep proportions (images arrive with Slice E)
+    act(() => uiDispatch({ type: 'SET_SELECTION', ids: [line.id] }));
+    expect(keepBox()).toBeNull();
+    act(() => uiDispatch({ type: 'SET_SELECTION', ids: [WIDE.id] }));
+    expect(keepBox()).not.toBeNull();
+  });
+
+  it('disabled with the fieldset for a locked object and in a read-only editor', () => {
+    mount([{ ...RECT, locked: true }], RECT.id);
+    expect(keepBox()!.matches(':disabled')).toBe(true);
+    act(() => root.unmount());
+    root = createRoot(container);
+    mount();
+    expect(keepBox()!.matches(':disabled')).toBe(false);
+    act(() => docDispatch({ type: 'SAVE_CONFLICT', serverRevision: 9 }));
+    expect(keepBox()!.matches(':disabled')).toBe(true);
+  });
+
+  it('native keyboard: Space and Enter on the focused checkbox stay native (not prevented, no editor pan)', () => {
+    mount();
+    const box = keepBox()!;
+    act(() => box.focus());
+    const space = key('keydown', ' ', {}, box);
+    expect(space.defaultPrevented).toBe(false);
+    expect(K.trProps!.listening).toBe(true); // Space did not become the editor's Space-pan
+    key('keyup', ' ', {}, box);
+    const enter = key('keydown', 'Enter', {}, box);
+    expect(enter.defaultPrevented).toBe(false);
+    act(() => box.click()); // the activation the browser performs for Space
+    expect(ui.keepProportions).toBe(true);
+  });
+
+  it('editor shortcuts still work with the checkbox focused (⌘Z, Delete, H/V)', () => {
+    mount();
+    drag(RECT.id, 'bottom-right', { x: 75, y: 70 });
+    expect(state.history).toHaveLength(1);
+    const box = keepBox()!;
+    act(() => box.focus());
+    clickKeep();
+    key('keydown', 'z', { metaKey: true }, box);
+    expect(state.history).toHaveLength(0); // undone
+    expect(ui.keepProportions).toBe(true); // undo does not touch the preference
+    key('keydown', 'h', {}, box);
+    expect(ui.tool).toBe('hand');
+    key('keydown', 'v', {}, box);
+    expect(ui.tool).toBe('select');
+    key('keydown', 'Delete', {}, box);
+    expect(state.doc.pages[0]!.elements).toHaveLength(0);
+  });
+});
+
+describe('stage 6 — Keep proportions through the real wiring (fake Konva Transformer, real shell and session)', () => {
+  const shapes = [
+    { name: 'rect', el: RECT, w0: 40, h0: 30, br: { x: 60, y: 50 }, onExpected: ONEXP_RECT },
+    { name: 'ellipse', el: WIDE, w0: 24, h0: 12, br: { x: 54, y: 72 }, onExpected: ONEXP_ELL },
+  ] as const;
+  for (const c of shapes) {
+    // A target that is NOT proportional: +30 mm right, +10 mm down from the bottom-right corner.
+    const to = { x: c.br.x + 30, y: c.br.y + 10 };
+
+    it(`${c.name}: OFF, no Shift → free corner resize`, () => {
+      mount([c.el], c.el.id);
+      drag(c.el.id, 'bottom-right', to);
+      expect(K.lastKonvaKeep).toBe(false);
+      const g = geometryOf(c.el.id);
+      expect(g).toMatchObject({ width: c.w0 + 30, height: c.h0 + 10 });
+      expect(ratioHeld(g, c.w0, c.h0)).toBe(false);
+    });
+
+    it(`${c.name}: ON, no Shift → the gesture-start ratio, fixed corner pinned`, () => {
+      mount([c.el], c.el.id);
+      clickKeep();
+      drag(c.el.id, 'bottom-right', to);
+      expect(K.lastKonvaKeep).toBe(true); // Konva proportional too — the two sides agree
+      const g = geometryOf(c.el.id);
+      expect(ratioHeld(g, c.w0, c.h0)).toBe(true);
+      expect(g).toEqual(c.onExpected); // AC-4: the controlling (larger start) axis exact, the other derived
+      expect({ x: g.x, y: g.y }).toEqual({ x: c.el.x, y: c.el.y });
+    });
+
+    it(`${c.name}: OFF + Shift → ratio`, () => {
+      mount([c.el], c.el.id);
+      drag(c.el.id, 'bottom-right', to, { shiftKey: true });
+      expect(K.lastKonvaKeep).toBe(true);
+      expect(geometryOf(c.el.id)).toEqual(c.onExpected); // Shift = the toggle
+    });
+
+    it(`${c.name}: ON + Shift → still ratio (Shift adds, never inverts)`, () => {
+      mount([c.el], c.el.id);
+      clickKeep();
+      drag(c.el.id, 'bottom-right', to, { shiftKey: true });
+      expect(K.lastKonvaKeep).toBe(true); // Shift adds; it does not invert the toggle
+      expect(geometryOf(c.el.id)).toEqual(c.onExpected);
+    });
+
+    it(`${c.name}: ON (and ON + Shift) → side handles stay independent`, () => {
+      mount([c.el], c.el.id);
+      clickKeep();
+      drag(c.el.id, 'middle-right', { x: c.br.x + 20, y: c.br.y + 15 });
+      expect(K.lastKonvaKeep).toBe(true); // Konva's flag is set, but its side branches ignore it — as the session's
+      expect(geometryOf(c.el.id)).toMatchObject({ width: c.w0 + 20, height: c.h0 });
+      drag(c.el.id, 'bottom-center', { x: c.br.x + 50, y: c.br.y + 15 }, { shiftKey: true });
+      expect(geometryOf(c.el.id)).toMatchObject({ width: c.w0 + 20, height: c.h0 + 15 });
+    });
+
+    it(`${c.name}: ON — a changed release is one 'Resize' and one save; a click, an unchanged release and Escape add nothing`, async () => {
+      mount([c.el], c.el.id);
+      clickKeep();
+      act(() => press(c.el.id, 'bottom-right'));
+      act(() => void moveMm({ x: c.br.x + 0.2, y: c.br.y + 0.1 })); // under 3 px
+      act(() => mouseup());
+      act(() => press(c.el.id, 'bottom-right'));
+      act(() => void moveMm(to));
+      act(() => void moveMm(c.br)); // back to the start in H
+      act(() => mouseup());
+      act(() => press(c.el.id, 'bottom-right'));
+      act(() => void moveMm(to));
+      key('keydown', 'Escape');
+      key('keyup', 'Escape');
+      expect(state.history).toHaveLength(0);
+      await flushSaves();
+      expect(puts).toEqual([]);
+      drag(c.el.id, 'bottom-right', to);
+      expect(state.history.map((h) => h.label)).toEqual(['Resize']);
+      await flushSaves();
+      expect(puts).toHaveLength(1);
+    });
+  }
+
+  it('a differently proportioned object uses ITS gesture-start ratio, not the previous object\'s', () => {
+    mount([RECT, WIDE], RECT.id);
+    clickKeep();
+    drag(RECT.id, 'bottom-right', { x: 90, y: 60 });
+    expect(ratioHeld(geometryOf(RECT.id), 40, 30)).toBe(true);
+    act(() => uiDispatch({ type: 'SET_SELECTION', ids: [WIDE.id] }));
+    drag(WIDE.id, 'bottom-right', { x: 84, y: 82 });
+    const g = geometryOf(WIDE.id);
+    expect(ratioHeld(g, 24, 12)).toBe(true); // 2:1
+    expect(ratioHeld(g, 40, 30)).toBe(false); // not the rect's 4:3
+  });
+
+  it('the ratio is the gesture-start box\'s: after a free resize changes the shape, ON uses the new ratio', () => {
+    mount();
+    drag(RECT.id, 'bottom-right', { x: 80, y: 50 }); // free: 60 × 30 (2:1)
+    expect(geometryOf(RECT.id)).toMatchObject({ width: 60, height: 30 });
+    clickKeep();
+    drag(RECT.id, 'bottom-right', { x: 100, y: 70 });
+    expect(ratioHeld(geometryOf(RECT.id), 60, 30)).toBe(true);
+  });
+
+  it('ON: typed and stepped W/H stay independent (W never changes H, H never changes W)', () => {
+    mount();
+    clickKeep();
+    const w = numField('w');
+    act(() => w.focus());
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(w, '60');
+      w.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => void w.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    expect(geometryOf(RECT.id)).toEqual({ x: 20, y: 20, width: 60, height: 30 });
+    const h = numField('h');
+    act(() => h.focus());
+    act(() => void h.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })));
+    expect(geometryOf(RECT.id)).toEqual({ x: 20, y: 20, width: 60, height: 31 });
+    act(() => void w.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true, cancelable: true })));
+    expect(geometryOf(RECT.id)).toEqual({ x: 20, y: 20, width: 55, height: 31 });
+  });
+
+  it('Konva and the session agree for the whole gesture: keepRatio is pinned at the press even if the preference changes mid-gesture', () => {
+    mount();
+    clickKeep();
+    act(() => press(RECT.id, 'bottom-right'));
+    expect(K.tr.keepRatioCalls).toEqual([true]); // pinned at the press
+    act(() => uiDispatch({ type: 'SET_KEEP_PROPORTIONS', value: false })); // not reachable by a user mid-drag
+    expect(K.trProps!.keepRatio).toBe(true);
+    expect(K.tr.keep).toBe(true);
+    act(() => void moveMm({ x: 90, y: 60 }));
+    act(() => mouseup());
+    expect(ratioHeld(geometryOf(RECT.id), 40, 30)).toBe(true); // the session's input was ON too
+    expect(K.trProps!.keepRatio).toBe(false); // released: back to the preference
+    expect(K.tr.keep).toBe(false);
+  });
+
+  it('ON: Alt keeps the centre fixed and stays proportional (accepted Alt behaviour)', () => {
+    mount();
+    clickKeep();
+    drag(RECT.id, 'bottom-right', { x: 70, y: 70 }, { altKey: true });
+    const g = geometryOf(RECT.id);
+    expect(ratioHeld(g, 40, 30)).toBe(true);
+    // AC-5: the centre within 0.005 mm, compared in doubled hundredths (float-safe).
+    expect(Math.abs(Math.round((2 * g.x + g.width) * 100) - 8000)).toBeLessThanOrEqual(1);
+    expect(Math.abs(Math.round((2 * g.y + g.height) * 100) - 7000)).toBeLessThanOrEqual(1);
+  });
+
+  it('ON: Q7 — a drag far past the fixed corner holds it at the ratio minimum box', () => {
+    mount();
+    clickKeep();
+    drag(RECT.id, 'bottom-right', { x: -40, y: -60 });
+    const g = geometryOf(RECT.id);
+    expect({ x: g.x, y: g.y }).toEqual({ x: 20, y: 20 });
+    expect(g).toMatchObject({ width: 5.34, height: 4.01 });
+  });
+
+  it('ON: Escape before the first preview render restores the live node; the next resize commits once, drawn as committed', async () => {
+    mount();
+    clickKeep();
+    act(() => {
+      press(RECT.id, 'bottom-right');
+      moveMm({ x: 90, y: 60 });
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    key('keyup', 'Escape');
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 20, y: 20, width: 40, height: 30 }));
+    expect(state.history).toHaveLength(0);
+    expect(K.trProps!.keepRatio).toBe(true);
+    drag(RECT.id, 'bottom-right', { x: 90, y: 60 });
+    expect(state.history.map((h) => h.label)).toEqual(['Resize']);
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs(geometryOf(RECT.id)));
+    await flushSaves();
+    expect(puts).toHaveLength(1);
   });
 });

@@ -33,7 +33,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "history []; selection [\"fd9a6c4a-831f-4a1f-8604-3ad113db056b\"]; tool select; pill null; PUTs 0"
+        "history []; selection [\"60fceabc-1a0c-4f78-b4e5-e0bea74c1eb6\"]; tool select; pill null; PUTs 0"
       ],
       "error": null
     },
@@ -42,7 +42,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "after release: history [\"Resize\"], hover cursor \"grab\"; second press: view 179.36422463600647 48 3.3464293968107235 → 219.36422463600647 78 3.3464293968107235, cursor \"grabbing\", history [\"Resize\"]; after keyup: history [\"Resize\",\"Resize\"]"
+        "after release: history [\"Resize\"], hover cursor \"grab\"; second press: view 79.36422463600648 48 3.3464293968107235 → 119.36422463600648 78 3.3464293968107235, cursor \"grabbing\", history [\"Resize\"]; after keyup: history [\"Resize\",\"Resize\"]"
       ],
       "error": null
     },
@@ -51,7 +51,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "history []; selection [\"7e5089fd-6ffa-4e3e-9d61-6bf6768124c8\"]; cursor after Escape \"grab\"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235"
+        "history []; selection [\"2a0b1e68-1bc1-48ee-9e3c-11bb432a4f8b\"]; cursor after Escape \"grab\"; view 79.36422463600648 48 3.3464293968107235 → 129.3642246360065 88 3.3464293968107235"
       ],
       "error": null
     },
@@ -60,7 +60,7 @@
       "kind": "mixed",
       "pass": true,
       "notes": [
-        "after blur: history [], selection [\"b0db29df-acea-42fd-9519-1772ffba6934\"], cursor \"default\"; next press: history [\"Resize\"] (blur and focus dispatched programmatically)"
+        "after blur: history [], selection [\"570c57d7-f146-42db-80e3-64d384f581eb\"], cursor \"default\"; next press: history [\"Resize\"] (blur and focus dispatched programmatically)"
       ],
       "error": null
     },
@@ -78,7 +78,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "view at press 179.36422463600647 48 3.3464293968107235; during 179.36422463600647 48 3.3464293968107235; after release + wheel 179.36422463600647 -72 3.3464293968107235; history [\"Resize\"]"
+        "view at press 79.36422463600648 48 3.3464293968107235; during 79.36422463600648 48 3.3464293968107235; after release + wheel 79.36422463600648 -72 3.3464293968107235; history [\"Resize\"]"
       ],
       "error": null
     },
@@ -123,7 +123,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "hover cursor \"grab\"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235; history []"
+        "hover cursor \"grab\"; view 79.36422463600648 48 3.3464293968107235 → 129.3642246360065 88 3.3464293968107235; history []"
       ],
       "error": null
     },
@@ -160,6 +160,96 @@
       "pass": true,
       "notes": [
         "pill during \"50.89 × 35.93 mm\"; after Escape live {\"x\":42,\"y\":69,\"radiusX\":12,\"radiusY\":9,\"scaleX\":1,\"scaleY\":1}, handles fit true; model {\"x\":30,\"y\":60,\"width\":24,\"height\":18}; history []; PUTs 0"
+      ],
+      "error": null
+    },
+    {
+      "name": "R19 rect: a real click on Keep proportions → checked, no history, no save; a real corner drag keeps 4:3 (AC-4), one Resize, one save, live node and handles = committed",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "checkbox before {\"checked\":false,\"disabled\":false} after click {\"checked\":true,\"disabled\":false}; after toggling: history [], PUTs 0; pill \"65.33 × 49 mm\"; committed {\"x\":20,\"y\":20,\"width\":65.33,\"height\":49}; history [\"Resize\"]; PUTs 1; live {\"x\":20,\"y\":20,\"width\":65.33,\"height\":49,\"scaleX\":1,\"scaleY\":1} fit true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R20 ellipse: toggled ON with the rect selected, it stays ON after selecting the ellipse; a real top-left drag keeps the ellipse's ratio, fixed corner kept",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "checkbox after selecting the ellipse {\"checked\":true,\"disabled\":false}; pill \"42 × 31.5 mm\"; committed {\"x\":12,\"y\":46.5,\"width\":42,\"height\":31.5}; history [\"Resize\"]; PUTs 1; live {\"x\":33,\"y\":62.25,\"radiusX\":21,\"radiusY\":15.75,\"scaleX\":1,\"scaleY\":1} fit true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R21 ON + Shift (real key): still proportional — Shift adds ratio, it does not invert the toggle",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "committed {\"x\":20,\"y\":20,\"width\":65.33,\"height\":49}; history [\"Resize\"]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R22 ON: side handles stay independent (middle-right, then bottom-center with Shift)",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "after middle-right {\"x\":20,\"y\":20,\"width\":57.93,\"height\":30}; after bottom-center + Shift {\"x\":20,\"y\":20,\"width\":57.93,\"height\":44.94}; history [\"Resize\",\"Resize\"]; live fit true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R23 ON + Alt (real key): centred and proportional — the centre (40, 35) kept",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "committed {\"x\":3.21,\"y\":7.41,\"width\":73.57,\"height\":55.18}; doubled-H centre offset (-1, 0) H/2"
+      ],
+      "error": null
+    },
+    {
+      "name": "R24 ON, no Shift: Q7 — a fast drag far past the fixed corner holds it; the ratio minimum box 5.34 × 4.01",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "pill \"5.34 × 4.01 mm\"; committed {\"x\":20,\"y\":20,\"width\":5.34,\"height\":4.01}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R25 ON rect: a move and Escape in ONE browser task (before the preview renders) → the LIVE node = model, scale 1, handles fitted; the next real resize commits once, drawn as committed and proportional",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "mutated in the task {\"width\":65.33,\"height\":49} (proportional true); after cancel live {\"x\":20,\"y\":20,\"width\":40,\"height\":30,\"scaleX\":1,\"scaleY\":1} fit true; history []; pill null; next {\"x\":20,\"y\":20,\"width\":65.33,\"height\":49}, history [\"Resize\"], PUTs 1, live fit true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R26 ON ellipse: Escape (real key) AFTER a rendered preview → the LIVE node = model, scale 1, handles fitted; zero saves",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "pill during \"44 × 33 mm\"; after Escape live {\"x\":42,\"y\":69,\"radiusX\":12,\"radiusY\":9,\"scaleX\":1,\"scaleY\":1} fit true; history []; PUTs 0"
+      ],
+      "error": null
+    },
+    {
+      "name": "R27 the checkbox by keyboard (real keys): Space on the focused checkbox toggles it natively; ⌘/Ctrl+Z and H from the checkbox still reach the editor",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "after Space {\"checked\":true,\"disabled\":false}, history [\"Resize\"]; after Ctrl+Z history []; after H tool hand; checkbox focused true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R28 locked object: the checkbox is disabled; read-only (save conflict) is covered in jsdom only",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "checkbox {\"checked\":false,\"disabled\":true} (lock applied programmatically)"
       ],
       "error": null
     }

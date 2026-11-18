@@ -142,6 +142,7 @@ describe('editor UI reducer — selection is session state', () => {
     view: { x: 0, y: 0, scale: PX_PER_MM },
     tool: 'select',
     selection: [],
+    keepProportions: false,
   };
 
   it('sets, toggles and clears', () => {
