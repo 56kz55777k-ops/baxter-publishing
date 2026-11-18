@@ -15,8 +15,18 @@
  *   transformend         → session.transformEnd(hadMouseUp) — on the TRANSFORMER (F4): a real
  *                          mouseup releases; an eventless stopTransform/destroy cancels
  *
- * When the session cancels (Escape, blur, readOnly), this stops Konva's
- * transform too. Under Hand or Space the handles stay visible but do not
+ * When the session cancels (Escape, blur, readOnly, eventless transformend),
+ * this stops Konva's transform too, then writes the element's CURRENT model
+ * geometry (scale 1) back onto the live node and re-fits the handles. The
+ * adapter's `transform` writes are imperative; react-konva re-applies only
+ * props that changed, and React may coalesce the preview and its clearing so
+ * that no prop changes at all — so a cancel must not rely on a render to
+ * undo them (stage 5 correction, Codex finding 1). "Current" means the
+ * element in the latest rendered document (`elementById`), never the
+ * geometry captured at the press; a newer document that has not rendered yet
+ * reaches the node as changed props when it does.
+ *
+ * Under Hand or Space the handles stay visible but do not
  * listen (D-4), and an anchor cursor left on Konva's inner element is
  * cleared (§4.7: the only write to it outside Konva, and it only clears).
  *
@@ -50,15 +60,18 @@ export interface SelectionTransformerProps {
   /** For the defensive start check (the same rule that decides `active`). */
   startContext: { spaceHeld: boolean; tool: EditorTool; readOnly: boolean; selectionCount: number };
   host: ResizeHost;
+  /** The element with this id in the latest rendered document, if it is a rect or ellipse — the
+   *  authoritative geometry a cancel restores (it may no longer be `target`: a conflict nulls it). */
+  elementById: (id: string) => ResizableElement | null;
   /** D-2 Keep proportions — stage 6. False until then. */
   keepProportions?: boolean;
 }
 
-export function SelectionTransformer({ target, active, startContext, host, keepProportions = false }: SelectionTransformerProps) {
+export function SelectionTransformer({ target, active, startContext, host, elementById, keepProportions = false }: SelectionTransformerProps) {
   const trRef = useRef<Konva.Transformer | null>(null);
   const mods = useRef<ResizeModifiers>({ shift: false, alt: false });
-  const latest = useRef({ target, startContext, keepProportions });
-  latest.current = { target, startContext, keepProportions };
+  const latest = useRef({ target, startContext, keepProportions, elementById });
+  latest.current = { target, startContext, keepProportions, elementById };
 
   // Attach by node id (plan §4.2). The node is rendered by ElementsLayer with `id={element.id}`.
   useLayoutEffect(() => {
@@ -93,11 +106,23 @@ export function SelectionTransformer({ target, active, startContext, host, keepP
       pressPoint: { x: pointer.x, y: pointer.y },
       keepProportions: keep,
       onEnded: (end) => {
+        if (end.committed) return; // the COMMIT's render carries the new geometry as changed props
         // A cancel ends the session while Konva still holds the press: stop Konva too. Its eventless
         // transformend then reaches an ended session — a no-op.
         if (end.reason !== 'release' && tr.isTransforming()) tr.stopTransform();
+        restoreLiveNode(tr, t.id);
       },
     });
+  }
+
+  /** Write the element's current model geometry (scale 1) onto its live node; re-fit the handles. */
+  function restoreLiveNode(tr: Konva.Transformer, id: string) {
+    const current = latest.current.elementById(id);
+    const node = tr.getStage()?.findOne(`#${id}`);
+    if (!node || !current) return; // the element is gone: its node is unmounted with it
+    node.setAttrs(nodeAttrsFor(current.type, current));
+    tr.forceUpdate();
+    tr.getLayer()?.batchDraw();
   }
 
   function anchorDragBoundFunc(oldAbs: Vector2d, newAbs: Vector2d, evt: MouseEvent) {

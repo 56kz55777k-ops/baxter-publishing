@@ -395,6 +395,93 @@ await check('R14 Hand tool: handles visible but inactive — an anchor press pan
   return hover.cursor === 'grab' && J.dataView !== I.dataView && J.history.length === 0;
 });
 
+/* ------------------------------------------- stage 5 correction (Codex finding 1) */
+// The LIVE node and the Transformer, read through Konva itself (not the model): position, size or radii, scale,
+// and whether the handles' box matches the node's box.
+async function live(page, which) {
+  return S(page, (w) => {
+    const st = window.__konva.stages[0];
+    const n = st.findOne('#' + window.__probe.ids[w]);
+    const tr = st.findOne('Transformer');
+    const nb = n.getClientRect({ skipStroke: true });
+    const geom = n.getClassName() === 'Rect'
+      ? { x: n.x(), y: n.y(), width: n.width(), height: n.height(), scaleX: n.scaleX(), scaleY: n.scaleY() }
+      : { x: n.x(), y: n.y(), radiusX: n.radiusX(), radiusY: n.radiusY(), scaleX: n.scaleX(), scaleY: n.scaleY() };
+    const handles = tr && tr.nodes().length ? { x: tr.x(), y: tr.y(), width: tr.width(), height: tr.height() } : null;
+    const fits = !handles || (Math.abs(handles.x - nb.x) < 0.5 && Math.abs(handles.y - nb.y) < 0.5 && Math.abs(handles.width - nb.width) < 0.5 && Math.abs(handles.height - nb.height) < 0.5);
+    return { geom, fits, handles, nodeBox: { x: nb.x, y: nb.y, width: nb.width, height: nb.height } };
+  }, which);
+}
+const expectedGeom = (type, g) => type === 'rect'
+  ? { x: g.x, y: g.y, width: g.width, height: g.height, scaleX: 1, scaleY: 1 }
+  : { x: g.x + g.width / 2, y: g.y + g.height / 2, radiusX: g.width / 2, radiusY: g.height / 2, scaleX: 1, scaleY: 1 };
+const sameGeom = (a, b) => Object.keys(b).every((k) => Math.abs(a[k] - b[k]) < 1e-9);
+
+for (const [label, which, anchor, d] of [['R15', 'rect', 'bottom-right', { x: 100, y: 70 }], ['R16', 'ellipse', 'bottom-right', { x: 100, y: 70 }]]) {
+  await check(`${label} ${which}: a move and Escape in ONE browser task (before React renders the preview) → the LIVE node is the model again, scale 1, handles fitted; the next resize commits once`, 'mixed', async (page, n) => {
+    await select(page, which);
+    const I = await info(page);
+    const a = anchorAt(I, which, anchor);
+    const model0 = I.els[I.ids[which]];
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down(); // real press on the anchor
+    // Programmatic step (as in Codex's reproduction): one synchronous task delivers Konva's window mousemove,
+    // then Escape — React has no chance to render the preview in between.
+    const during = await S(page, ({ a, d, w }) => {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: a.x + d.x, clientY: a.y + d.y, bubbles: true, buttons: 1 }));
+      const n = window.__konva.stages[0].findOne('#' + window.__probe.ids[w]);
+      const mutated = n.getClassName() === 'Rect' ? n.width() : n.radiusX() * 2;
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      return { mutated };
+    }, { a, d, w: which });
+    await page.waitForTimeout(100);
+    const L = await live(page, which);
+    const J = await info(page);
+    await page.mouse.up();
+    await S(page, () => document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true, cancelable: true })));
+    // A later resize with real input, released: exactly one commit and the drawn node equals it.
+    const I2 = await info(page);
+    const a2 = anchorAt(I2, which, anchor);
+    await page.mouse.move(a2.x, a2.y);
+    await page.mouse.down();
+    await page.mouse.move(a2.x + 60, a2.y + 40, { steps: 8 });
+    await page.mouse.up();
+    await settleSaves(page);
+    const K2 = await info(page);
+    const L2 = await live(page, which);
+    const g2 = K2.els[K2.ids[which]];
+    n.push(`width during the task ${during.mutated} (model ${model0.width}); after cancel: live ${JSON.stringify(L.geom)}, handles fit ${L.fits}; model ${JSON.stringify(J.els[J.ids[which]])}; history ${JSON.stringify(J.history)}; pill ${J.pill}; next resize: ${JSON.stringify(g2)}, history ${JSON.stringify(K2.history)}, PUTs ${K2.puts}, live ${JSON.stringify(L2.geom)}, fit ${L2.fits}`);
+    return during.mutated !== model0.width
+      && sameGeom(L.geom, expectedGeom(which, model0)) && L.fits
+      && JSON.stringify(J.els[J.ids[which]]) === JSON.stringify(model0) && J.history.length === 0 && J.pill === null
+      && JSON.stringify(K2.history) === '["Resize"]' && K2.puts === 1 && g2.width !== model0.width
+      && sameGeom(L2.geom, expectedGeom(which, g2)) && L2.fits;
+  });
+}
+
+for (const [label, which] of [['R17', 'rect'], ['R18', 'ellipse']]) {
+  await check(`${label} ${which}: Escape AFTER a rendered preview → the LIVE node is the model again, scale 1, handles fitted; zero saves`, 'real', async (page, n) => {
+    await select(page, which);
+    const I = await info(page);
+    const a = anchorAt(I, which, 'bottom-right');
+    const model0 = I.els[I.ids[which]];
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(a.x + 90, a.y + 60, { steps: 10 });
+    await page.waitForTimeout(100);
+    const mid = await info(page);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+    const L = await live(page, which);
+    await page.mouse.up();
+    await settleSaves(page);
+    const J = await info(page);
+    n.push(`pill during "${mid.pill}"; after Escape live ${JSON.stringify(L.geom)}, handles fit ${L.fits}; model ${JSON.stringify(J.els[J.ids[which]])}; history ${JSON.stringify(J.history)}; PUTs ${J.puts}`);
+    return mid.pill !== null && sameGeom(L.geom, expectedGeom(which, model0)) && L.fits
+      && J.history.length === 0 && J.puts === 0 && J.pill === null;
+  });
+}
+
 /* ----------------------------------------------------------------- report */
 await browser.close();
 server.close();
@@ -413,7 +500,7 @@ const lines = [
   '|---|---|---|---|',
   ...results.map((r) => `| ${r.name} | ${r.kind} | ${r.pass ? 'PASS' : 'FAIL'} | ${(r.notes.join('; ') + (r.error ? ` ERROR ${r.error.split('\n')[0]}` : '')).replace(/\|/g, '/')} |`),
   '',
-  'Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it).',
+  'Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering).',
 ];
 fs.writeFileSync(path.join(OUT, 'summary.md'), lines.join('\n') + '\n');
 fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ browser: `chromium ${version}`, results }, null, 2) + '\n');

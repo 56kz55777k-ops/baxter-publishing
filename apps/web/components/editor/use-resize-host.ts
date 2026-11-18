@@ -72,19 +72,24 @@ export function useResizeHost(options: ResizeHostOptions): ResizeHost {
   const sessions = useRef<ResizeSession[]>([]);
   const opts = useRef(options);
   opts.current = options;
+  /** True between the layout effect's setup and its cleanup. Set in setup (not at creation) so
+   *  StrictMode's simulated cleanup → setup leaves a mounted host live. */
+  const mounted = useRef(false);
 
   // A LAYOUT effect: its cleanup runs synchronously in React's commit, so an owner unmounted
-  // synchronously (flushSync) from inside a session callback is disposed before that callback
-  // returns, and the session then skips every later callback (stage 4 correction).
-  useLayoutEffect(
-    () => () => {
+  // synchronously (flushSync) from inside a session callback is torn down before that callback
+  // returns: the session then skips every later callback (stage 4 correction), and `onEnd` below
+  // stops between its own steps (stage 5 correction).
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       // Unmount: dispose every session still listening (live or holding a residual), silently.
       for (const s of sessions.current) s.dispose();
       sessions.current = [];
       liveRef.current = null;
-    },
-    []
-  );
+    };
+  }, []);
 
   const begin = useCallback((b: ResizeBegin): ResizeSession | null => {
     const o = opts.current;
@@ -118,9 +123,13 @@ export function useResizeHost(options: ResizeHostOptions): ResizeHost {
         onCommit: (elementId, payload) => opts.current.onResize(elementId, payload),
         onEnd: (end) => {
           if (liveRef.current === session) liveRef.current = null;
+          if (!mounted.current) return;
           setCursor(null);
           opts.current.onSpaceSync(end.spaceHeld);
+          // Any owner callback may have unmounted the stage synchronously: re-check before each next step.
+          if (!mounted.current) return;
           if (end.refit) opts.current.onRefit(end.refit);
+          if (!mounted.current) return;
           b.onEnded?.(end);
         },
       }

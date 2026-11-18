@@ -17,6 +17,13 @@
  * stage 1), fires `transformend` with the mouseup event on release and with
  * none on `stopTransform()`. Real Konva is exercised separately in the
  * Chromium probe (`docs/evidence/slice-d-stage5-probe/`).
+ *
+ * The fake shapes keep the node's LIVE attributes as react-konva 19 does in
+ * its default (non-strict) mode: a render applies only the props that changed
+ * since the previous render, and `setAttrs` (the adapter's imperative write)
+ * changes the live attributes directly. So a render whose props equal the
+ * previous render's does not repair an imperative write — the condition behind
+ * Codex's stage 5 finding 1.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
@@ -29,12 +36,13 @@ import {
   newEllipseElement,
   newRectElement,
   type EditorDoc,
+  updateElement,
   type EditorElement,
   type ResizeAnchor,
 } from '@baxter/domain';
 import { AUTOSAVE_DEBOUNCE_MS } from '@/components/editor/state/autosave-core';
 import { fitUnitView } from '@/components/editor/geometry';
-import { ellipseNodeAttrs, rectNodeAttrs } from '@/components/editor/node-attrs';
+import { ellipseNodeAttrs, nodeAttrsFor, rectNodeAttrs } from '@/components/editor/node-attrs';
 import { anchorPositionPx, konvaStep, type PxBox } from './support/slice-d-konva-port';
 
 /* -------------------------------------------------------------------------- */
@@ -44,6 +52,8 @@ import { anchorPositionPx, konvaStep, type PxBox } from './support/slice-d-konva
 interface FakeNode {
   kind: 'rect' | 'ellipse';
   props: Record<string, unknown>;
+  /** The node's live attributes: changed props on each render, plus every setAttrs. */
+  live: Record<string, unknown>;
   setAttrsCalls: Record<string, unknown>[];
   setAttrs(a: Record<string, unknown>): void;
 }
@@ -68,11 +78,15 @@ vi.mock('react-konva', async () => {
       const n = (K.nodes.get(p.id) as FakeNode | undefined) ?? {
         kind,
         props: {},
+        live: {},
         setAttrsCalls: [],
         setAttrs(a: Record<string, unknown>) {
           this.setAttrsCalls.push(a);
+          Object.assign(this.live, a);
         },
       };
+      // react-konva's non-strict update: apply only the props that changed since the last render.
+      for (const [k, v] of Object.entries(p)) if (!Object.is(n.props[k], v)) n.live[k] = v;
       n.props = p;
       K.nodes.set(p.id, n);
     }
@@ -130,6 +144,10 @@ function makeTransformer() {
     },
     getStage: () => stage,
     getLayer: () => ({ batchDraw() {} }),
+    forceUpdateCalls: 0,
+    forceUpdate() {
+      tr.forceUpdateCalls++;
+    },
     isTransforming: () => tr.transforming,
     stopTransform() {
       tr.stopCalls++;
@@ -191,6 +209,13 @@ const view = () => {
 };
 const pill = () => container.querySelector('[data-testid="size-readout"]')?.textContent ?? null;
 const node = (id: string) => K.nodes.get(id) as FakeNode;
+/** The live node's geometry and scale — what Konva would draw. */
+const liveGeom = (id: string) => {
+  const l = node(id).live;
+  return node(id).kind === 'rect'
+    ? { x: l.x, y: l.y, width: l.width, height: l.height, scaleX: l.scaleX, scaleY: l.scaleY }
+    : { x: l.x, y: l.y, radiusX: l.radiusX, radiusY: l.radiusY, scaleX: l.scaleX, scaleY: l.scaleY };
+};
 const geometryOf = (id: string) => {
   const e = findElement(state.doc, id) as EditorElement & { x: number; y: number; width: number; height: number };
   return { x: e.x, y: e.y, width: e.width, height: e.height };
@@ -245,7 +270,18 @@ function key(type: 'keydown' | 'keyup', k: string, init: KeyboardEventInit = {},
   return e;
 }
 
-/** Advance past the debounce in steps (as the autosave seam test does), letting each save settle. */
+/**
+ * Advance past the debounce in steps (as the autosave seam test does), each in its own `act`.
+ *
+ * Why steps: the hook's `isDirty()` reads React state (`doc !== savedDoc`). A save's acknowledgement
+ * (`SAVED`) only becomes visible to it once React renders, and React renders at an `act` boundary. One
+ * long advance inside a single `act` keeps that state stale, so after the first save the scheduler still
+ * sees the document as dirty and schedules redundant attempts (3 PUTs for one commit when measured).
+ * It is NOT the max-wait timer firing during the in-flight save: `AutosaveScheduler` clears max-wait
+ * before it calls `performSave`. Separate `act`s model the browser, where React renders between timer
+ * tasks; the real-Konva probe's R1 counts exactly one PUT for one resize. (Corrected after Codex's
+ * stage 5 review; autosave behaviour is unchanged.)
+ */
 async function flushSaves() {
   for (const ms of [AUTOSAVE_DEBOUNCE_MS + 10, 500, 1000, 2000, 4000]) {
     await act(async () => {
@@ -640,5 +676,126 @@ describe('stage 5 — viewport freeze and the deferred refit', () => {
     key('keydown', 'z', { metaKey: true }); // nothing listening, nothing thrown
     rem.mockRestore();
     errors.mockRestore();
+  });
+});
+
+/* ========================================================================== */
+
+describe('stage 5 correction — a cancelled resize restores the LIVE node (Codex finding 1)', () => {
+  const escapeRaw = () => void document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  const cases = [
+    { name: 'rect', el: RECT, to: { x: 75, y: 70 } },
+    { name: 'ellipse', el: ELLIPSE, to: { x: 70, y: 95 } },
+  ] as const;
+  const modelAttrs = (el: EditorElement & { x: number; y: number; width: number; height: number }) => {
+    const g = geometryOf(el.id);
+    return nodeAttrsFor(el.type as 'rect' | 'ellipse', g);
+  };
+
+  for (const c of cases) {
+    it(`${c.name}: Escape BEFORE the first preview render (press, move, Escape in one act) → live node = model, scale 1`, async () => {
+      mount([c.el], c.el.id);
+      const before = liveGeom(c.el.id);
+      act(() => {
+        press(c.el.id);
+        moveMm(c.to);
+        expect(node(c.el.id).live.width ?? node(c.el.id).live.radiusX).not.toBe(before.width ?? before.radiusX); // the imperative write happened
+        escapeRaw();
+      });
+      expect(liveGeom(c.el.id)).toEqual(modelAttrs(c.el));
+      expect(liveGeom(c.el.id)).toEqual(before);
+      expect(geometryOf(c.el.id)).toEqual({ x: c.el.x, y: c.el.y, width: c.el.width, height: c.el.height });
+      expect(state.history).toHaveLength(0);
+      expect(pill()).toBeNull();
+      expect(node(c.el.id).props).toMatchObject(modelAttrs(c.el)); // no preview left in the props
+      expect(K.tr.transforming).toBe(false);
+      expect(K.tr.forceUpdateCalls).toBeGreaterThan(0); // the handles re-fit the restored node
+      await flushSaves();
+      expect(puts).toEqual([]);
+    });
+
+    it(`${c.name}: Escape AFTER a rendered preview → live node = model, scale 1`, async () => {
+      mount([c.el], c.el.id);
+      const before = liveGeom(c.el.id);
+      act(() => press(c.el.id));
+      act(() => void moveMm(c.to));
+      expect(pill()).not.toBeNull(); // the preview rendered
+      key('keydown', 'Escape');
+      expect(liveGeom(c.el.id)).toEqual(before);
+      expect(liveGeom(c.el.id)).toEqual(modelAttrs(c.el));
+      expect(state.history).toHaveLength(0);
+      expect(pill()).toBeNull();
+      await flushSaves();
+      expect(puts).toEqual([]);
+    });
+
+    it(`${c.name}: after a before-render cancel, the next resize works and its changed release commits exactly once`, async () => {
+      mount([c.el], c.el.id);
+      act(() => {
+        press(c.el.id);
+        moveMm(c.to);
+        escapeRaw();
+      });
+      key('keyup', 'Escape');
+      act(() => press(c.el.id));
+      act(() => void moveMm(c.to));
+      act(() => mouseup());
+      expect(state.history.map((h) => h.label)).toEqual(['Resize']);
+      expect(geometryOf(c.el.id)).not.toEqual({ x: c.el.x, y: c.el.y, width: c.el.width, height: c.el.height });
+      expect(liveGeom(c.el.id)).toEqual(modelAttrs(c.el)); // the committed geometry is what is drawn
+      await flushSaves();
+      expect(puts).toHaveLength(1);
+    });
+  }
+
+  it('a newer document update is not overwritten: the element moved mid-resize (rendered), then Escape → live = the NEW model', () => {
+    mount();
+    act(() => press(RECT.id));
+    act(() => void moveMm({ x: 75, y: 70 }));
+    act(() => docDispatch({ type: 'COMMIT', nextDoc: updateElement(state.doc, RECT.id, { x: 25 }), selection: [RECT.id], label: 'Move' }));
+    key('keydown', 'Escape');
+    expect(geometryOf(RECT.id)).toEqual({ x: 25, y: 20, width: 40, height: 30 });
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 25, y: 20, width: 40, height: 30 }));
+  });
+
+  it('a newer document update in the SAME act as the move and Escape (not yet rendered) still ends drawn as the new model', () => {
+    mount();
+    act(() => {
+      press(RECT.id);
+      moveMm({ x: 75, y: 70 });
+      docDispatch({ type: 'COMMIT', nextDoc: updateElement(state.doc, RECT.id, { x: 25 }), selection: [RECT.id], label: 'Move' });
+      escapeRaw();
+    });
+    expect(geometryOf(RECT.id)).toEqual({ x: 25, y: 20, width: 40, height: 30 });
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 25, y: 20, width: 40, height: 30 }));
+  });
+
+  it('a save conflict (read-only) in the same act as the move: the handles detach, and the live node is still restored', () => {
+    mount();
+    act(() => {
+      press(RECT.id);
+      moveMm({ x: 75, y: 70 });
+      docDispatch({ type: 'SAVE_CONFLICT', serverRevision: 9 });
+    });
+    expect(K.tr.attached).toEqual([]);
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 20, y: 20, width: 40, height: 30 }));
+    expect(state.history).toHaveLength(0);
+  });
+
+  it('blur and an eventless transformend restore the live node too', () => {
+    mount();
+    act(() => {
+      press(RECT.id);
+      moveMm({ x: 75, y: 70 });
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 20, y: 20, width: 40, height: 30 }));
+    act(() => {
+      press(RECT.id);
+      moveMm({ x: 75, y: 70 });
+      K.tr.stopTransform();
+    });
+    expect(liveGeom(RECT.id)).toEqual(rectNodeAttrs({ x: 20, y: 20, width: 40, height: 30 }));
+    expect(state.history).toHaveLength(0);
   });
 });

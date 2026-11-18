@@ -1,6 +1,7 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–5 implemented on `slice-d-resize`; at the stage 5 review checkpoint (§6.9).**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–5 implemented on `slice-d-resize`; stage 5 reviewed and corrected — at the stage 5 correction review checkpoint (§6.10).**
+- **Stage 5 correction (2026-11-18):** Codex reviewed stage 5 (`3fcad11`): accept after corrections, two P2 findings (§0.14) — a cancel before the preview rendered left the live Konva node resized; the host's end callback went on after an owner callback unmounted the stage. Ben authorized the corrections only (§0.15). Corrected in §6.10, with the autosave test explanation corrected. Stage 6 needs Codex's review of the correction, Ben's acceptance and his separate go.
 - **Stage 5 (2026-11-14):** Ben accepted Codex's review of the stage 4 correction `fe5ca33` (the disposal finding closed) and authorized **stage 5 only** (§0.13): the Konva wiring. Resize now works in the editor for one selected, unlocked rect or ellipse; Shift supplies ratio mode. Stage 6 (the Keep proportions toggle) needs Codex's review of stage 5, Ben's acceptance and his separate go.
 - **Stage 4 correction (2026-11-14):** Codex reviewed stage 4 (`8d2cd0c`) with one P2 lifecycle finding — an owner that disposes the session inside a termination callback still received the later callbacks (§0.12). Corrected in §6.8. Stage 5 needs Codex's review of the correction, Ben's acceptance and his separate go.
 - **Stage 4 (2026-11-12):** Ben accepted Codex's stage 3 correction review, the cleanup `17b38cb` and the Q2/Q7 record `201a474`, made four plan clarifications (§0.11), and authorized **stage 4 only**: the Konva-free resize session controller and its policies (§4.3–§4.6, §6.7). Stage 5 (Konva wiring) needs Ben's separate go after Codex's review of stage 4.
@@ -188,6 +189,18 @@ Ben accepted Codex's review of the cleanup `17b38cb` and of the Q2/Q7 record `20
 - Tests through the actual adapter and shell entry points (changed, no-op and cancelled releases; release before React renders; rect and ellipse preview geometry; Space held through release/Escape vs blur; focused-control keyup; deferred refit) with focused negative controls; report separately what ran against real Konva, in jsdom or through the port, and which native checks remain NOT EXECUTED. No write testing against a preview that shares production data.
 - **Excluded:** stages 6–9, the Q5 harness, Q6 instrumentation, production writes, dependency or lockfile changes, any bundle-allowance increase. Q3 stays resize-only.
 ---
+
+### 0.14 Codex review of stage 5 `3fcad11` (2026-11-18) — answered in the stage 5 correction
+
+Verdict: accept after corrections; two P2 findings, both reproduced by Codex. Hosted CI on `3fcad11` passed (44 files / 676 tests, Node 24.22.2, budget +986 B of +1024 B). Codex reran the 14-case probe (14 / 14, Chromium 157) and found the scope as authorized.
+1. **P2 — a cancel before the preview renders leaves the live node resized** (`SelectionTransformer.tsx` 95–98). The adapter's `transform` writes the node imperatively; a cancel only stopped Konva and cleared the preview state. When React coalesces the preview and its clearing, the rendered props never change, and react-konva's non-strict updates apply only changed props — so nothing repaired the node. Reproduced in Chromium 157 with real Konva: after a move and Escape delivered in one browser task, the node stayed 69.88 × 50.92 mm while the document stayed 40 × 30 mm with no history entry. Required: restore authoritative model geometry and scale on cancellation, independent of a preview render; rect and ellipse, before and after a rendered preview; live node attributes asserted.
+2. **P2 — the host's end callback continues after an owner callback unmounts the stage** (`use-resize-host.ts` 122–124). Reproduced with the real hook and an injected `onSpaceSync` that unmounts synchronously: `space → unmounted → refit-after-unmount → adapter-after-unmount`. Not observed in ordinary production use.
+- Notes: W16 is equivalent for the tested scheduling case only; keeping layout cleanup is right. `EditorShell.onResize`'s refs are updated during render — they do not observe queued reducer actions before render. **The briefing's autosave explanation was wrong:** `AutosaveScheduler` clears max-wait before `performSave`, so max-wait cannot fire during that save; the staged advances matter because React applies the save acknowledgement at `act` boundaries. No double-save defect was demonstrated (R1 counts one PUT).
+
+### 0.15 Ben's authorization of the stage 5 corrections (2026-11-18)
+
+- Fix the two findings, add the regressions, correct the autosave explanation; nothing else. (1) Cancellation restores authoritative model geometry and scale independently of whether React rendered a preview, refreshing the Transformer; from the current document, never stale captured geometry over a newer update. Rect and ellipse, before and after a rendered preview; live position, size/radii and scale asserted with document, history and preview; a later resize still works and a changed release commits once; a real Chromium/Konva regression for the same-task move/Escape, failing before and passing after. (2) Track host lifetime across callback boundaries; tests for unmount inside `onSpaceSync` and `onRefit`, the existing `onResize` case, normal order, deferred refit, exactly-once termination and residual suppression; valid under StrictMode; the injected reproduction distinguished from production behaviour. (3) Correct the autosave explanation in the briefing, test comments and handoff; no autosave behaviour change.
+- **Excluded:** stage 6, merging, deploying, dependency versions, any bundle-allowance increase.
 
 ## 1 · Approved decisions (Ben, 2026-10-22)
 
@@ -962,7 +975,32 @@ Each stage is one or two commits on `slice-d-resize`. Every commit runs the full
 
 **Not executed:** Firefox and WebKit (no builds here) — including the Firefox release-point timing and Ctrl+wheel page zoom, and WebKit's keyboard activation; trackpad pinch; real window blur (programmatic); the Next app itself (the probe bundles the editor tree without Next, Supabase or the API route); any production write (stage 8B, Q1/Q6); the Q5 harness (8A).
 
-**Checkpoint.** Codex reviews stage 5; stage 6 needs Ben's acceptance and his separate go.
+**Checkpoint.** Codex reviews stage 5; stage 6 needs Ben's acceptance and his separate go. *(Reviewed 2026-11-18: two P2 findings, §0.14; corrected in §6.10.)*
+
+### 6.10 Stage 5 correction (2026-11-18; awaiting Codex's review)
+
+**Scope.** The two P2 findings and the autosave explanation (§0.14–§0.15) only. No dependency, lockfile, CI, persistence or budget change; no stage 6.
+
+**Finding 1 — cancel restores the live node.**
+- `SelectionTransformer.tsx`: on every end that did not commit (Escape, blur, readOnly, eventless `transformend`, and a release that committed nothing), after stopping Konva the adapter writes `nodeAttrsFor(type, current element)` — position, size or radii, **scale 1** — onto the live node, calls `tr.forceUpdate()` and redraws the layer. A committed release is skipped: its COMMIT render carries the new geometry as changed props (restoring there first would leave the node at the old geometry, because the committed props equal the preview props React last applied — negative control C3).
+- "Current" is the element in the latest rendered document, through a new `elementById` prop from `SpreadStage` — not the geometry captured at the press, and not `target`, which a read-only conflict nulls. A newer document that has not rendered yet reaches the node as changed props when it renders.
+- Implementation choice 36.
+
+**Finding 2 — host lifetime.**
+- `use-resize-host.ts`: a `mounted` ref, set in the layout effect's setup (so StrictMode's simulated cleanup → setup leaves a mounted host live) and cleared in its cleanup. `onEnd` returns before the Space sync if the host is gone, and re-checks after `onSpaceSync` and after `onRefit`, so a synchronous unmount inside either stops the refit and the adapter's end hook. Implementation choice 37.
+
+**Autosave explanation (no behaviour change).** The staged fake-timer advances in `slice-d-shell-resize.test.tsx` exist because the hook's `isDirty()` reads React state, which takes the save acknowledgement only when React renders at an `act` boundary. Measured: one 6 s advance inside one `act` → 3 PUTs for one commit (redundant attempts on stale dirty state); with the acknowledgement rendered, no further PUT follows. Max-wait does not fire during the in-flight save — `AutosaveScheduler` clears it before `performSave`. The probe's R1 counts one PUT. The test comment, the briefings and `HANDOFF.md` are corrected.
+
+**Tests.**
+- `slice-d-shell-resize.test.tsx` (25 → 35): the fake shapes now keep **live** attributes as react-konva's non-strict mode does (a render applies only changed props; `setAttrs` writes directly). New: rect and ellipse × {Escape before the first preview render, Escape after a rendered preview, the next resize after a before-render cancel commits once and is drawn as committed}; a newer document update mid-resize (rendered, and unrendered in the same `act`) is not overwritten; a read-only conflict in the same `act` as the move; blur and an eventless `transformend`. Each asserts live position, size/radii and scale with document, history, pill and PUTs.
+- `slice-d-resize-host.test.tsx` (6 → 17): release, Escape and blur × unmount inside `onSpaceSync` (no refit, no adapter end) and inside `onRefit` (no adapter end); the stage 4 `onResize` case; a mounted owner's order (Space, refit with the latest size, adapter last, exactly once); residual suppression after the end; StrictMode mounted (every callback) and StrictMode unmounted (stops). These are **injected** unmounts; production's Space setter and refit do not unmount the stage.
+- **Red on `3fcad11`'s source:** 11 of the 52 fail (4 shell, 7 host). The after-render, newer-document-rendered, read-only and next-resize cases pass on the old code too: there the preview's clearing changes props, which repairs the node — they are controls.
+- **Negative controls on the corrected code (52 tests):** no restore 4 · no `forceUpdate` 2 · restore also on a committed release 2 · press-time geometry instead of the current element 9 · `mounted` check after `onSpaceSync` removed 4 · after `onRefit` removed 3 · `mounted` never set in setup 24 · `mounted` set only at creation (StrictMode) 2. **Equivalent:** the `mounted` check at the top of `onEnd` (a host torn down before `onEnd` has already disposed the session, which never calls it) and `target` instead of `elementById` (a read-only cancel runs after a render that showed the preview, so the clearing repairs the node) — both kept as defence.
+- **Real Konva, Chromium (probe R15–R18, new):** R15 rect and R16 ellipse — a real anchor press, then one synthetic `mousemove` and `Escape` keydown in a single browser task (Codex's ordering) → live node = model, scale 1, Transformer box = node box, zero history, pill cleared; then a real resize commits one `Resize`, one PUT, drawn as committed. R17 rect and R18 ellipse — Escape by real input after a rendered preview → live node = model. **On `3fcad11`'s source: 16 / 18** (R15: node 69.88 × 50.92 mm while the model is 40 × 30; the next press at the model's anchor landed inside the oversized node and made a **Move**, not a resize. R16: radii 26.94 / 19.46 vs 12 / 9). **Corrected: 18 / 18.**
+
+**Not executed:** Firefox and WebKit; human-paced input for the before-render ordering (R15–R16 force it with synthetic events in one task, as Codex did); real OS focus loss and trackpad pinch; the Next app and Vercel deployment; any production write.
+
+**Checkpoint.** Codex reviews the correction; stage 6 needs Ben's acceptance and his separate go.
 
 ---
 
@@ -1396,7 +1434,9 @@ Codex checkpoints at stage 0 (r1 done, r2 now), stage 2 and stage 9; the stage 1
 32. **Ended sessions are kept until their key sequences finish** (stage 5, Codex §0.12): `useResizeHost` never disposes a session on release or cancel; a session detaches itself when its last residual keyup arrives, and the host forgets detached sessions at the next press. Every session still listening is disposed on unmount.
 33. **The host disposes in a layout-effect cleanup**, so a synchronous unmount from inside a session callback disposes the session before that callback returns (the stage 4 correction then skips every later callback). With React's default batching the owner is still mounted while the callbacks run.
 34. **Space sync:** the session swallows Space while it lives; at its end the host calls the shell's `syncSpaceHeld(end.spaceHeld)` (blur reports false). The later keyup, which the session lets through, clears it in the shell hook as before.
-35. **The shell's `onResize` reads the latest document and selection through refs**, not the render closure, so a release delivered before React has re-rendered commits against current state.
+35. **The shell's `onResize` reads the latest document and selection through refs**, not the render closure, so a release delivered before React has re-rendered commits against current state. (Codex, §0.14: the refs are updated during render, so "current" means the latest rendered state; they do not observe queued reducer actions before render.)
+36. **A cancel restores the live node imperatively** (stage 5 correction): every end that commits nothing writes the current element's `nodeAttrsFor` (scale 1) onto the node and refits the Transformer, because react-konva re-applies only changed props and a coalesced preview changes none. The current element comes from the latest rendered document (`elementById`), so a newer document is never overwritten with press-time geometry; a committed release is left to its render.
+37. **The host checks its own lifetime between `onEnd`'s steps** (stage 5 correction): a `mounted` ref set in the layout effect's setup and cleared in its cleanup; a synchronous unmount inside `onSpaceSync` or `onRefit` stops the rest.
 
 ### 10.3 Genuinely open
 - **Q1 — Ben; blocks stage 8B.** Approve D's production-write allowances?

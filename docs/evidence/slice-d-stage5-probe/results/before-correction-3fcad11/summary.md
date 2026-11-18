@@ -1,0 +1,29 @@
+# Slice D stage 5 — real-Konva probe results
+
+Browser: Chromium 153.0.8010.12 (headless, Playwright 1.62.1), device pixel ratio 1, viewport 1280 × 900.
+Konva 10.3.0, react-konva 19.2.5. Firefox and WebKit: NOT EXECUTED (no builds in this environment).
+
+**16 / 18 PASS.**
+
+| Case | Input | Result | Notes |
+|---|---|---|---|
+| R1 changed release (rect, bottom-right): pill = commit; one Resize; one save | real | PASS | scale 3.3464293968107235; pill during drag "71.97 × 65.86 mm"; cursor during drag "nwse-resize"; committed {"x":20,"y":20,"width":71.97,"height":65.86}; expected 71.97 × 65.86; history ["Resize"]; PUTs 1 |
+| R2 anchor click (no movement): zero history, zero saves | real | PASS | history []; PUTs 0; geometry {"x":20,"y":20,"width":40,"height":30} |
+| R3 out and back to the press point: unchanged in H → zero history, zero saves | real | PASS | history []; PUTs 0; geometry {"x":20,"y":20,"width":40,"height":30} |
+| R4 Escape mid-drag: cancelled; later moves and mouseup do nothing; selection kept; zero saves | real | PASS | history []; selection ["bb5b655c-eea5-4c81-a74d-ab5bfc0d62b1"]; tool select; pill null; PUTs 0 |
+| R5 Space held through release (Q2 a): one commit; handles then inactive — a new press on the anchor pans; after keyup it resizes again | real | PASS | after release: history ["Resize"], hover cursor "grab"; second press: view 179.36422463600647 48 3.3464293968107235 → 219.36422463600647 78 3.3464293968107235, cursor "grabbing", history ["Resize"]; after keyup: history ["Resize","Resize"] |
+| R6 Space held through Escape: zero commits, selection kept; a new press pans | real | PASS | history []; selection ["5f96a86c-d25c-458e-9988-13ed061c46d8"]; cursor after Escape "grab"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235 |
+| R7 Space held through window blur: zero commits, selection kept, Space cleared — the next anchor press resizes (no stuck pan) | mixed | PASS | after blur: history [], selection ["73547d6f-a96a-409b-889f-d3126c3ac633"], cursor "default"; next press: history ["Resize"] (blur and focus dispatched programmatically) |
+| R8 Q7 (a) with Shift: a fast drag far past the fixed corner holds it — the ratio minimum box 5.34 × 4.01 | real | PASS | pill "5.34 × 4.01 mm"; committed {"x":20,"y":20,"width":5.34,"height":4.01} |
+| R9 wheel during the resize is consumed (no pan, no zoom); after release it pans again | real | PASS | view at press 179.36422463600647 48 3.3464293968107235; during 179.36422463600647 48 3.3464293968107235; after release + wheel 179.36422463600647 -72 3.3464293968107235; history ["Resize"] |
+| R10 ellipse, top-left: pill = commit; the fixed corner (bottom-right) unchanged | real | PASS | pill "36.25 × 28 mm"; committed {"x":17.75,"y":50,"width":36.25,"height":28} |
+| R11 native control activation (Chromium): Space on a focused button during a resize, released after it, does not click | mixed | PASS | control click count 1; focus after the anchor press "BODY"; clicks after resize 1; history ["Resize"] |
+| R12 native control activation (Chromium): Enter on a focused button during a resize does not click, during or after | mixed | PASS | control click count 1; clicks after resize 1; history ["Resize"] |
+| R13 shortcuts mid-resize do nothing (⌘Z, Delete, H); they work after | real | PASS | mid: tool select, elements 2; after release + Ctrl+Z: history [], rect {"x":20,"y":20,"width":40,"height":30} |
+| R14 Hand tool: handles visible but inactive — an anchor press pans, nothing resizes | real | PASS | hover cursor "grab"; view 179.36422463600647 48 3.3464293968107235 → 229.36422463600647 88 3.3464293968107235; history [] |
+| R15 rect: a move and Escape in ONE browser task (before React renders the preview) → the LIVE node is the model again, scale 1, handles fitted; the next resize commits once | mixed | FAIL | width during the task 69.88 (model 40); after cancel: live {"x":20,"y":20,"width":69.88,"height":50.92,"scaleX":1,"scaleY":1}, handles fit true; model {"x":20,"y":20,"width":40,"height":30}; history []; pill null; next resize: {"x":37.9,"y":32,"width":40,"height":30}, history ["Move"], PUTs 1, live {"x":37.9,"y":32,"width":69.88,"height":50.92,"scaleX":1,"scaleY":1}, fit true |
+| R16 ellipse: a move and Escape in ONE browser task (before React renders the preview) → the LIVE node is the model again, scale 1, handles fitted; the next resize commits once | mixed | FAIL | width during the task 53.88 (model 24); after cancel: live {"x":56.94,"y":79.46000000000001,"radiusX":26.94,"radiusY":19.46,"scaleX":1,"scaleY":1}, handles fit true; model {"x":30,"y":60,"width":24,"height":18}; history []; pill null; next resize: {"x":48,"y":72,"width":24,"height":18}, history ["Move"], PUTs 1, live {"x":60,"y":81,"radiusX":26.94,"radiusY":19.46,"scaleX":1,"scaleY":1}, fit true |
+| R17 rect: Escape AFTER a rendered preview → the LIVE node is the model again, scale 1, handles fitted; zero saves | real | PASS | pill during "66.89 × 49 mm"; after Escape live {"x":20,"y":20,"width":40,"height":30,"scaleX":1,"scaleY":1}, handles fit true; model {"x":20,"y":20,"width":40,"height":30}; history []; PUTs 0 |
+| R18 ellipse: Escape AFTER a rendered preview → the LIVE node is the model again, scale 1, handles fitted; zero saves | real | PASS | pill during "50.89 × 35.93 mm"; after Escape live {"x":42,"y":69,"radiusX":12,"radiusY":9,"scaleX":1,"scaleY":1}, handles fit true; model {"x":30,"y":60,"width":24,"height":18}; history []; PUTs 0 |
+
+Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering).

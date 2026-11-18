@@ -104,6 +104,17 @@ export const SpreadStage = memo(function SpreadStage({
     }
     return null;
   }, [readOnly, ui.selection, ui.tool, pages]);
+  // The cancel-restore lookup (stage 5 correction): the element in the rendered document, selected or not.
+  const elementById = useCallback(
+    (id: string): ResizableElement | null => {
+      for (const page of pages) {
+        const el = page.elements.find((e) => e.id === id);
+        if (el) return el.type === 'rect' || el.type === 'ellipse' ? el : null;
+      }
+      return null;
+    },
+    [pages]
+  );
   const handlesActive = ui.tool === 'select' && !spaceHeld;
   // readOnly (a save conflict, a closed window) cancels a live resize (§4.4).
   useEffect(() => {
@@ -357,6 +368,7 @@ export const SpreadStage = memo(function SpreadStage({
               active={handlesActive}
               startContext={{ spaceHeld, tool: ui.tool, readOnly, selectionCount: ui.selection.length }}
               host={resize}
+              elementById={elementById}
             />
           </Layer>
         </Stage>

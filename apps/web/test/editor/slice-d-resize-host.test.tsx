@@ -27,7 +27,7 @@ const EL = { ...newRectElement({ x: 20, y: 20 }), width: 40, height: 30 } as Edi
 const GEOM = { widthMm: 148, heightMm: 210, pageOffsetsMm: [0], bleedMm: 3.175, marginMm: 12, safeMm: 5 };
 const VIEW = { x: 0, y: 0, scale: 3.4 };
 
-type When = 'commit-sync' | 'commit-batched' | 'none';
+type When = 'commit-sync' | 'commit-batched' | 'space-sync' | 'refit-sync' | 'none';
 
 function Owner({ unmountOn }: { unmountOn: When }) {
   host = useResizeHost({
@@ -41,8 +41,23 @@ function Owner({ unmountOn }: { unmountOn: When }) {
       if (unmountOn === 'commit-sync') flushSync(() => show(false));
       if (unmountOn === 'commit-batched') show(false);
     },
-    onSpaceSync: (h) => void log.push(`space ${h}`),
-    onRefit: () => void log.push('refit'),
+    // INJECTED reproductions (Codex's stage 5 review, finding 2): an owner callback that unmounts the owner
+    // synchronously. The production Space setter and refit do not unmount the stage; these cases pin the
+    // host's lifetime rule, not an observed production path.
+    onSpaceSync: (h) => {
+      log.push(`space ${h}`);
+      if (unmountOn === 'space-sync') {
+        flushSync(() => show(false));
+        log.push('unmounted');
+      }
+    },
+    onRefit: () => {
+      log.push('refit');
+      if (unmountOn === 'refit-sync') {
+        flushSync(() => show(false));
+        log.push('unmounted');
+      }
+    },
   });
   return null;
 }
@@ -53,10 +68,12 @@ function App({ unmountOn }: { unmountOn: When }) {
   return on ? <Owner unmountOn={unmountOn} /> : null;
 }
 
+const adapterEnded = (end: { reason: string }) => void log.push(`adapter ${end.reason}`);
+
 /** Press at the bottom-right anchor, one real change through the session's own hooks. */
 function gesture() {
   const press = { x: 60 * 3.4, y: 50 * 3.4 };
-  const s = host.begin({ element: EL, anchor: 'bottom-right', pressPoint: press, keepProportions: false })!;
+  const s = host.begin({ element: EL, anchor: 'bottom-right', pressPoint: press, keepProportions: false, onEnded: adapterEnded })!;
   const p = { x: 70 * 3.4, y: 60 * 3.4 };
   act(() => {
     s.anchorBound(press, p, p, { shift: false, alt: false }, 'bottom-right');
@@ -90,7 +107,7 @@ describe('stage 5 — useResizeHost lifetime', () => {
     act(() => root.render(<App unmountOn="commit-batched" />));
     const s = gesture();
     act(() => void s.release());
-    expect(log).toEqual(['resize', 'space false']); // delivered to a still-mounted owner
+    expect(log).toEqual(['resize', 'space false', 'adapter release']); // delivered to a still-mounted owner
     expect(s.snapshot().listening).toBe(false);
   });
 
@@ -99,7 +116,7 @@ describe('stage 5 — useResizeHost lifetime', () => {
     const s = gesture();
     s.noteViewportSize({ w: 1280, h: 720 });
     act(() => void s.release());
-    expect(log).toEqual(['resize', 'space false', 'refit']);
+    expect(log).toEqual(['resize', 'space false', 'refit', 'adapter release']);
     expect(host.liveRef.current).toBeNull();
   });
 
@@ -134,5 +151,99 @@ describe('stage 5 — useResizeHost lifetime', () => {
     act(() => void b.cancel('escape'));
     expect(host.liveRef.current).toBeNull();
     expect(vi.isMockFunction(host.begin)).toBe(false);
+  });
+});
+
+describe('stage 5 correction — host lifetime across the end callbacks (Codex finding 2)', () => {
+  // Each end path: a real change, a pending refit, then the end. The owner unmounts synchronously inside
+  // the named callback; nothing after it — owner refit or the adapter's own end hook — may run.
+  const ends = {
+    release: (s: ReturnType<typeof gesture>) => void s.release(),
+    escape: (s: ReturnType<typeof gesture>) => void s.cancel('escape'),
+    blur: (s: ReturnType<typeof gesture>) => void s.cancel('blur'),
+  };
+  for (const [name, end] of Object.entries(ends)) {
+    it(`${name}: unmount inside onSpaceSync → no refit and no adapter end afterwards`, () => {
+      act(() => root.render(<App unmountOn="space-sync" />));
+      const s = gesture();
+      s.noteViewportSize({ w: 1280, h: 720 });
+      act(() => end(s));
+      const lead = name === 'release' ? ['resize'] : [];
+      expect(log).toEqual([...lead, 'space false', 'unmounted']);
+      expect(s.snapshot().listening).toBe(false);
+      expect(host.liveRef.current).toBeNull();
+    });
+
+    it(`${name}: unmount inside onRefit → no adapter end afterwards`, () => {
+      act(() => root.render(<App unmountOn="refit-sync" />));
+      const s = gesture();
+      s.noteViewportSize({ w: 1280, h: 720 });
+      act(() => end(s));
+      const lead = name === 'release' ? ['resize'] : [];
+      expect(log).toEqual([...lead, 'space false', 'refit', 'unmounted']);
+      expect(s.snapshot().listening).toBe(false);
+    });
+  }
+
+  it('control: unmount inside onResize (the stage 4 case) still stops everything after the commit', () => {
+    act(() => root.render(<App unmountOn="commit-sync" />));
+    const s = gesture();
+    s.noteViewportSize({ w: 1280, h: 720 });
+    act(() => void s.release());
+    expect(log).toEqual(['resize']);
+  });
+
+  it('control: a mounted owner gets each end callback exactly once, refit deferred to the end, adapter last', () => {
+    act(() => root.render(<App unmountOn="none" />));
+    const s = gesture();
+    s.noteViewportSize({ w: 1000, h: 700 });
+    s.noteViewportSize({ w: 1280, h: 720 });
+    expect(log).toEqual([]); // the refit waits for the end
+    act(() => void s.cancel('escape'));
+    act(() => void s.release());
+    act(() => void s.cancel('blur'));
+    expect(log).toEqual(['space false', 'refit', 'adapter escape']);
+  });
+
+  it('control: a mounted owner keeps the residual key suppression after the end', () => {
+    act(() => root.render(<App unmountOn="none" />));
+    const s = gesture();
+    const down = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    act(() => void document.body.dispatchEvent(down));
+    act(() => void s.cancel('escape'));
+    const up = new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true });
+    act(() => void document.body.dispatchEvent(up));
+    expect(down.defaultPrevented).toBe(true);
+    expect(up.defaultPrevented).toBe(true);
+    expect(log).toEqual(['space false', 'adapter escape']);
+    expect(s.snapshot().listening).toBe(false);
+  });
+
+  it('StrictMode (mount → cleanup → mount): the host is live after setup, so a mounted owner still gets every end callback', () => {
+    act(() =>
+      root.render(
+        <React.StrictMode>
+          <App unmountOn="none" />
+        </React.StrictMode>
+      )
+    );
+    const s = gesture();
+    s.noteViewportSize({ w: 1280, h: 720 });
+    act(() => void s.release());
+    expect(log).toEqual(['resize', 'space false', 'refit', 'adapter release']);
+  });
+
+  it('StrictMode: a real unmount still stops the callbacks', () => {
+    act(() =>
+      root.render(
+        <React.StrictMode>
+          <App unmountOn="space-sync" />
+        </React.StrictMode>
+      )
+    );
+    const s = gesture();
+    s.noteViewportSize({ w: 1280, h: 720 });
+    act(() => void s.release());
+    expect(log).toEqual(['resize', 'space false', 'unmounted']);
   });
 });

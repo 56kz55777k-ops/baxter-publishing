@@ -12,6 +12,7 @@
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import Konva from 'konva';
 import { addElement, getFormatPreset, newEditorDoc, newEllipseElement, newRectElement, type EditorDoc } from '@baxter/domain';
 import { EditorShell } from '@/components/editor/EditorShell';
 import { DocumentProvider, useDocumentState } from '@/components/editor/state/document-context';
@@ -27,8 +28,11 @@ declare global {
       ids: { rect: string; ellipse: string };
       clicks: number;
     };
+    /** Konva itself, so the probe can read the LIVE node and Transformer (stage 5 correction cases R15–R18). */
+    __konva: typeof Konva;
   }
 }
+window.__konva = Konva;
 
 const puts: string[] = [];
 window.fetch = (async (_url: string, init?: RequestInit) => {

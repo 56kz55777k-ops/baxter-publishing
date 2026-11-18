@@ -1,6 +1,6 @@
 # Slice D stage 5 — real-Konva probe of the resize wiring
 
-Plan: `native-publishing-slice-d-plan.md` §6.9. **Not production code.** Nothing here is imported by the app, linted, type-checked, built or run by CI (`docs/` is outside the npm workspaces). It adds no dependency: it uses what `npm ci` installs (esbuild through vitest, `konva` 10.3.0, `react-konva`, `@playwright/test` 1.62.1).
+Plan: `native-publishing-slice-d-plan.md` §6.9 (R1–R14) and §6.10 (R15–R18, the stage 5 correction). **Not production code.** Nothing here is imported by the app, linted, type-checked, built or run by CI (`docs/` is outside the npm workspaces). It adds no dependency: it uses what `npm ci` installs (esbuild through vitest, `konva` 10.3.0, `react-konva`, `@playwright/test` 1.62.1).
 
 ## What it is
 
@@ -18,13 +18,17 @@ node docs/evidence/slice-d-stage5-probe/run-probe.mjs [--chromium <path to a chr
 
 Without `--chromium` (or `PROBE_CHROMIUM`) Playwright's own Chromium for 1.62.1 is used. Exit code 0 = every case passed.
 
-## Cases (R1–R14)
+## Cases (R1–R18)
 
 Changed release (pill = commit, one `Resize`, one PUT, resize cursor) · anchor click · out and back to the press point · Escape mid-drag · Space held through release, then a new press pans and, after keyup, resizes · Space held through Escape · Space through window blur (blur/focus programmatic) · Q7 with Shift: a fast drag past the fixed corner commits the ratio minimum box · wheel and Ctrl+wheel during the resize · ellipse top-left · native activation of a focused button by Space and by Enter during a resize (focus placed on the button programmatically mid-drag, because a canvas press moves focus to the body; each has a control that the button activates without a resize) · shortcuts mid-resize · Hand tool.
+
+R15–R18 (stage 5 correction, Codex finding 1) read the **live** Konva node and Transformer through `window.__konva` (exposed by `page.tsx` for the probe only): position, size or radii, scale, and whether the Transformer's box matches the node's. R15 rect / R16 ellipse: a real anchor press, then one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, so React cannot render the preview in between (Codex's reproduction) — then a later real resize must commit once and be drawn as committed. R17 rect / R18 ellipse: Escape by real input after a rendered preview.
 
 ## Limits
 
 - Chromium only here (headless, device pixel ratio 1). Firefox and WebKit: NOT EXECUTED in this environment.
 - Window blur cannot be produced by real input; R7 dispatches it.
+- R15–R16 force the before-render ordering with synthetic events in one task; human-paced input was not attempted.
 - Element ids are random per page load, so `results/` differs between runs in those ids only.
+- `results/` holds the corrected run (18 / 18). `results/before-correction-3fcad11/` holds the same 18 cases run with the three corrected source files reverted to `3fcad11` (16 / 18: R15 and R16 fail).
 - It proves the wiring in a real browser with real Konva; it is not the Q5 harness (no Next build, no `EditorGate`, no mocked API route).
