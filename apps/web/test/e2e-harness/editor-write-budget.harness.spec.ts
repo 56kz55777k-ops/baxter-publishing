@@ -282,6 +282,65 @@ test.describe('cleanup: separate allowance, only registered ids, the fence, reco
   }
 });
 
+test.describe('shutdown × declared creation (REAL-HARNESS race; Codex 8A P2 #1)', () => {
+  /** A declared creation whose gesture creates a real rect (R + a real click), then waits on `release`. */
+  function pausedCreate(r: Awaited<ReturnType<typeof begin>>, release: Promise<void>) {
+    return async () => {
+      const p = await r.ed.at({ x: 100, y: 60 });
+      await r.page.keyboard.press('r');
+      await r.page.mouse.click(Math.round(p.x), Math.round(p.y));
+      await release; // paused: the editor's debounced save (2 s) arrives meanwhile and is held
+    };
+  }
+
+  test('shutdown while the gesture is paused: the held autosave (carrying the new id) is aborted unforwarded; nothing registered; the resumed gesture changes nothing', async ({ browser }) => {
+    const r = await begin(browser, 6);
+    let resume!: () => void;
+    const release = new Promise<void>((res) => (resume = res));
+    const creation = r.gate.declaredCreate(r.ed, 'create-rect', pausedCreate(r, release), { deadlineMs: 60_000 });
+    creation.catch(() => undefined);
+    await expect.poll(() => r.gate.heldCount, { timeout: 10_000 }).toBe(1);
+    expect(r.mock.puts).toHaveLength(0);
+    const t0 = Date.now();
+    const end = await r.gate.endPhase(r.ctx, 2_000, undefined, { attributionMs: 300 });
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    expect(end.creation).toBe('cancelled');
+    await expect(creation).rejects.toMatchObject({ report: { kind: 'creation-failed', reason: 'cancelled-at-shutdown' } });
+    resume();
+    await new Promise((res) => setTimeout(res, 200));
+    expect(r.mock.puts).toHaveLength(0); // nothing forwarded, before or after
+    expect(r.registry.entries()).toEqual([]); // no late registration
+    const puts = r.journal.read().writes.filter((w) => w.method === 'PUT');
+    expect(puts.map((w) => [w.forwarded, w.outcome])).toEqual([[false, 'not-forwarded']]);
+    expect(Object.keys(puts[0]!.elements)).toHaveLength(3); // u0, p1 and the new rect
+    expect(r.gate.budget.snapshot()).toMatchObject({ admitted: 2, closed: true }); // the load + the held save, both charged
+  });
+
+  test('attribution completing inside the shutdown window: registered first, then the held autosave is forwarded and committed', async ({ browser }) => {
+    const r = await begin(browser, 6);
+    let resume!: () => void;
+    const release = new Promise<void>((res) => (resume = res));
+    const creation = r.gate.declaredCreate(r.ed, 'create-rect', pausedCreate(r, release), { deadlineMs: 60_000 });
+    await expect.poll(() => r.gate.heldCount, { timeout: 10_000 }).toBe(1);
+    const ending = r.gate.endPhase(r.ctx, 5_000, undefined, { attributionMs: 8_000 });
+    await new Promise((res) => setTimeout(res, 200));
+    expect(r.mock.puts).toHaveLength(0); // still held during the window
+    resume();
+    const end = await ending;
+    expect(end.creation).toBe('resolved-in-window');
+    const id = await creation;
+    expect([...r.registry.ids()]).toEqual([id]);
+    expect(r.mock.puts.map((w) => w.status)).toEqual([200]);
+    const recs = r.journal.read().records;
+    const intent = recs.find((x) => x.t === 'intent') as { hr: number };
+    const write = recs.find((x) => x.t === 'write' && x.method === 'PUT') as { hr: number; forwarded: boolean };
+    const reg = r.registry.entries()[0]!;
+    expect(write.forwarded).toBe(true);
+    expect(intent.hr).toBeLessThan(reg.hr!);
+    expect(reg.hr!).toBeLessThan(write.hr);
+  });
+});
+
 test.describe('ownership versus whole-document saves (r5)', () => {
   test('HUMAN h1 added on the target unit before the cleanup load: the deletion save carries it unchanged; it is neither registered nor deleted', async ({ browser }) => {
     const r = await begin(browser, 4);

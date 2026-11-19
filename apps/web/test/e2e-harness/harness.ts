@@ -22,6 +22,9 @@ export interface Box { x: number; y: number; width: number; height: number }
 
 export const H = (mm: number) => Math.round(mm * 100);
 
+/** This invocation's artifact directory (set per run by scripts/e2e-harness-run.mjs). */
+export const RUN_DIR = process.env.HARNESS_RUN_DIR || '../../harness-artifacts';
+
 export class Editor {
   constructor(readonly page: Page, readonly mock: EditorMock, readonly net: Fence, readonly fixture: HarnessFixtureName) {}
 

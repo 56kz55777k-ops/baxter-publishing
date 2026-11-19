@@ -16,6 +16,8 @@ export interface Ownership {
   id: string;
   /** The page it landed on, when known at registration. */
   pageId: string | null;
+  /** In-process high-resolution time of the registration (orders it against journal records). */
+  hr?: number;
 }
 
 export class OwnershipRegistry {

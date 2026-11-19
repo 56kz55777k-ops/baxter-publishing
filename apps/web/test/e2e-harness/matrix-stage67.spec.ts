@@ -9,9 +9,9 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- page-script globals (Konva's untyped stage, test counters) and loosely typed document elements */
 import { test, expect } from '@playwright/test';
-import { openEditor, expectFenced, ID, type Editor } from './spec-kit';
+import { openEditor, expectFenced, ID, RUN_DIR, type Editor } from './spec-kit';
 
-const SHOTS = '../../harness-artifacts/screens';
+const SHOTS = `${RUN_DIR}/screens`;
 const shot = (ed: Editor, name: string) => ed.page.screenshot({ path: `${SHOTS}/${test.info().project.name}-${name}.png` });
 const keep = (ed: Editor) => ed.page.locator('[data-testid="keep-proportions"]');
 const union = (rs: { x: number; y: number; width: number; height: number }[]) => {

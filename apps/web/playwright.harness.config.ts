@@ -16,6 +16,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 3008;
+/** Every artifact of one invocation goes here (scripts/e2e-harness-run.mjs gives each run its own). */
+const RUN_DIR = process.env.HARNESS_RUN_DIR || '../../harness-artifacts';
 const viewport = { width: 1440, height: 900 };
 
 export default defineConfig({
@@ -24,8 +26,8 @@ export default defineConfig({
   timeout: 90_000,
   retries: 0,
   workers: Number(process.env.HARNESS_WORKERS ?? 2),
-  reporter: [['list'], ['json', { outputFile: '../../harness-artifacts/results.json' }]],
-  outputDir: '../../harness-artifacts/test-output',
+  reporter: [['list'], ['json', { outputFile: `${RUN_DIR}/results.json` }]],
+  outputDir: `${RUN_DIR}/test-output`,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport,

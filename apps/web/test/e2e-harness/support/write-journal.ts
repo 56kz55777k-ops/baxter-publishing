@@ -18,7 +18,7 @@ export type Outcome = 'pending' | 'committed' | 'not-committed' | 'not-forwarded
 
 export type JournalRecord =
   | { t: 'start'; runId: string; at: number }
-  | { t: 'intent'; seq: number; kind: string; unit: string; geometry?: unknown; at: number }
+  | { t: 'intent'; seq: number; kind: string; unit: string; geometry?: unknown; at: number; hr: number }
   | {
       t: 'write';
       seq: number;
@@ -29,6 +29,8 @@ export type JournalRecord =
       elements: Record<string, unknown>;
       forwarded: boolean;
       at: number;
+      /** In-process high-resolution time (orders records against the registry within a run). */
+      hr: number;
     }
   | { t: 'outcome'; seq: number; outcome: Exclude<Outcome, 'pending'>; status: number | string; at: number }
   | { t: 'report'; status: 'clean' | 'recovery-pending'; detail: unknown; at: number }
@@ -94,12 +96,12 @@ export class WriteJournal {
 
   intent(kind: string, unit: string, geometry?: unknown) {
     const seq = this.nextSeq();
-    this.append({ t: 'intent', seq, kind, unit, geometry, at: Date.now() });
+    this.append({ t: 'intent', seq, kind, unit, geometry, at: Date.now(), hr: performance.now() });
     return seq;
   }
 
   write(seq: number, phase: Phase, method: 'PUT' | 'POST', baseRevision: number | null, doc: EditorDoc | null, forwarded: boolean) {
-    this.append({ t: 'write', seq, phase, method, baseRevision, elements: elementsOf(doc), forwarded, at: Date.now() });
+    this.append({ t: 'write', seq, phase, method, baseRevision, elements: elementsOf(doc), forwarded, at: Date.now(), hr: performance.now() });
   }
 
   outcome(seq: number, outcome: Exclude<Outcome, 'pending'>, status: number | string) {

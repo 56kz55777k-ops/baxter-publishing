@@ -44,6 +44,7 @@ import { elementBoxes, useStageGestures } from './use-stage-gestures';
 import { useViewportMeasure, type ViewportSize } from './use-viewport-measure';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
 import { isCreationTool } from './state/editor-ui';
+import { harnessResizeTiming } from './resize-timing';
 
 /**
  * Harness-only seams (Slice D stage 8A, plan §8.2/§8.4). `BAXTER_E2E_HARNESS`
@@ -55,20 +56,18 @@ import { isCreationTool } from './state/editor-ui';
 const HARNESS = process.env.BAXTER_E2E_HARNESS === '1';
 
 /**
- * Resize frame timing, harness builds only (§8.4): the adapter marks each Konva move
- * (`baxter:editor:resize-move`); this measures at the next frame after React commits the preview.
- * Called only behind the build-time constant `HARNESS` (see the call site), so a default build
- * contains neither the call nor this function.
+ * Resize timing, harness builds only (§8.4): each committed preview hands its claimed moves to the
+ * recorder, which schedules that sample's own frame callback (see resize-timing.ts). Called only behind
+ * the build-time constant `HARNESS` (see the call site), so a default build contains neither the call,
+ * this hook nor the recorder module.
  */
-function useResizeFrameTiming(preview: unknown) {
-  useEffect(() => {
-    if (!preview) return;
-    requestAnimationFrame(() => {
-      if (performance.getEntriesByName('baxter:editor:resize-move').length === 0) return;
-      performance.measure('baxter:editor:resize-frame', 'baxter:editor:resize-move');
-      performance.clearMarks('baxter:editor:resize-move');
-    });
+function useResizeTimingHarness(preview: unknown) {
+  useLayoutEffect(() => {
+    const t = harnessResizeTiming();
+    if (preview) t.commit();
+    else t.end();
   }, [preview]);
+  useEffect(() => () => harnessResizeTiming().teardown(), []);
 }
 
 const PASTEBOARD = '#eae7e0';
@@ -234,7 +233,7 @@ export const SpreadStage = memo(function SpreadStage({
   // one build this hook is either always or never called — hook order never changes between renders —
   // and a default build drops the call and the hook entirely (no no-op effect is left behind).
   // eslint-disable-next-line react-hooks/rules-of-hooks -- build-time constant condition (see above)
-  if (HARNESS) useResizeFrameTiming(resize.preview);
+  if (HARNESS) useResizeTimingHarness(resize.preview);
 
   // --- pan gesture (window-level while active, the spike's architecture).
   // Blur cancels an in-flight drag — a gesture concern, so it lives here.

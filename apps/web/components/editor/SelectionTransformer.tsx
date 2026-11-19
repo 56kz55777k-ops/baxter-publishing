@@ -53,6 +53,7 @@ import { nodeAttrsFor } from './node-attrs';
 import { resizeMayStart, type ResizeModifiers } from './resize-session';
 import type { ResizeHost } from './use-resize-host';
 import type { EditorTool } from './state/editor-ui';
+import { harnessResizeTiming } from './resize-timing';
 
 /** Harness builds only (stage 8A, §8.4): see SpreadStage. A constant false in default builds. */
 const HARNESS = process.env.BAXTER_E2E_HARNESS === '1';
@@ -143,8 +144,8 @@ export function SelectionTransformer({ target, active, startContext, host, eleme
   }
 
   function anchorDragBoundFunc(oldAbs: Vector2d, newAbs: Vector2d, evt: MouseEvent) {
-    // Konva calls this first on every move: the start of the measured resize-move span (harness only).
-    if (HARNESS) performance.mark('baxter:editor:resize-move');
+    // Konva calls this first on every move: the move's timestamp for the per-commit timing (harness only).
+    if (HARNESS) harnessResizeTiming().move();
     const tr = trRef.current;
     const s = host.liveRef.current;
     if (!tr || !s) return oldAbs;

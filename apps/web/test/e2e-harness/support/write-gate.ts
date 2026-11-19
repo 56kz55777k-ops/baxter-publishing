@@ -26,8 +26,30 @@ export interface TargetUnit {
 
 export type StopReport =
   | { kind: 'ambiguous'; intent: { seq: number; kind: string }; before: string[]; after: string[]; selection: string[]; reloaded: boolean }
+  /** A declared creation that did not reach attribution: its held saves were aborted unforwarded. */
+  | { kind: 'creation-failed'; intent: { seq: number | null; kind: string }; reason: 'timeout' | 'gesture-failed' | 'cancelled-at-shutdown' | 'phase-closed'; detail?: string; heldAborted: number[] }
   | { kind: 'unattributed'; seq: number; ids: string[] }
   | { kind: 'no-b0'; seq: number };
+
+/** Internal: a pending creation was cancelled (by the deadline or by shutdown). */
+class CreationCancelled extends Error {
+  constructor(readonly reason: 'timeout' | 'cancelled-at-shutdown') {
+    super(reason);
+  }
+}
+class GestureFailed extends Error {}
+
+/** One declared creation in flight (§8.5 "Declared creation"). */
+interface PendingCreation {
+  intentSeq: number;
+  kind: string;
+  cancelled: boolean;
+  /** Rejects (once) when the creation is cancelled; every await of the attribution races it. */
+  readonly cancelSignal: Promise<never>;
+  cancel(reason: 'timeout' | 'cancelled-at-shutdown'): void;
+  /** Resolves when declaredCreate has fully settled — attributed, or rejected with its held saves aborted. */
+  readonly settled: Promise<void>;
+}
 
 export class RunStopped extends Error {
   constructor(readonly report: StopReport) {
@@ -81,7 +103,9 @@ export class WriteGate implements Fence {
   readonly events: WriteEvent[] = [];
   navigations = 0;
 
-  private creationPending = false;
+  private creation: PendingCreation | null = null;
+  /** Set at the end of endPhase: nothing registers, forwards or attributes after teardown. */
+  private torndown = false;
   private held: WriteItem[] = [];
   private inflight = new Map<number, Promise<void>>();
   private settledUnknown = new Set<number>();
@@ -151,8 +175,8 @@ export class WriteGate implements Fence {
     const method = request.method() as 'PUT' | 'POST';
     const body = method === 'PUT' ? (JSON.parse(request.postData() ?? 'null') as WriteItem['body']) : null;
     const item: WriteItem = { seq, method, route, request, body };
-    if (this.creationPending) {
-      this.held.push(item); // reserved and charged; forwarded only once attribution succeeds
+    if (this.creation) {
+      this.held.push(item); // reserved and charged; forwarded only once attribution succeeds, else aborted
       return;
     }
     return this.track(item);
@@ -171,10 +195,7 @@ export class WriteGate implements Fence {
     const reason = this.stop ?? (item.method === 'PUT' ? this.guard(item.seq, doc) : null);
     if (reason) {
       if (!this.stop) this.stop = reason;
-      this.journal.write(item.seq, this.phase, item.method, base, doc, false);
-      this.journal.outcome(item.seq, 'not-forwarded', 'aborted-by-harness');
-      this.emit({ seq: item.seq, method: item.method, outcome: 'not-forwarded', status: 'aborted-by-harness' });
-      await item.route.abort('blockedbyclient').catch(() => undefined);
+      await this.notForwarded(item, 'aborted-by-harness');
       return;
     }
     this.journal.write(item.seq, this.phase, item.method, base, doc, true);
@@ -191,6 +212,14 @@ export class WriteGate implements Fence {
     const outcome = outcomeOf(status === 'aborted' ? 'aborted' : typeof status === 'number' ? status : 'network');
     this.journal.outcome(item.seq, outcome, status);
     this.emit({ seq: item.seq, method: item.method, outcome, status });
+  }
+
+  /** Record a reserved write as `not-forwarded` (exactly once) and abort it. It stays charged. */
+  private notForwarded(item: WriteItem, status: string) {
+    this.journal.write(item.seq, this.phase, item.method, item.body?.baseRevision ?? null, item.body?.doc ?? null, false);
+    this.journal.outcome(item.seq, 'not-forwarded', status);
+    this.emit({ seq: item.seq, method: item.method, outcome: 'not-forwarded', status });
+    return item.route.abort('blockedbyclient').catch(() => undefined);
   }
 
   /** §8.5 unattributed-id guard: an id on a target-unit page that is in neither B0 nor the registry. */
@@ -240,38 +269,131 @@ export class WriteGate implements Fence {
     return { ed, doc: json.doc, revision: json.revision };
   }
 
+  /** True while a declared creation is pending (its saves are held). */
+  get creationPending() {
+    return this.creation !== null;
+  }
+
+  /** Saves currently held for a pending creation (reserved and charged, not yet forwarded or aborted). */
+  get heldCount() {
+    return this.held.length;
+  }
+
   /**
-   * §8.5 declared creation: intent (fsync) → hold saves → read before → gesture → read after (≤ 5 s) →
-   * attribute (exactly one fresh id, selection exactly [it], no reload) → register (fsync) → release the
-   * held saves in arrival order. Otherwise ambiguous: nothing registered, held and later saves aborted
-   * unforwarded, and the run stops.
+   * §8.5 declared creation, as one bounded, cancellable operation:
+   *   intent (fsync) → hold saves → read before → gesture → read after (≤ `observeMs`) → attribute
+   *   (exactly one fresh id, selection exactly [it], no reload) → register (fsync) → release the held saves
+   *   in arrival order, each through the guard and the journal.
+   * Every await is raced against the creation's cancel signal (the overall `deadlineMs`, or shutdown), and
+   * the final check → register → release runs with no await, so a stale continuation can never register
+   * an id, forward a write or return success after cancellation or teardown. On ambiguity, timeout, a
+   * thrown gesture or cancellation: nothing is registered, every held save is aborted unforwarded and
+   * recorded once, the run stops, and this rejects with RunStopped.
    */
-  async declaredCreate(ed: Editor, kind: string, gesture: () => Promise<void>, timeoutMs = 5_000): Promise<string> {
+  async declaredCreate(
+    ed: Editor,
+    kind: string,
+    gesture: () => Promise<void>,
+    opts: { observeMs?: number; deadlineMs?: number } | number = {}
+  ): Promise<string> {
+    const { observeMs = 5_000, deadlineMs = 15_000 } = typeof opts === 'number' ? { observeMs: opts } : opts;
     if (this.stop) throw new RunStopped(this.stop);
+    if (this.torndown || this.budget.closed) {
+      throw new RunStopped({ kind: 'creation-failed', intent: { seq: null, kind }, reason: 'phase-closed', heldAborted: [] });
+    }
+    if (this.creation) throw new Error('declaredCreate: one declared creation at a time');
+
     const intentSeq = this.journal.intent(kind, this.unit.label);
-    this.creationPending = true;
-    const nav0 = this.navigations;
-    const before = (await ed.stage()).unitIds;
-    await gesture();
-    let after = before;
-    const t0 = Date.now();
-    while (Date.now() - t0 < timeoutMs) {
-      after = (await ed.stage()).unitIds;
-      if (!sameSet(after, before)) break;
-      await sleep(50);
+    let rejectCancel!: (e: CreationCancelled) => void;
+    const cancelSignal = new Promise<never>((_, rej) => (rejectCancel = rej));
+    cancelSignal.catch(() => undefined);
+    let resolveSettled!: () => void;
+    const settled = new Promise<void>((r) => (resolveSettled = r));
+    const c: PendingCreation = {
+      intentSeq,
+      kind,
+      cancelled: false,
+      cancelSignal,
+      settled,
+      cancel: (reason) => {
+        if (c.cancelled) return;
+        c.cancelled = true;
+        rejectCancel(new CreationCancelled(reason));
+      },
+    };
+    this.creation = c;
+    const deadline = setTimeout(() => c.cancel('timeout'), deadlineMs);
+    /** Race one await against cancellation; the losing promise's later rejection is swallowed. */
+    // (a function expression, not a generic arrow: some TS-to-JS loaders read `<T>(` as JSX)
+    const step = function <T>(p: Promise<T>): Promise<T> {
+      p.catch(() => undefined);
+      return Promise.race([p, c.cancelSignal]);
+    };
+
+    try {
+      const nav0 = this.navigations;
+      const before = (await step(ed.stage())).unitIds;
+      try {
+        await step(Promise.resolve().then(gesture));
+      } catch (e) {
+        if (e instanceof CreationCancelled) throw e;
+        throw new GestureFailed(e instanceof Error ? e.message : String(e));
+      }
+      let after = before;
+      const t0 = Date.now();
+      while (Date.now() - t0 < observeMs) {
+        after = (await step(ed.stage())).unitIds;
+        if (!sameSet(after, before)) break;
+        await step(sleep(50));
+      }
+      const selection = (await step(ed.stage())).selected;
+
+      // ---- synchronous from here: no await between the final check, the registration and the release ----
+      if (c.cancelled || this.torndown || this.creation !== c) throw new CreationCancelled('cancelled-at-shutdown');
+      const fresh = after.filter((id) => !before.includes(id));
+      const reloaded = this.navigations !== nav0;
+      if (fresh.length === 1 && selection.length === 1 && selection[0] === fresh[0] && !reloaded) {
+        const id = fresh[0]!;
+        this.registry.register({
+          runId: this.runId,
+          intentSeq,
+          kind,
+          unit: this.unit,
+          id,
+          pageId: this.unit.pageIds.length === 1 ? this.unit.pageIds[0]! : this.pageInHeld(id),
+          hr: performance.now(),
+        });
+        this.creation = null;
+        for (const item of this.held.splice(0)) void this.track(item); // in arrival order; guard + journal each
+        return id;
+      }
+      const report: StopReport = { kind: 'ambiguous', intent: { seq: intentSeq, kind }, before, after, selection, reloaded };
+      this.failCreation(c, report);
+      throw new RunStopped(report);
+    } catch (e) {
+      if (e instanceof RunStopped) throw e;
+      const reason = e instanceof CreationCancelled ? e.reason : 'gesture-failed';
+      const report: StopReport = {
+        kind: 'creation-failed',
+        intent: { seq: intentSeq, kind },
+        reason,
+        detail: e instanceof Error ? e.message : String(e),
+        heldAborted: this.held.map((h) => h.seq),
+      };
+      this.failCreation(c, report);
+      throw new RunStopped(report);
+    } finally {
+      clearTimeout(deadline);
+      if (this.creation === c) this.creation = null;
+      resolveSettled();
     }
-    const selection = (await ed.stage()).selected;
-    const fresh = after.filter((id) => !before.includes(id));
-    const reloaded = this.navigations !== nav0;
-    if (fresh.length === 1 && selection.length === 1 && selection[0] === fresh[0] && !reloaded) {
-      const id = fresh[0]!;
-      this.registry.register({ runId: this.runId, intentSeq, kind, unit: this.unit, id, pageId: this.unit.pageIds.length === 1 ? this.unit.pageIds[0]! : this.pageInHeld(id) });
-      this.release();
-      return id;
-    }
-    this.stop = { kind: 'ambiguous', intent: { seq: intentSeq, kind }, before, after, selection, reloaded };
-    this.release();
-    throw new RunStopped(this.stop);
+  }
+
+  /** The creation did not attribute: stop the run and abort every held save unforwarded (each recorded once). */
+  private failCreation(c: PendingCreation, report: StopReport) {
+    if (this.creation === c) this.creation = null;
+    if (!this.stop) this.stop = report;
+    for (const item of this.held.splice(0)) void this.notForwarded(item, `aborted-by-harness:${report.kind === 'creation-failed' ? report.reason : report.kind}`);
   }
 
   private pageInHeld(id: string): string | null {
@@ -279,15 +401,34 @@ export class WriteGate implements Fence {
     return null;
   }
 
-  private release() {
-    this.creationPending = false;
-    for (const item of this.held.splice(0)) void this.track(item);
-  }
-
-  /** §8.5 end of the action phase: close → settle (pending writes may answer) → offline → close. */
-  async endPhase(context: BrowserContext, settleMs = 30_000, beforeClose?: () => Promise<void>) {
+  /**
+   * §8.5 end of the action phase:
+   *   1. close admission (every later write is blocked and charged as blocked);
+   *   2. a pending declared creation gets at most `attributionMs` to resolve by its own rules — attributed
+   *      (its held saves are then forwarded) or rejected (aborted unforwarded); if it has not resolved by
+   *      then it is cancelled, which aborts its held saves unforwarded and stops the run;
+   *   3. settle: wait up to `settleMs` for forwarded writes to answer; the rest become `unknown`;
+   *   4. teardown (nothing registers, forwards or attributes after this) → offline → close.
+   */
+  async endPhase(
+    context: Pick<BrowserContext, 'setOffline' | 'close'>,
+    settleMs = 30_000,
+    beforeClose?: () => Promise<void>,
+    opts: { attributionMs?: number } = {}
+  ) {
+    const { attributionMs = 5_000 } = opts;
     this.budget.close();
-    if (this.creationPending) this.release(); // an attribution still pending is resolved by its own call
+    const c = this.creation;
+    let creation: 'none' | 'resolved-in-window' | 'cancelled' = 'none';
+    if (c) {
+      const inWindow = await Promise.race([c.settled.then(() => true), sleep(attributionMs).then(() => false)]);
+      if (inWindow) creation = 'resolved-in-window';
+      else {
+        c.cancel('cancelled-at-shutdown');
+        await c.settled; // prompt: every await of the attribution races the cancel signal
+        creation = 'cancelled';
+      }
+    }
     const t0 = Date.now();
     while (this.inflight.size && Date.now() - t0 < settleMs) await sleep(50);
     for (const seq of this.inflight.keys()) {
@@ -295,12 +436,13 @@ export class WriteGate implements Fence {
       this.journal.outcome(seq, 'unknown', 'pending-at-settle-deadline');
       this.emit({ seq, method: 'PUT', outcome: 'unknown', status: 'pending-at-settle-deadline' });
     }
+    this.torndown = true;
     await context.setOffline(true);
     const mockWritesAtOffline = this.mock.writes.length;
     const attemptedAtOffline = this.budget.attempted;
     if (beforeClose) await beforeClose();
     await context.close();
-    return { mockWritesAtOffline, attemptedAtOffline };
+    return { mockWritesAtOffline, attemptedAtOffline, creation };
   }
 }
 
