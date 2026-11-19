@@ -92,7 +92,38 @@ export class Editor {
     const fx = anchor.includes('left') ? b.x : anchor.includes('right') ? b.x + b.width : b.x + b.width / 2;
     const fy = anchor.startsWith('top') ? b.y : anchor.startsWith('bottom') ? b.y + b.height : b.y + b.height / 2;
     const p = await this.at({ x: fx, y: fy });
-    return { x: Math.round(p.x), y: Math.round(p.y) };
+    const pt = { x: Math.round(p.x), y: Math.round(p.y) };
+    await this.anchorDrawn(pt, anchor);
+    return pt;
+  }
+
+  /**
+   * Wait (≤ 3 s) until the anchor at `pt` is actually on the canvas: Konva's hit test there returns that
+   * Transformer anchor — or the handles are deliberately inactive (Hand/Space, D-4: not listening) or
+   * absent. Konva draws a layer's scene and hit regions together on its next animation frame, so right
+   * after a selection change (or a refit) the anchor can be neither visible nor hittable yet; in the VM's
+   * WebKit (≈ 6 frames/s) a press 60 ms after selecting occasionally landed on empty canvas (2 of 40 runs).
+   * A user cannot press an anchor that is not drawn, so the test waits for it rather than racing it.
+   */
+  async anchorDrawn(pt: { x: number; y: number }, anchor: Anchor) {
+    const deadline = Date.now() + 3_000;
+    for (;;) {
+      const state = await this.page.evaluate(
+        ({ x, y, name }) => {
+          const st = (window as any).Konva.stages[0];
+          const tr = st.findOne('Transformer');
+          if (!tr || tr.nodes().length === 0) return 'no-handles';
+          if (!tr.listening() || !tr.getLayer().listening()) return 'inactive';
+          const box = st.container().getBoundingClientRect();
+          const n = st.getIntersection({ x: x - box.left, y: y - box.top });
+          return n && n.name() === name ? 'drawn' : 'pending';
+        },
+        { x: pt.x, y: pt.y, name: `${anchor} _anchor` }
+      );
+      if (state !== 'pending') return state;
+      if (Date.now() > deadline) throw new Error(`anchor ${anchor} at ${pt.x},${pt.y} never became hittable`);
+      await this.page.waitForTimeout(20);
+    }
   }
 
   /** A real click inside the element's rendered node (Konva client rect), optionally with Shift. */
