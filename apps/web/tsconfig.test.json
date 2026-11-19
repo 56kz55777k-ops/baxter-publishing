@@ -15,7 +15,8 @@
     "components/**/*.tsx",
     "app/**/*.ts",
     "app/**/*.tsx",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.harness.config.ts"
   ],
   "exclude": [
     "node_modules",

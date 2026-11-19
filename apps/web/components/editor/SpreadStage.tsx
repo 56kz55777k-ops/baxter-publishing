@@ -45,6 +45,32 @@ import { useViewportMeasure, type ViewportSize } from './use-viewport-measure';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
 import { isCreationTool } from './state/editor-ui';
 
+/**
+ * Harness-only seams (Slice D stage 8A, plan §8.2/§8.4). `BAXTER_E2E_HARNESS`
+ * is inlined at build time by next.config.js ('1' only in a harness build, '0'
+ * otherwise; unset under Vitest), so in a default build every branch below is
+ * a constant false that the minifier removes — verified per commit by grepping
+ * the default output for the attribute and mark names.
+ */
+const HARNESS = process.env.BAXTER_E2E_HARNESS === '1';
+
+/**
+ * Resize frame timing, harness builds only (§8.4): the adapter marks each Konva move
+ * (`baxter:editor:resize-move`); this measures at the next frame after React commits the preview.
+ * Called only behind the build-time constant `HARNESS` (see the call site), so a default build
+ * contains neither the call nor this function.
+ */
+function useResizeFrameTiming(preview: unknown) {
+  useEffect(() => {
+    if (!preview) return;
+    requestAnimationFrame(() => {
+      if (performance.getEntriesByName('baxter:editor:resize-move').length === 0) return;
+      performance.measure('baxter:editor:resize-frame', 'baxter:editor:resize-move');
+      performance.clearMarks('baxter:editor:resize-move');
+    });
+  }, [preview]);
+}
+
 const PASTEBOARD = '#eae7e0';
 
 export const SpreadStage = memo(function SpreadStage({
@@ -204,6 +230,12 @@ export const SpreadStage = memo(function SpreadStage({
     });
   }, [dragPreview]);
 
+  // Harness builds only. `HARNESS` is a BUILD-TIME constant (inlined by next.config.js), so within any
+  // one build this hook is either always or never called — hook order never changes between renders —
+  // and a default build drops the call and the hook entirely (no no-op effect is left behind).
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- build-time constant condition (see above)
+  if (HARNESS) useResizeFrameTiming(resize.preview);
+
   // --- pan gesture (window-level while active, the spike's architecture).
   // Blur cancels an in-flight drag — a gesture concern, so it lives here.
   useEffect(() => {
@@ -330,6 +362,14 @@ export const SpreadStage = memo(function SpreadStage({
       // page's unit offset (mm). Read-only facts already on screen.
       data-view={`${view.x} ${view.y} ${view.scale}`}
       data-page-offsets={geom.pageOffsetsMm.join(' ')}
+      // Harness builds only (stage 8A): the shown unit's element ids and the selection, for the local
+      // mock-persistence ownership tests. NOT the Q6 production instrumentation (not approved).
+      {...(HARNESS
+        ? {
+            'data-unit-element-ids': pages.flatMap((p) => p.elements.map((e) => e.id)).join(' '),
+            'data-selected-ids': ui.selection.join(' '),
+          }
+        : {})}
       className="relative h-full w-full overflow-hidden"
       style={{ backgroundColor: PASTEBOARD }}
     >
