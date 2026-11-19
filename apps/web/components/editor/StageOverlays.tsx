@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Transient stage overlays — selection outline, creation preview, marquee and
- * snap guides.
+ * Transient stage overlays — selection outline, multi-selection border, lock
+ * indicators, creation preview, marquee and snap guides.
  *
  * Everything here is drawn from state that exists only between mousedown and
  * mouseup (or from the UI context's selection), never from the document. None
@@ -12,9 +12,10 @@
  * property — they are the editor's chrome on the canvas, not its content.
  *
  * Hairlines use `strokeScaleEnabled={false}` so guides stay one screen pixel
- * at every zoom, matching StageGuides.
+ * at every zoom, matching StageGuides. Every shape here is `listening={false}`
+ * (and drawn in a non-listening layer): chrome never takes a pointer event.
  */
-import { Ellipse, Line, Rect } from 'react-konva';
+import { Arc, Group, Line, Rect, Ellipse } from 'react-konva';
 
 const OXBLOOD = '#8a2820';
 const SELECTION = 'rgba(138, 40, 32, 0.85)';
@@ -42,6 +43,7 @@ export function SelectionOutlines({ boxes }: { boxes: readonly Box[] }) {
       {boxes.map((b, i) => (
         <Rect
           key={i}
+          name="selection-outline"
           x={b.x}
           y={b.y}
           width={b.width}
@@ -51,6 +53,63 @@ export function SelectionOutlines({ boxes }: { boxes: readonly Box[] }) {
           strokeScaleEnabled={false}
           listening={false}
         />
+      ))}
+    </>
+  );
+}
+
+/**
+ * The multi-selection border (D-6, plan §4.8, choice 10): one dashed oxblood
+ * rectangle around the union of the selected objects shown on the unit,
+ * locked members included, replacing the per-object outlines. The [3, 2] dash
+ * is in screen pixels (Konva applies the dash after resetting the transform
+ * when `strokeScaleEnabled` is false). No handles: multi-object resize is out
+ * of scope.
+ */
+export function MultiSelectionBorder({ box }: { box: Box | null }) {
+  if (!box) return null;
+  return (
+    <Rect
+      name="multi-selection-border"
+      x={box.x}
+      y={box.y}
+      width={box.width}
+      height={box.height}
+      stroke={SELECTION}
+      strokeWidth={1.5}
+      dash={[3, 2]}
+      strokeScaleEnabled={false}
+      listening={false}
+    />
+  );
+}
+
+/** Lock indicator size in SCREEN pixels (choice 11): constant at every zoom. */
+export const LOCK_ICON_PX = 11;
+/** Inset from the object's top-left corner, screen pixels. */
+export const LOCK_INSET_PX = 2;
+
+/**
+ * A small vector padlock on every locked object on the unit (D-6, choice 11),
+ * selected or not, under every tool. It sits at the object's displayed
+ * top-left (unit mm), inset by `LOCK_INSET_PX`; its own Group is scaled by
+ * 1 / view scale so it is `LOCK_ICON_PX` screen pixels whatever the zoom. No
+ * emoji, no icon dependency: a Konva Arc (shackle) over a Rect (body). Not
+ * interactive — no click-to-unlock.
+ */
+export function LockIndicators({ anchors, scale }: { anchors: readonly { id: string; x: number; y: number }[]; scale: number }) {
+  if (anchors.length === 0 || !(scale > 0)) return null;
+  const k = 1 / scale;
+  const inset = LOCK_INSET_PX * k;
+  return (
+    <>
+      {anchors.map((a) => (
+        <Group key={a.id} name="lock-indicator" id={`lock-${a.id}`} x={a.x + inset} y={a.y + inset} scaleX={k} scaleY={k} listening={false}>
+          {/* 11 × 11 px box: shackle 4.5 px tall above a 10 × 6.5 px body. */}
+          <Arc x={5.5} y={4.75} innerRadius={2.25} outerRadius={3.75} angle={180} rotation={180} fill={OXBLOOD} listening={false} />
+          <Rect x={0.5} y={4.5} width={10} height={6.5} cornerRadius={1.25} fill={OXBLOOD} stroke="#ffffff" strokeWidth={0.75} listening={false} />
+          <Rect x={5} y={6.75} width={1} height={2} fill="#ffffff" listening={false} />
+        </Group>
       ))}
     </>
   );

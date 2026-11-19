@@ -104,6 +104,7 @@ vi.mock('react-konva', async () => {
     Layer: pass,
     Group: pass,
     Line: () => null,
+    Arc: () => null, // stage 7 lock indicator (overlays are tested in slice-d-overlays)
     Rect: shape('rect'),
     Ellipse: shape('ellipse'),
     Transformer: React.forwardRef(function FakeTransformer(p: Record<string, any>, ref: React.Ref<unknown>) {

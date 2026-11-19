@@ -648,7 +648,7 @@ await check('R27 the checkbox by keyboard (real keys): Space on the focused chec
   return k1?.checked === true && JSON.stringify(J.history) === '["Resize"]' && K.history.length === 0 && M.tool === 'hand' && focused;
 });
 
-await check('R28 locked object: the checkbox is disabled; read-only (save conflict) is covered in jsdom only', 'real', async (page, n) => {
+await check('R28 locked object: the checkbox is disabled; read-only (save conflict) is covered in jsdom only', 'mixed', async (page, n) => {
   await select(page, 'rect');
   await S(page, () => {
     const st = window.__probe.state();
@@ -658,6 +658,211 @@ await check('R28 locked object: the checkbox is disabled; read-only (save confli
   const k = await keepState(page);
   n.push(`checkbox ${JSON.stringify(k)} (lock applied programmatically)`);
   return k?.disabled === true;
+});
+
+/* ------------------------------------------- stage 7: D-6 selection and lock indicators (plan §6.12) */
+fs.mkdirSync(path.join(OUT, 'screens'), { recursive: true });
+const shot = async (page, name) => {
+  const el = await page.$('[data-testid="spread-stage"]');
+  await el.screenshot({ path: path.join(OUT, 'screens', `${name}.png`) });
+};
+/** Programmatic SETUP only: change the document through the reducer (lock, add elements). */
+async function commitDoc(page, edit) {
+  await S(page, (src) => {
+    const st = window.__probe.state();
+    const fn = new Function('doc', 'ids', 'uuid', src);
+    const next = fn(structuredClone(st.doc), window.__probe.ids, () => crypto.randomUUID());
+    window.__probe.docDispatch({ type: 'COMMIT', nextDoc: next, selection: window.__probe.ui().selection, label: 'Setup' });
+  }, edit);
+  await page.waitForTimeout(50);
+}
+const LOCK = (which) => `for (const p of doc.pages) for (const e of p.elements) if (e.id === ids.${which}) e.locked = true; return doc;`;
+/** Real clicks: select `first`, Shift-click the others, each on a point inside its node. */
+async function clickSelect(page, first, ...more) {
+  clickSelect.log = [];
+  // 60 ms between clicks: React renders the first selection before the Shift-click is read (see §6.12).
+  for (const [i, w] of [first, ...more].entries()) {
+    const c = await S(page, (w) => { const r = window.__konva.stages[0].findOne('#' + (window.__probe.ids[w] ?? w)).getClientRect({ skipStroke: true }); const box = document.querySelector('[data-testid="spread-stage"] canvas').getBoundingClientRect(); return { x: box.left + r.x + r.width * 0.75, y: box.top + r.y + r.height * 0.75 }; }, w);
+    if (i > 0) await page.keyboard.down('Shift');
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.down();
+    await page.mouse.up();
+    if (i > 0) await page.keyboard.up('Shift');
+    await page.waitForTimeout(60);
+    const sel = await S(page, () => window.__probe.ui().selection.length);
+    (clickSelect.log ??= []).push(`${w}@${Math.round(c.x)},${Math.round(c.y)}→${sel}`);
+  }
+}
+/** Rendered chrome, read through Konva: client rects in stage px. */
+async function chrome(page, ids) {
+  return S(page, (ids) => {
+    const st = window.__konva.stages[0];
+    const rect = (n) => { const r = n.getClientRect({ skipStroke: true }); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    const border = st.findOne('.multi-selection-border');
+    const tr = st.findOne('Transformer');
+    return {
+      border: border ? { ...rect(border), dash: border.dash(), listening: border.listening(), layerListening: border.getLayer().listening() } : null,
+      outlines: st.find('.selection-outline').length,
+      handles: tr ? tr.nodes().length : 0,
+      nodes: Object.fromEntries(ids.map((id) => [id, rect(st.findOne('#' + id))])),
+      locks: Object.fromEntries(st.find('.lock-indicator').map((g) => [g.id().replace(/^lock-/, ''), { ...rect(g), absScale: g.getAbsoluteScale().x, listening: g.listening(), layerListening: g.getLayer().listening() }])),
+    };
+  }, ids);
+}
+const near = (a, b, tol = 0.5) => Math.abs(a - b) <= tol;
+const unionOf = (rs) => { const x = Math.min(...rs.map((r) => r.x)), y = Math.min(...rs.map((r) => r.y)); return { x, y, width: Math.max(...rs.map((r) => r.x + r.width)) - x, height: Math.max(...rs.map((r) => r.y + r.height)) - y }; };
+const sameRect = (a, b, tol = 0.75) => a && b && near(a.x, b.x, tol) && near(a.y, b.y, tol) && near(a.width, b.width, tol) && near(a.height, b.height, tol);
+
+await check('R29 multi-selection by real clicks (rect, then Shift-click the ellipse): ONE dashed [3, 2] border = the union of the two rendered nodes; no per-object outlines; no handles; not listening', 'real', async (page, n) => {
+  await clickSelect(page, 'rect', 'ellipse');
+  const J = await info(page);
+  const C = await chrome(page, [J.ids.rect, J.ids.ellipse]);
+  const U = unionOf(Object.values(C.nodes));
+  await shot(page, 'R29-multi-union');
+  n.push(`clicks ${clickSelect.log?.splice(0).join(' ')}; selection ${J.selection.length}; border ${JSON.stringify(C.border)}; node union ${JSON.stringify(U)}; outlines ${C.outlines}; handles ${C.handles}; history ${JSON.stringify(J.history)}`);
+  return J.selection.length === 2 && sameRect(C.border, U) && JSON.stringify(C.border.dash) === '[3,2]' && C.border.listening === false && C.border.layerListening === false
+    && C.outlines === 0 && C.handles === 0 && J.history.length === 0;
+});
+
+await check('R30 mixed locked/unlocked drag (lock = programmatic setup; selection and drag = real input): mid-drag the border = union of the MOVED rect and the STATIONARY locked ellipse; after release = the document', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('ellipse'));
+  await clickSelect(page, 'rect', 'ellipse');
+  const I = await info(page);
+  const C0 = await chrome(page, [I.ids.rect, I.ids.ellipse]);
+  const r = C0.nodes[I.ids.rect];
+  const canvas = await S(page, () => { const b = document.querySelector('[data-testid="spread-stage"] canvas').getBoundingClientRect(); return { x: b.left, y: b.top }; });
+  const start = { x: canvas.x + r.x + r.width / 2, y: canvas.y + r.y + r.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 160, start.y - 40, { steps: 12 });
+  await page.waitForTimeout(60);
+  const M = await chrome(page, [I.ids.rect, I.ids.ellipse]);
+  await shot(page, 'R30-mixed-drag-preview');
+  await page.mouse.up();
+  await page.waitForTimeout(60);
+  const J = await info(page);
+  const E = await chrome(page, [J.ids.rect, J.ids.ellipse]);
+  const ellStill = sameRect(M.nodes[I.ids.ellipse], C0.nodes[I.ids.ellipse], 0.01);
+  const rectMoved = near(M.nodes[I.ids.rect].x - r.x, 160, 1) && near(M.nodes[I.ids.rect].y - r.y, -40, 1);
+  const naive = { ...unionOf(Object.values(C0.nodes)) }; naive.x += 160; naive.y -= 40;
+  n.push(`rect moved ${rectMoved}; ellipse stationary ${ellStill}; mid border ${JSON.stringify(M.border)} vs union of displayed ${JSON.stringify(unionOf(Object.values(M.nodes)))} (naive translated union ${JSON.stringify(naive)}); after release border ${JSON.stringify(E.border)}; history ${JSON.stringify(J.history)}; padlock on ellipse ${!!E.locks[J.ids.ellipse]}`);
+  return rectMoved && ellStill && sameRect(M.border, unionOf(Object.values(M.nodes))) && !sameRect(M.border, naive)
+    && sameRect(E.border, unionOf(Object.values(E.nodes))) && JSON.stringify(J.history) === '["Setup","Move"]' && !!E.locks[J.ids.ellipse] && E.handles === 0;
+});
+
+await check('R31 padlock placement and size (lock = programmatic setup): an ~11 px padlock 2 px inside the top-left of the rendered rect and of the ellipse\'s bounding box; unlocked objects none', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('rect'));
+  await commitDoc(page, LOCK('ellipse'));
+  await S(page, () => window.__probe.uiDispatch({ type: 'CLEAR_SELECTION' }));
+  await page.waitForTimeout(30);
+  const I = await info(page);
+  const C = await chrome(page, [I.ids.rect, I.ids.ellipse]);
+  await shot(page, 'R31-padlocks');
+  const ok = [I.ids.rect, I.ids.ellipse].every((id) => {
+    const l = C.locks[id], b = C.nodes[id];
+    return l && near(l.x, b.x + 2, 0.6) && near(l.y - 0.5, b.y + 2, 0.6) && l.width >= 9 && l.width <= 11.5 && l.height >= 9 && l.height <= 11.5 && near(l.absScale, 1, 1e-9) && !l.listening && !l.layerListening;
+  });
+  n.push(`padlocks ${JSON.stringify(C.locks)}; nodes ${JSON.stringify(C.nodes)}; scale ${I.view.scale}`);
+  return ok && Object.keys(C.locks).length === 2;
+});
+
+await check('R32 zoom (real Ctrl+wheel in and out): the padlock stays the same screen size and stays 2 px inside the rect\'s top-left', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('rect'));
+  const I = await info(page);
+  // Zoom about the rect's top-left corner, so the padlock stays on screen at every zoom.
+  const canvas = await S(page, (id) => { const b = document.querySelector('[data-testid="spread-stage"] canvas').getBoundingClientRect(); const r = window.__konva.stages[0].findOne('#' + id).getClientRect({ skipStroke: true }); return { x: b.left + r.x + 8, y: b.top + r.y + 8 }; }, I.ids.rect);
+  const rows = [];
+  const measure = async (label) => { const J = await info(page); const C = await chrome(page, [J.ids.rect]); rows.push({ label, scale: J.view.scale, lock: C.locks[J.ids.rect], node: C.nodes[J.ids.rect] }); };
+  await measure('fit');
+  await shot(page, 'R32-zoom-fit');
+  await page.mouse.move(canvas.x, canvas.y);
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 250);
+  await page.keyboard.up('Control');
+  await page.waitForTimeout(80);
+  await measure('out');
+  await shot(page, 'R32-zoom-out');
+  await page.keyboard.down('Control');
+  for (let i = 0; i < 14; i++) await page.mouse.wheel(0, -250);
+  await page.keyboard.up('Control');
+  await page.waitForTimeout(80);
+  await measure('in');
+  await shot(page, 'R32-zoom-in');
+  n.push(rows.map((r) => `${r.label}: scale ${r.scale.toFixed(3)}, padlock ${r.lock.width.toFixed(2)} × ${r.lock.height.toFixed(2)} px at (${(r.lock.x - r.node.x).toFixed(2)}, ${(r.lock.y - r.node.y).toFixed(2)}) from the node`).join('; '));
+  const w0 = rows[0].lock.width, h0 = rows[0].lock.height;
+  return rows[1].scale < rows[0].scale / 2 && rows[2].scale > rows[0].scale * 2
+    && rows.every((r) => near(r.lock.width, w0, 0.05) && near(r.lock.height, h0, 0.05) && near(r.lock.x - r.node.x, 2, 0.6));
+});
+
+await check('R33 pass-through (lock = programmatic setup; pointer = real): over the padlock the hit target is the rect, the cursor equals that elsewhere on the locked rect, a click there selects the rect, and under Hand a press there pans', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('rect'));
+  await S(page, () => window.__probe.uiDispatch({ type: 'CLEAR_SELECTION' }));
+  const I = await info(page);
+  const C = await chrome(page, [I.ids.rect]);
+  const l = C.locks[I.ids.rect], b = C.nodes[I.ids.rect];
+  const canvas = await S(page, () => { const r = document.querySelector('[data-testid="spread-stage"] canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; });
+  const onLock = { x: canvas.x + l.x + l.width / 2, y: canvas.y + l.y + l.height * 0.7 };
+  const elsewhere = { x: canvas.x + b.x + b.width * 0.7, y: canvas.y + b.y + b.height * 0.7 };
+  const hit = await S(page, (p) => { const st = window.__konva.stages[0]; const s = st.getIntersection(p); return s ? s.id() || s.name() || s.getClassName() : null; }, { x: l.x + l.width / 2, y: l.y + l.height * 0.7 });
+  await page.mouse.move(elsewhere.x, elsewhere.y);
+  const curElse = (await info(page)).cursor;
+  await page.mouse.move(onLock.x, onLock.y);
+  const curLock = (await info(page)).cursor;
+  await page.mouse.click(onLock.x, onLock.y);
+  const J = await info(page);
+  await S(page, () => window.__probe.uiDispatch({ type: 'SET_TOOL', tool: 'hand' }));
+  await page.waitForTimeout(30);
+  const v0 = (await info(page)).dataView;
+  await page.mouse.move(onLock.x, onLock.y);
+  await page.mouse.down();
+  await page.mouse.move(onLock.x + 40, onLock.y + 30, { steps: 5 });
+  await page.mouse.up();
+  const K = await info(page);
+  n.push(`hit at the padlock: ${hit === I.ids.rect ? 'the rect' : hit}; cursor elsewhere "${curElse}", on the padlock "${curLock}"; selection after click ${JSON.stringify(J.selection.map((s) => (s === J.ids.rect ? 'rect' : s)))}; Hand press on the padlock: view ${v0} → ${K.dataView} (tool set programmatically)`);
+  return hit === I.ids.rect && curLock === curElse && J.selection.length === 1 && J.selection[0] === J.ids.rect && K.dataView !== v0;
+});
+
+await check('R34 spread (elements added and the recto one locked = programmatic setup; navigation and selection = real clicks): the border spans both pages at their offsets; the recto padlock sits at its node', 'mixed', async (page, n) => {
+  await commitDoc(page, `const mk = (x, y, w, h, locked) => ({ ...doc.pages[0].elements.find((e) => e.id === ids.rect), id: uuid(), x, y, width: w, height: h, locked }); const a = mk(100, 40, 30, 20, false), b = mk(10, 50, 20, 30, true); doc.pages[1].elements.push(a); doc.pages[2].elements.push(b); window.__spread = { a: a.id, b: b.id }; return doc;`);
+  await page.click('ul li:nth-child(2) button');
+  await stableView(page);
+  const ids = await S(page, () => window.__spread);
+  await clickSelect(page, ids.a, ids.b);
+  const J = await info(page);
+  const C = await chrome(page, [ids.a, ids.b]);
+  const offsets = await S(page, () => document.querySelector('[data-testid="spread-stage"]').dataset.pageOffsets);
+  await shot(page, 'R34-spread');
+  const l = C.locks[ids.b], nb = C.nodes[ids.b];
+  n.push(`unit ${J.dataView ? 'spread' : '?'}; page offsets ${offsets}; selection ${J.selection.length}; border ${JSON.stringify(C.border)} vs node union ${JSON.stringify(unionOf(Object.values(C.nodes)))}; recto padlock ${JSON.stringify(l)} vs node ${JSON.stringify(nb)}`);
+  return offsets.split(' ').length === 2 && J.selection.length === 2 && sameRect(C.border, unionOf(Object.values(C.nodes)))
+    && l && near(l.x, nb.x + 2, 0.6) && near(l.y - 0.5, nb.y + 2, 0.6) && C.handles === 0;
+});
+
+await check('R35 tools (lock = programmatic setup; keys = real): R hides the border with the selection kept, padlocks stay; H shows the border; V shows it', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('ellipse'));
+  await clickSelect(page, 'rect', 'ellipse');
+  const at = async () => { const J = await info(page); const C = await chrome(page, [J.ids.rect, J.ids.ellipse]); return { tool: J.tool, sel: J.selection.length, border: !!C.border, locks: Object.keys(C.locks).length }; };
+  const s0 = await at();
+  await page.keyboard.press('r');
+  const s1 = await at();
+  await shot(page, 'R35-creation-tool');
+  await page.keyboard.press('h');
+  const s2 = await at();
+  await page.keyboard.press('v');
+  const s3 = await at();
+  n.push(`clicks ${clickSelect.log?.splice(0).join(' ')}; ` + JSON.stringify([s0, s1, s2, s3]));
+  return s0.border && s0.locks === 1 && s1.tool === 'rect' && !s1.border && s1.sel === 2 && s1.locks === 1
+    && s2.tool === 'hand' && s2.border && s3.tool === 'select' && s3.border && s3.locks === 1;
+});
+
+await check('R36 a locked single (lock = programmatic setup; click = real): solid outline + padlock, no handles, no dashed border', 'mixed', async (page, n) => {
+  await commitDoc(page, LOCK('rect'));
+  await clickSelect(page, 'rect');
+  const J = await info(page);
+  const C = await chrome(page, [J.ids.rect]);
+  await shot(page, 'R36-locked-single');
+  n.push(`selection ${J.selection.length}; outlines ${C.outlines}; border ${!!C.border}; handles ${C.handles}; padlock ${!!C.locks[J.ids.rect]}`);
+  return J.selection.length === 1 && C.outlines === 1 && !C.border && C.handles === 0 && !!C.locks[J.ids.rect];
 });
 
 /* ----------------------------------------------------------------- report */
@@ -678,7 +883,7 @@ const lines = [
   '|---|---|---|---|',
   ...results.map((r) => `| ${r.name} | ${r.kind} | ${r.pass ? 'PASS' : 'FAIL'} | ${(r.notes.join('; ') + (r.error ? ` ERROR ${r.error.split('\n')[0]}` : '')).replace(/\|/g, '/')} |`),
   '',
-  'Input kinds: **real** = only Playwright mouse and keyboard input; **mixed** = real input plus the named programmatic step (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16 and R25: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering; R28: the lock is applied by a programmatic document COMMIT).',
+  'Input kinds: **real** = the behaviour under test is driven only by Playwright mouse and keyboard input (setup before it may be programmatic: the initial selection through the UI dispatch in R1–R27, and the Hand tool the same way in R14 and R33); **mixed** = real input plus a named programmatic step inside the case or a programmatic document change (window blur/focus; `focus()` on the button during the drag, because a pointer press on the canvas moves focus off it; R15–R16 and R25: one synthetic `mousemove` and `Escape` keydown dispatched in a single browser task, after a real anchor press, to force the before-render ordering; R28 and R30–R36: locks and added elements are applied by a programmatic document COMMIT, named in each case).',
 ];
 fs.writeFileSync(path.join(OUT, 'summary.md'), lines.join('\n') + '\n');
 fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ browser: `chromium ${version}`, results }, null, 2) + '\n');

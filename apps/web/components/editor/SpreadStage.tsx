@@ -38,7 +38,8 @@ import { fitUnitView, panBy, zoomAt, type UnitGeometry } from './geometry';
 import { ElementsLayer } from './ElementsLayer';
 import { SizeReadout } from './SizeReadout';
 import { StageGuides } from './StageGuides';
-import { CreationPreview, MarqueeRect, SelectionOutlines, SnapGuides } from './StageOverlays';
+import { CreationPreview, LockIndicators, MarqueeRect, MultiSelectionBorder, SelectionOutlines, SnapGuides } from './StageOverlays';
+import { lockAnchors, unionBox } from './selection-chrome';
 import { elementBoxes, useStageGestures } from './use-stage-gestures';
 import { useViewportMeasure, type ViewportSize } from './use-viewport-measure';
 import { useEditorUi, useEditorUiDispatch } from './state/editor-ui-context';
@@ -311,6 +312,14 @@ export const SpreadStage = memo(function SpreadStage({
         : [],
     [boxes, ui.selection, ui.tool, dragPreview, resizePreview, pages, geom]
   );
+  // D-6 (stage 7): a multi-selection draws ONE dashed border around the union of its members shown
+  // on this unit — the displayed boxes above, so a drag moves only the members the drag moves (locked
+  // members stay put and still count) — instead of per-object outlines. Members on other units are
+  // not in `boxes` and never reach the union.
+  const isMulti = ui.selection.length > 1;
+  const multiBorder = useMemo(() => (isMulti ? unionBox(selectedBoxes) : null), [isMulti, selectedBoxes]);
+  // Every locked object on the unit gets a padlock, selected or not, under every tool (choice 11).
+  const locks = useMemo(() => lockAnchors(pages, geom), [pages, geom]);
 
   return (
     <div
@@ -345,7 +354,8 @@ export const SpreadStage = memo(function SpreadStage({
           </Layer>
           <Layer listening={false}>
             <Group x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}>
-              <SelectionOutlines boxes={selectedBoxes} />
+              {isMulti ? <MultiSelectionBorder box={multiBorder} /> : <SelectionOutlines boxes={selectedBoxes} />}
+              <LockIndicators anchors={locks} scale={view.scale} />
               {gestures.previewShape && (
                 <CreationPreview
                   shape={gestures.previewShape}

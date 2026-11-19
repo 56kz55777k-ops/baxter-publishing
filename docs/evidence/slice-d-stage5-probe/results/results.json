@@ -33,7 +33,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "history []; selection [\"60fceabc-1a0c-4f78-b4e5-e0bea74c1eb6\"]; tool select; pill null; PUTs 0"
+        "history []; selection [\"c385e41e-4971-43f9-8a93-a94f5c503fa0\"]; tool select; pill null; PUTs 0"
       ],
       "error": null
     },
@@ -51,7 +51,7 @@
       "kind": "real",
       "pass": true,
       "notes": [
-        "history []; selection [\"2a0b1e68-1bc1-48ee-9e3c-11bb432a4f8b\"]; cursor after Escape \"grab\"; view 79.36422463600648 48 3.3464293968107235 → 129.3642246360065 88 3.3464293968107235"
+        "history []; selection [\"32a8af0a-0de0-4be3-af9a-a968e86dc31a\"]; cursor after Escape \"grab\"; view 79.36422463600648 48 3.3464293968107235 → 129.3642246360065 88 3.3464293968107235"
       ],
       "error": null
     },
@@ -60,7 +60,7 @@
       "kind": "mixed",
       "pass": true,
       "notes": [
-        "after blur: history [], selection [\"570c57d7-f146-42db-80e3-64d384f581eb\"], cursor \"default\"; next press: history [\"Resize\"] (blur and focus dispatched programmatically)"
+        "after blur: history [], selection [\"e4b51598-09c1-4803-a9e8-72d87792af65\"], cursor \"default\"; next press: history [\"Resize\"] (blur and focus dispatched programmatically)"
       ],
       "error": null
     },
@@ -246,10 +246,82 @@
     },
     {
       "name": "R28 locked object: the checkbox is disabled; read-only (save conflict) is covered in jsdom only",
-      "kind": "real",
+      "kind": "mixed",
       "pass": true,
       "notes": [
         "checkbox {\"checked\":false,\"disabled\":true} (lock applied programmatically)"
+      ],
+      "error": null
+    },
+    {
+      "name": "R29 multi-selection by real clicks (rect, then Shift-click the ellipse): ONE dashed [3, 2] border = the union of the two rendered nodes; no per-object outlines; no handles; not listening",
+      "kind": "real",
+      "pass": true,
+      "notes": [
+        "clicks rect@446,238→1 ellipse@372,342→2; selection 2; border {\"x\":147.79281257222095,\"y\":114.92858793621447,\"width\":133.85717587242897,\"height\":194.09290501502198,\"dash\":[3,2],\"listening\":false,\"layerListening\":false}; node union {\"x\":147.79281257222095,\"y\":114.92858793621447,\"width\":133.85717587242897,\"height\":194.09290501502204}; outlines 0; handles 0; history []"
+      ],
+      "error": null
+    },
+    {
+      "name": "R30 mixed locked/unlocked drag (lock = programmatic setup; selection and drag = real input): mid-drag the border = union of the MOVED rect and the STATIONARY locked ellipse; after release = the document",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "rect moved true; ellipse stationary true; mid border {\"x\":181.2571065403282,\"y\":74.77143517448579,\"width\":260.35220707187426,\"height\":234.25005777675065,\"dash\":[3,2],\"listening\":false,\"layerListening\":false} vs union of displayed {\"x\":181.25710654032815,\"y\":74.77143517448579,\"width\":260.35220707187426,\"height\":234.2500577767507} (naive translated union {\"x\":307.79281257222095,\"y\":74.92858793621447,\"width\":133.85717587242897,\"height\":194.09290501502204}); after release border {\"x\":181.2571065403282,\"y\":74.77143517448579,\"width\":260.35220707187426,\"height\":234.25005777675065,\"dash\":[3,2],\"listening\":false,\"layerListening\":false}; history [\"Setup\",\"Move\"]; padlock on ellipse true"
+      ],
+      "error": null
+    },
+    {
+      "name": "R31 padlock placement and size (lock = programmatic setup): an ~11 px padlock 2 px inside the top-left of the rendered rect and of the ellipse's bounding box; unlocked objects none",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "padlocks {\"1bfbbd95-95a7-4bf6-8c62-95e98194c81a\":{\"x\":215.79281257222095,\"y\":117.92858793621447,\"width\":10,\"height\":10,\"absScale\":1,\"listening\":false,\"layerListening\":false},\"843a83b9-cf82-4f7b-b555-bae135287290\":{\"x\":249.25710654032818,\"y\":251.7857638086434,\"width\":10.000000000000028,\"height\":10.000000000000028,\"absScale\":1,\"listening\":false,\"layerListening\":false}}; nodes {\"1bfbbd95-95a7-4bf6-8c62-95e98194c81a\":{\"x\":213.29281257222095,\"y\":114.92858793621447,\"width\":133.85717587242897,\"height\":100.3928819043217},\"843a83b9-cf82-4f7b-b555-bae135287290\":{\"x\":246.75710654032815,\"y\":248.78576380864345,\"width\":80.31430552345739,\"height\":60.235729142593044}}; scale 3.3464293968107235"
+      ],
+      "error": null
+    },
+    {
+      "name": "R32 zoom (real Ctrl+wheel in and out): the padlock stays the same screen size and stays 2 px inside the rect's top-left",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "fit: scale 3.346, padlock 10.00 × 10.00 px at (2.50, 3.00) from the node; out: scale 0.510, padlock 10.00 × 10.00 px at (2.50, 3.00) from the node; in: scale 27.200, padlock 10.00 × 10.00 px at (2.50, 3.00) from the node"
+      ],
+      "error": null
+    },
+    {
+      "name": "R33 pass-through (lock = programmatic setup; pointer = real): over the padlock the hit target is the rect, the cursor equals that elsewhere on the locked rect, a click there selects the rect, and under Hand a press there pans",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "hit at the padlock: the rect; cursor elsewhere \"default\", on the padlock \"default\"; selection after click [\"rect\"]; Hand press on the padlock: view 146.36422463600647 48 3.3464293968107235 → 119.36422463600648 78 3.3464293968107235 (tool set programmatically)"
+      ],
+      "error": null
+    },
+    {
+      "name": "R34 spread (elements added and the recto one locked = programmatic setup; navigation and selection = real clicks): the border spans both pages at their offsets; the recto padlock sits at its node",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "unit spread; page offsets 0 148; selection 2; border {\"x\":239.43765503555483,\"y\":283.50363816768646,\"width\":144.72631056722344,\"height\":74.21862080370431,\"dash\":[3,2],\"listening\":false,\"layerListening\":false} vs node union {\"x\":239.43765503555483,\"y\":283.50363816768646,\"width\":144.72631056722338,\"height\":74.21862080370437}; recto padlock {\"x\":349.55465520092605,\"y\":305.05829336861257,\"width\":10,\"height\":10,\"absScale\":0.9999999999999999,\"listening\":false,\"layerListening\":false} vs node {\"x\":347.05465520092605,\"y\":302.05829336861257,\"width\":37.109310401852156,\"height\":55.66396560277826}"
+      ],
+      "error": null
+    },
+    {
+      "name": "R35 tools (lock = programmatic setup; keys = real): R hides the border with the selection kept, padlocks stay; H shows the border; V shows it",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "clicks rect@446,238→1 ellipse@372,342→2; [{\"tool\":\"select\",\"sel\":2,\"border\":true,\"locks\":1},{\"tool\":\"rect\",\"sel\":2,\"border\":false,\"locks\":1},{\"tool\":\"hand\",\"sel\":2,\"border\":true,\"locks\":1},{\"tool\":\"select\",\"sel\":2,\"border\":true,\"locks\":1}]"
+      ],
+      "error": null
+    },
+    {
+      "name": "R36 a locked single (lock = programmatic setup; click = real): solid outline + padlock, no handles, no dashed border",
+      "kind": "mixed",
+      "pass": true,
+      "notes": [
+        "selection 1; outlines 1; border false; handles 0; padlock true"
       ],
       "error": null
     }
