@@ -221,9 +221,22 @@ test('baseline comparison (recorded, not gated): rAF callbacks per second while 
   };
   const paced = async (x0: number, y0: number) => { await page.mouse.move(x0, y0); await page.mouse.down(); const t0 = Date.now(); for (let i = 1; i <= 120; i++) { await page.mouse.move(Math.round(x0 + 40 * Math.sin(i / 10)), Math.round(y0 + 30 * Math.sin(i / 7))); const w = t0 + i * 2000 / 120 - Date.now(); if (w > 0) await page.waitForTimeout(w); } await page.mouse.up(); };
   const dragRafPerSec = await count(() => paced(cx, cy));
+  // The drag moved the element: wait for its save so the anchor is computed from where it now is (the
+  // b3baf08 version computed it from the stale stored box and pressed empty canvas — not a resize).
+  await ed.waitForPuts(1);
   await ed.click(id);
-  const a = await ed.anchorPoint(id, 'bottom-right');
+  const a = await ed.anchorPoint(id, 'bottom-right'); // waits until that anchor is drawn and hittable
+  const resizeAnchorHit = await page.evaluate(({ x, y }) => {
+    const st = (window as any).Konva.stages[0];
+    const box = st.container().getBoundingClientRect();
+    return st.getIntersection({ x: x - box.left, y: y - box.top })?.name() ?? 'none';
+  }, a);
+  expect(resizeAnchorHit).toBe('bottom-right _anchor');
+  const savesBefore = ed.mock.puts.length;
   const resizeRafPerSec = await count(() => paced(Math.round(a.x), Math.round(a.y)));
+  await ed.waitForPuts(savesBefore + 1);
+  const resized = ed.lastPut(id)!;
+  expect([resized.width, resized.height]).not.toEqual([r.width, r.height]); // it really was a resize
   const hoverRafPerSec = await count(async () => { const t0 = Date.now(); for (let i = 1; i <= 120; i++) { await page.mouse.move(300 + (i % 50), 300); const w = t0 + i * 2000 / 120 - Date.now(); if (w > 0) await page.waitForTimeout(w); } });
   const out = { browser: ti.project.name, unit: 'animation-frame callbacks per second (not painted frames)', idle, hoverRafPerSec, objectDragRafPerSec: dragRafPerSec, resizeRafPerSec };
   mkdirSync(RUN_DIR, { recursive: true });
