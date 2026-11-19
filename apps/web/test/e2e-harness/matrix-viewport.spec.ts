@@ -71,7 +71,7 @@ test.describe('viewport freeze (REAL wheel)', () => {
     expect(r).toEqual({ panned: false, zoomed: false, browserZoom: 1 });
     await page.mouse.move(p.x + 50, p.y + 35, { steps: 4 });
     await page.waitForTimeout(40);
-    const pill = (await ed.stage()).pill;
+    const pill = await ed.settledPill();
     await page.mouse.up();
     await ed.waitForPuts(1);
     const g = ed.lastPut(ID.rect)!;

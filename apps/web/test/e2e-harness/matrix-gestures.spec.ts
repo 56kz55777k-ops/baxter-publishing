@@ -275,7 +275,7 @@ test.describe('Space and Hand (REAL input): handles visible but inactive; pan is
     await page.waitForTimeout(40);
     expect((await ed.stage()).cursor).toBe('nwse-resize');
     expect((await ed.stage()).dataView).toBe(v0); // no pan
-    const pill = (await ed.stage()).pill;
+    const pill = await ed.settledPill();
     await page.mouse.up();
     await page.waitForTimeout(40);
     expect((await ed.stage()).cursor).toBe('grab'); // the tracked Space is handed back

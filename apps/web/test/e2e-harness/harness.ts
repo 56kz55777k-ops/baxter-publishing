@@ -215,13 +215,32 @@ export class Editor {
     if (opts.key) await this.page.keyboard.down(opts.key);
     for (const p of pts) await this.page.mouse.move(Math.round(p.x), Math.round(p.y), { steps: opts.steps ?? 8 });
     await this.page.waitForTimeout(40);
-    const pill = (await this.stage()).pill;
+    const pill = await this.settledPill();
     if (opts.release !== false) {
       await this.page.mouse.up();
       if (opts.key) await this.page.keyboard.up(opts.key);
       await this.page.waitForTimeout(40);
     }
     return { pill };
+  }
+
+  /**
+   * The pill once the editor has caught up with the input already sent: the same value across two
+   * consecutive animation frames (≤ 3 s). A slow renderer (the VM's WebKit, ~6 frames/s) can still be
+   * processing queued moves 40 ms after the last one; reading then compared a stale pill with the save
+   * of the final position (1 failure in 159 on 5eab0f5's batch A). The app's own rule — the save equals
+   * the last bounded preview at release — is tested separately (release-before-paint).
+   */
+  async settledPill() {
+    const frame = () => this.page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    const deadline = Date.now() + 3_000;
+    let prev = (await this.stage()).pill;
+    for (;;) {
+      await frame();
+      const cur = (await this.stage()).pill;
+      if (cur === prev || Date.now() > deadline) return cur;
+      prev = cur;
+    }
   }
 
   /** Marquee-select by a real drag on empty canvas between two unit-mm points. */

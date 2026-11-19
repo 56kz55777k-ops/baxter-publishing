@@ -162,7 +162,7 @@ test.describe('minimum, zero-H, S2-1, rounding', () => {
       const p = await ed.at(mm);
       await page.mouse.move(Math.round(p.x), Math.round(p.y), { steps: 6 });
       await page.waitForTimeout(40);
-      return (await ed.stage()).pill;
+      return ed.settledPill();
     };
     const guide = () =>
       page.evaluate(() => (window as any).Konva.stages[0].find('Line').filter((l: any) => l.stroke() === '#8a2820' && l.visible()).length);

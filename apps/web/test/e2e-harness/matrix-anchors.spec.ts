@@ -233,7 +233,7 @@ test.describe('Alt (centred)', () => {
     const after = await centreH(ed, ID.rect);
     // Free again from the last (centred) box: its top-left is now the fixed corner.
     expect([after.x, after.y]).toEqual([c2.x, c2.y]);
-    const pill = (await ed.stage()).pill;
+    const pill = await ed.settledPill();
     await page.mouse.up();
     await ed.waitForPuts(1);
     const g = ed.lastPut(ID.rect)!;
