@@ -134,9 +134,16 @@ export class Editor {
       const c = st.container().getBoundingClientRect();
       return { x: c.left + r.x + r.width / 2, y: c.top + r.y + r.height / 2 };
     }, id);
+    const before = (await this.stage()).selected;
     if (shift) await this.page.keyboard.down('Shift');
     await this.page.mouse.click(p.x, p.y);
     if (shift) await this.page.keyboard.up('Shift');
+    // Wait (≤ 3 s) for the editor to COMMIT the selection the click makes — a plain click selects `id`; a
+    // Shift-click toggles it. Under load the VM's WebKit committed it later than the old fixed 60 ms, and the
+    // next step (an anchor press) then raced an empty selection (1 failure in 159 on 8f509a0's batch A).
+    const want = (sel: string[]) => (shift ? sel.includes(id) !== before.includes(id) : sel.includes(id));
+    const deadline = Date.now() + 3_000;
+    while (!want((await this.stage()).selected) && Date.now() < deadline) await this.page.waitForTimeout(20);
     await this.page.waitForTimeout(60);
   }
 
