@@ -45,8 +45,17 @@ const ID = 'AbCdEf123456';
 const CORE = ['BUILD_ID', 'build-manifest.json', 'app-build-manifest.json', 'app-path-routes-manifest.json', 'routes-manifest.json', 'prerender-manifest.json', 'required-server-files.json', 'server/app-paths-manifest.json', 'server/pages-manifest.json', 'server/middleware-manifest.json'];
 const MANIFESTS = CORE.filter((f) => f.endsWith('.json'));
 const serverJs = (e: string) => `app${e}.js`;
+const MIDDLEWARE = {
+  files: ['server/edge-runtime-webpack.js', 'server/middleware.js'],
+  name: 'middleware',
+  page: '/',
+  matchers: [{ regexp: '^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/static|_next\\/image|favicon.ico).*))$', originalSource: '/((?!_next/static|_next/image|favicon.ico).*)' }],
+  wasm: [] as { name: string; filePath: string }[],
+  assets: [] as { name: string; filePath: string }[],
+  env: { __NEXT_BUILD_ID: 'AbCdEf123456' },
+};
 
-type Opts = { harness?: boolean; entries?: Entry[]; extra?: Record<string, string> };
+type Opts = { harness?: boolean; entries?: Entry[]; extra?: Record<string, string>; emptyMiddleware?: boolean };
 /** Write a complete synthetic build mirroring the real output. `extra` overrides files after writing. */
 function makeBuild(opts: Opts = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'baxter-build-'));
@@ -94,7 +103,12 @@ function makeBuild(opts: Opts = {}) {
   }
   json('server/pages-manifest.json', { '/_app': 'pages/_app.js', '/_error': 'pages/_error.js', '/_document': 'pages/_document.js', '/404': 'pages/404.html' });
   for (const f of ['pages/_app.js', 'pages/_error.js', 'pages/_document.js', 'pages/404.html']) w(`server/${f}`, `/* ${f} */`);
-  json('server/middleware-manifest.json', { version: 3, middleware: {}, functions: {}, sortedMiddleware: [] });
+  if (opts.emptyMiddleware) json('server/middleware-manifest.json', { version: 3, middleware: {}, functions: {}, sortedMiddleware: [] });
+  else {
+    // Active middleware, as in this app's real build (env values are build-generated; placeholders here).
+    json('server/middleware-manifest.json', { version: 3, middleware: { '/': MIDDLEWARE }, functions: {}, sortedMiddleware: ['/'] });
+    for (const f of MIDDLEWARE.files) w(f, `/* ${f} */`);
+  }
   const isDyn = (r: string) => r.includes('[');
   json('routes-manifest.json', {
     version: 3,
@@ -443,5 +457,105 @@ describe('inputs that are not a build, invalid baselines, leaks, the harness pos
     expect(ok.status, ok.stdout).toBe(0);
     expect(ok.stdout).toContain('VERDICT OK');
     expect(spawnSync(process.execPath, [verifierPath, 'nonsense'], { encoding: 'utf8' }).status).toBe(2);
+  });
+});
+
+describe('middleware and edge-function references (Codex 8A verifier review P2)', () => {
+  const MWM = 'server/middleware-manifest.json';
+  const at = (k = '/') => `${MWM} middleware[${JSON.stringify(k)}]`;
+
+  it('a valid build with ACTIVE middleware passes (the fixture default), and legitimate empty maps pass too', async () => {
+    const { verifyBuild } = await load();
+    const active = verifyBuild({ mode: 'default', dist: makeBuild(), baseline: makeBuild() });
+    expect(active.ok, errs(active)).toBe(true);
+    const empty = verifyBuild({ mode: 'default', dist: makeBuild({ emptyMiddleware: true }), baseline: makeBuild({ emptyMiddleware: true }) });
+    expect(empty.ok, errs(empty)).toBe(true);
+  });
+
+  for (const rel of MIDDLEWARE.files) {
+    it(`missing ${rel} (declared by middleware["/"]) → invalid`, async () => {
+      const d = makeBuild();
+      rmSync(path.join(d, rel));
+      await failsBothWays(d, `missing ${at()} → ${rel}`);
+    });
+    it(`a directory in place of ${rel} → invalid`, async () => {
+      const d = makeBuild();
+      rmSync(path.join(d, rel));
+      mkdirSync(path.join(d, rel));
+      await failsBothWays(d, `not a regular file: ${at()} → ${rel} (directory)`);
+    });
+  }
+
+  it.skipIf(process.getuid?.() === 0)('a mode-000 middleware executable → "unreadable" (skipped as root, where permissions do not apply)', async () => {
+    const { verifyBuild } = await load();
+    const d = makeBuild();
+    chmodSync(path.join(d, 'server/middleware.js'), 0o000);
+    const r = verifyBuild({ mode: 'default', dist: d });
+    chmodSync(path.join(d, 'server/middleware.js'), 0o644);
+    expect(r.ok).toBe(false);
+    expect(errs(r)).toContain(`unreadable ${at()} → server/middleware.js`);
+  });
+
+  const ENTRY: [string, (v: Json) => Json, string][] = [
+    ['entry null', (v) => ({ ...v, middleware: { '/': null } }), 'middleware["/"] must be an object, got null'],
+    ['entry false', (v) => ({ ...v, middleware: { '/': false } }), 'middleware["/"] must be an object, got boolean'],
+    ['entry 0', (v) => ({ ...v, middleware: { '/': 0 } }), 'middleware["/"] must be an object, got number'],
+    ['entry ""', (v) => ({ ...v, middleware: { '/': '' } }), 'middleware["/"] must be an object, got string'],
+    ['entry []', (v) => ({ ...v, middleware: { '/': [] } }), 'middleware["/"] must be an object, got array'],
+    ['files null', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: null } } }), 'middleware["/"].files must be'],
+    ['files false', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: false } } }), 'middleware["/"].files must be'],
+    ['files []', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: [] } } }), 'middleware["/"].files must be'],
+    ['files a string', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: 'server/middleware.js' } } }), 'middleware["/"].files must be'],
+    ['files [0]', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: [0] } } }), 'middleware["/"].files must be'],
+    ['files [""]', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: [''] } } }), 'middleware["/"].files must be'],
+    ['files absent', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: undefined } } }), 'middleware["/"].files must be'],
+    ['name ""', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, name: '' } } }), 'middleware["/"].name must be'],
+    ['page not its key', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, page: '/other' } } }), 'middleware["/"].page must equal its key'],
+    ['matchers null', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, matchers: null } } }), 'middleware["/"].matchers must be'],
+    ['matchers [{}]', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, matchers: [{}] } } }), 'middleware["/"].matchers must be'],
+    ['wasm false', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, wasm: false } } }), 'middleware["/"].wasm must be'],
+    ['wasm [{ name }]', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, wasm: [{ name: 'w' }] } } }), 'middleware["/"].wasm must be'],
+    ['assets null', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, assets: null } } }), 'middleware["/"].assets must be'],
+    ['env null', (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, env: null } } }), 'middleware["/"].env must be'],
+    ['sortedMiddleware lists an absent entry', (v) => ({ ...v, sortedMiddleware: ['/', '/missing'] }), 'sortedMiddleware lists "/missing", which has no middleware entry'],
+    ['a middleware entry missing from sortedMiddleware', (v) => ({ ...v, sortedMiddleware: [] }), 'middleware entry "/" is missing from sortedMiddleware'],
+    ['sortedMiddleware [null]', (v) => ({ ...v, sortedMiddleware: [null] }), 'sortedMiddleware must be a list'],
+    ['function entry null', (v) => ({ ...v, functions: { '/api/x/route': null } }), 'functions["/api/x/route"] must be an object, got null'],
+    ['function files false', (v) => ({ ...v, functions: { '/api/x/route': { ...MIDDLEWARE, page: '/api/x/route', files: false } } }), 'functions["/api/x/route"].files must be'],
+    ['function page not its key', (v) => ({ ...v, functions: { '/api/x/route': { ...MIDDLEWARE } } }), 'functions["/api/x/route"].page must equal its key'],
+  ];
+  for (const [label, editFn, needle] of ENTRY) it(`${MWM}: ${label} → invalid`, async () => failsBothWays(mutated(MWM, editFn), `${MWM}: ${needle}`));
+
+  it('invalid or escaping declared paths → invalid', async () => {
+    await failsBothWays(mutated(MWM, (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: ['../../outside.js'] } } })), 'escapes the build directory');
+    await failsBothWays(mutated(MWM, (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, files: ['/etc/passwd'] } } })), 'invalid path "/etc/passwd"');
+  });
+
+  it('a wasm or asset filePath that is missing → invalid', async () => {
+    await failsBothWays(mutated(MWM, (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, wasm: [{ name: 'wasm_x', filePath: 'server/edge-chunks/wasm_x.wasm' }] } } })), `missing ${at()} → server/edge-chunks/wasm_x.wasm`);
+    await failsBothWays(mutated(MWM, (v) => ({ ...v, middleware: { '/': { ...MIDDLEWARE, assets: [{ name: 'a', filePath: 'server/edge-chunks/asset_a' }] } } })), `missing ${at()} → server/edge-chunks/asset_a`);
+  });
+
+  it('an edge-function entry is validated like middleware: present files pass, a missing file fails', async () => {
+    const { verifyBuild } = await load();
+    const fn = { ...MIDDLEWARE, name: 'x', page: '/api/x/route', files: ['server/edge-runtime-webpack.js', 'server/edge-fn-x.js'] };
+    const ok = mutated(MWM, (v) => ({ ...v, functions: { '/api/x/route': fn } }));
+    writeFileSync(path.join(ok, 'server/edge-fn-x.js'), '/* edge fn */');
+    const r = verifyBuild({ mode: 'default', dist: ok, baseline: makeBuild() });
+    expect(r.ok, errs(r)).toBe(true);
+    await failsBothWays(mutated(MWM, (v) => ({ ...v, functions: { '/api/x/route': fn } })), `missing ${MWM} functions["/api/x/route"] → server/edge-fn-x.js`);
+  });
+
+  it('the CLI reports a missing middleware executable and a null middleware entry as controlled failures', () => {
+    const missing = makeBuild();
+    rmSync(path.join(missing, 'server/middleware.js'));
+    const nullEntry = mutated(MWM, (v) => ({ ...v, middleware: { '/': null } }));
+    for (const d of [missing, nullEntry])
+      for (const args of [['default', d], ['default', makeBuild(), '--baseline', d], ['harness', d]]) {
+        const p = spawnSync(process.execPath, [verifierPath, ...args], { encoding: 'utf8' });
+        expect(p.status).toBe(1);
+        expect(p.stdout).toMatch(/VERDICT FAIL \(\d+ error\(s\)\)/);
+        expect(p.stderr).toBe('');
+      }
   });
 });

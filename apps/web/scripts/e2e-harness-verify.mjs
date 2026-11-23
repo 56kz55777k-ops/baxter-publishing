@@ -118,6 +118,28 @@ function readJson(dist, rel, errors) {
 const strArrMap = (v) => isObj(v) && Object.values(v).every(isStrArr);
 const strMap = (v) => isObj(v) && Object.values(v).every(isStr);
 const pageEntries = (v) => Array.isArray(v) && v.every((r) => isObj(r) && isStr(r.page));
+/**
+ * One `middleware` or `functions` entry of server/middleware-manifest.json, as Next 15.5 writes it (this app's
+ * real build: middleware["/"] = { files: ["server/edge-runtime-webpack.js", "server/middleware.js"],
+ * name: "middleware", page: "/", matchers: [{ regexp, originalSource }], wasm: [], assets: [], env: {…} }).
+ * Edge functions use the same shape. wasm/assets items are { name, filePath }. Checked before any field is
+ * used; the files themselves are read in validateInto.
+ */
+const isNamedFile = (v) => isObj(v) && isStr(v.name) && isStr(v.filePath);
+function edgeEntryProblems(section, key, e) {
+  const at = `${section}[${JSON.stringify(key)}]`;
+  if (!isObj(e)) return [`${at} must be an object, got ${kind(e)}`];
+  return [
+    !(isStrArr(e.files) && e.files.length) && `${at}.files must be a non-empty list of file paths`,
+    !isStr(e.name) && `${at}.name must be a non-empty string`,
+    !(isStr(e.page) && e.page === key) && `${at}.page must equal its key`,
+    !(Array.isArray(e.matchers) && e.matchers.every((x) => isObj(x) && isStr(x.regexp))) && `${at}.matchers must be a list of { regexp }`,
+    !(Array.isArray(e.wasm) && e.wasm.every(isNamedFile)) && `${at}.wasm must be a list of { name, filePath }`,
+    !(Array.isArray(e.assets) && e.assets.every(isNamedFile)) && `${at}.assets must be a list of { name, filePath }`,
+    !isObj(e.env) && `${at}.env must be an object`,
+  ].filter(Boolean);
+}
+
 const SCHEMAS = {
   'build-manifest.json': (m) => [
     !(isStrArr(m.rootMainFiles) && m.rootMainFiles.length) && 'rootMainFiles must be a non-empty list of file paths',
@@ -141,6 +163,14 @@ const SCHEMAS = {
     !isObj(m.middleware) && 'middleware must be an object',
     !isObj(m.functions) && 'functions must be an object',
     !isStrArr(m.sortedMiddleware) && 'sortedMiddleware must be a list',
+    ...(isObj(m.middleware) ? Object.entries(m.middleware).flatMap(([k, e]) => edgeEntryProblems('middleware', k, e)) : []),
+    ...(isObj(m.functions) ? Object.entries(m.functions).flatMap(([k, e]) => edgeEntryProblems('functions', k, e)) : []),
+    ...(isObj(m.middleware) && isStrArr(m.sortedMiddleware)
+      ? [
+          ...m.sortedMiddleware.filter((k) => !Object.hasOwn(m.middleware, k)).map((k) => `sortedMiddleware lists ${JSON.stringify(k)}, which has no middleware entry`),
+          ...Object.keys(m.middleware).filter((k) => !m.sortedMiddleware.includes(k)).map((k) => `middleware entry ${JSON.stringify(k)} is missing from sortedMiddleware`),
+        ]
+      : []),
   ],
   'routes-manifest.json': (m) => [
     !isNum(m.version) && 'version must be a number',
@@ -230,6 +260,16 @@ function validateInto(dist, errors) {
   if (bm) readEach([...bm.rootMainFiles, ...bm.polyfillFiles, ...bm.lowPriorityFiles, ...Object.values(bm.pages).flat()], 'build-manifest.json');
   if (abm) readEach(Object.values(abm.pages).flat(), 'app-build-manifest.json');
   if (spm) for (const [page, f] of Object.entries(spm)) readArtifact(dist, path.join('server', f), errors, `server/pages-manifest.json ${page} → server/${f}`);
+  const mw = m['server/middleware-manifest.json'];
+  if (mw)
+    // Middleware and edge-function executables are declared only here (required-server-files lists the
+    // manifest, not these files), so each declared file must be a readable regular file in the build.
+    for (const kind of ['middleware', 'functions'])
+      for (const [key, e] of Object.entries(mw[kind])) {
+        const label = `server/middleware-manifest.json ${kind}[${JSON.stringify(key)}]`;
+        readEach(e.files, label);
+        readEach([...e.wasm, ...e.assets].map((x) => x.filePath), label);
+      }
   if (sap)
     for (const [entry, f] of Object.entries(sap)) {
       if (!f.endsWith('.js')) {
