@@ -1,6 +1,6 @@
 # Native Publishing — Slice D plan
 
-**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–7 and stage 8A implemented on `slice-d-resize`; stage 8A corrected after Codex's review (§6.14) and again after his fresh review (verifier, §6.15, `43b5061`); at the stage 8A review checkpoint. Stage 8A is NOT accepted; Q8 open; stage 8B not authorized.**
+**Status:** **Revision 6 (r6), 2026-11-04, plus stages 2–7 and stage 8A implemented on `slice-d-resize`; stage 8A corrected after Codex's review (§6.14) and again after his fresh review (verifier, §6.15, `43b5061`) and his verifier review (middleware, §6.16, `761e11b`); at the stage 8A review checkpoint. Stage 8A is NOT accepted; Q8 open; stage 8B not authorized.**
 - **Stage 8A corrections (2026-11-19):** Codex reviewed stage 8A (`b3baf08` + records `d35dc96`): accept after corrections — three P2 findings and one P3 (§0.22). Ben authorized the corrections and verification only (§0.23). Corrected in §6.14 (`ffa85d3` … `3773002`). Open for Ben: Q8 (how AC-18 is measured — the corrected measurement shows Firefox failing both the §8.4 gate and a 55/s cadence in the VM) and Q9 (Codex's cleanup-rule recommendation). **2026-11-22/23: hosted CI green on `fa47f72` (run 45111830113); native-Mac WebKit run by Ben on `3773002`: median 5 ms, ~60 updates/s and frame callbacks/s (§6.14).** Awaiting Codex's correction review. Stage 8B is not authorized.
 - **Stage 8A (2026-11-19):** Ben accepted Codex's review of stage 7 `b596b92` (no findings, §0.20), approved Q5 and authorized **stage 8A only** (§0.21): the local application harness, fixtures, mocked-persistence tests and performance verification. Implemented in §6.13 (`b3baf08`). Stage 8B (production) is not authorized and still needs Q1 and Q6.
 - **Stage 7 (2026-11-18):** Ben accepted Codex's review of stage 6 `d946b2c` (no P1/P2; one P3 evidence label, §0.18) and authorized the R28 label correction and **stage 7 only** (§0.19): D-6 multi-selection border and lock indicators. Implemented in §6.12. Stage 8 (8A harness, 8B production) needs Codex's review, Ben's acceptance and his separate authorization, with its prerequisites (Q5; Q1 and Q6).
@@ -205,6 +205,28 @@ Verdict: accept after corrections; two P2 findings, both reproduced by Codex. Ho
 
 - Fix the two findings, add the regressions, correct the autosave explanation; nothing else. (1) Cancellation restores authoritative model geometry and scale independently of whether React rendered a preview, refreshing the Transformer; from the current document, never stale captured geometry over a newer update. Rect and ellipse, before and after a rendered preview; live position, size/radii and scale asserted with document, history and preview; a later resize still works and a changed release commits once; a real Chromium/Konva regression for the same-task move/Escape, failing before and passing after. (2) Track host lifetime across callback boundaries; tests for unmount inside `onSpaceSync` and `onRefit`, the existing `onResize` case, normal order, deferred refit, exactly-once termination and residual suppression; valid under StrictMode; the injected reproduction distinguished from production behaviour. (3) Correct the autosave explanation in the briefing, test comments and handoff; no autosave behaviour change.
 - **Excluded:** stage 6, merging, deploying, dependency versions, any bundle-allowance increase.
+
+### 0.26 Codex's review of the verifier corrections `43b5061` / `734156c` (2026-11-23) — one further correction
+
+- **Closed:** the falsy-JSON finding and the timing-documentation finding. The earlier six cases fail correctly on a real build, as candidate and baseline. The extension-keyed client entry (`…/page.harness`) is accepted for the current build configuration. Hosted CI on `734156c` is confirmed through status and logs ([run 45117205447](https://github.com/56kz55777k-ops/baxter-publishing/actions/runs/45117205447): 934 tests; budget +986 B of +1024 B). The browser manifests (297) match their results.
+- **P2 — middleware-manifest references not validated:** only the outer `middleware`, `functions` and `sortedMiddleware` types were checked. On a copy of a real build, deleting `server/middleware.js` (declared in `middleware["/"].files`, and not listed in required-server-files) still returned `ok: true`, as candidate and as baseline; deleting the edge runtime as well also passed. The fixture used empty maps although the real build has active middleware. Required: validate nested entries and their declared files; check sortedMiddleware against the entries; apply the same to function entries and to baselines; add an active-middleware fixture and regressions; repeat the real-build deletion check.
+
+### 0.27 Ben's authorization: the remaining stage 8A middleware-verifier correction only (2026-11-22 23:27 local)
+
+Fix the middleware completeness gap in the verifier only, using the existing artifact-reading and error conventions. Preserve legitimate empty maps and valid current Next output. Do not change product behaviour, middleware, the recorder, the write gate or performance policy. Required regressions:
+- a valid active-middleware build;
+- a missing executable and a missing edge runtime;
+- a directory substituted for a file;
+- an unreadable file where permissions allow;
+- malformed nested entries and file lists, including falsy values and wrong types;
+- invalid and escaping paths;
+- sortedMiddleware referencing an absent entry;
+- function entries;
+- legitimate empty maps;
+- every invalid input as candidate and as baseline;
+- a controlled CLI failure.
+
+Show the regressions exposing the pre-fix verifier, and repeat the real-build deletion with a pristine passing control. Complete verification: focused and full tests; typechecks; lint; default builds with the flag absent and `=0`; the harness build; real outputs against a valid baseline; the middleware cases failing through the CLI; the browser matrix. Hosted CI for the final code or a code-equivalent docs head; pushing for CI is authorized, merge and deployment are not. Correct summary-generation mistakes. **Q8 stays open**; performance need not be rerun and must not be relabelled. Deliver and stop for Codex's review.
 
 ### 0.24 Codex's fresh review of the stage 8A corrections (2026-11-23) — corrections still required
 
@@ -1349,7 +1371,73 @@ Every invalid case is asserted as candidate **and** as baseline, with its specif
 - Default server: fixture URLs and traversal → 404; 9 page bodies equal the baseline with hashes masked.
 - **Functional browser matrix on the final harness build**, through `e2e-harness-run.mjs` with run manifests at commit `43b5061`, tree `cd599fa1`, clean: batch A 159/159, B 69/69, C 69/69 = **297/297** (99 tests × Chromium 151, Firefox 153, WebKit 26.5). Canary contacts 0; non-loopback `connect()` 0; batch C has 6 SIGPIPE lines, as before. The isolation positive control was not rerun; the harness and isolation code is unchanged, and the 2026-11-19 positive-control evidence stands.
 - **Performance: not rerun.** The existing evidence keeps its original identities: VM runs at `3773002` (BUILD_ID `tSORLUSX4n3AWD4iRlaQf`) and native-Mac WebKit at `3773002` (`BayZalF5CDxpSu5c4KGBL`). Firefox in the VM still fails the existing gate; native Chromium and Firefox are not measured. **Q8 stays open.**
-- **Hosted CI:** pending Ben's push of this branch (see the delivery).
+- **Hosted CI:** green on `734156c` (code-equivalent to `43b5061`): [run 45117205447](https://github.com/56kz55777k-ops/baxter-publishing/actions/runs/45117205447), confirmed by Codex through status and logs (934 tests).
+- **Incomplete — corrected in §6.16:** middleware-manifest entries and their files were not validated (Codex, §0.26).
+
+### 6.16 Stage 8A middleware-verifier correction (2026-11-23; awaiting Codex's review — stage 8A NOT accepted)
+
+Authorized by Ben (§0.27) after Codex's review (§0.26). One code commit on `734156c`: **`761e11b`** (tree `133bece5…`), which changes only `apps/web/scripts/e2e-harness-verify.mjs` and its test. No change to product code, middleware, the recorder, the write gate or performance policy.
+
+**Validation added** (shape taken from this app's real Next 15.5 output: `middleware["/"] = { files: ["server/edge-runtime-webpack.js", "server/middleware.js"], name, page: "/", matchers: [{ regexp, originalSource }], wasm: [], assets: [], env }`, `functions: {}`, `sortedMiddleware: ["/"]`):
+- **Entry shapes.** Inside the manifest schema, before any field is used, each `middleware` and `functions` entry must be an object with:
+  - `files`: a non-empty list of file paths;
+  - `name`: a string;
+  - `page`: equal to its key;
+  - `matchers`: a list of `{ regexp }`;
+  - `wasm` and `assets`: lists of `{ name, filePath }`;
+  - `env`: an object.
+- **sortedMiddleware** and the middleware entries must correspond in both directions.
+- **Declared files.** Every declared file, and every wasm and asset `filePath`, must be a readable regular file inside the build. The checks use the existing artifact reader, so the errors are the same kinds: missing, not a regular file, unreadable, path escapes the build directory, invalid path.
+- **Empty maps** (`middleware: {}`, `functions: {}`, `sortedMiddleware: []`) remain valid.
+- **Baselines** get the same rules.
+
+**Tests.** The fixture now has active middleware as in the real build, with empty maps kept as a passing case. 36 new tests (35 run; the mode-000 one is skipped as root), 198 passed + 2 skipped in total:
+- a valid active-middleware build, and empty maps;
+- each executable missing, and replaced by a directory;
+- a mode-000 executable (skipped as root);
+- 26 malformed entry, field and file-list cases: `null`, `false`, `0`, `""` and `[]` entries; `files` `null`, `false`, `[]`, a string, `[0]`, `[""]` or absent; a bad `name`, `page`, `matchers`, `wasm`, `assets` or `env`; sortedMiddleware with an absent entry, a missing entry or `[null]`; malformed function entries;
+- escaping and absolute paths;
+- missing wasm and asset files;
+- a valid and a missing-file edge function;
+- the CLI giving exit 1 with empty stderr.
+
+Every invalid input is asserted as candidate and as baseline, with its specific error.
+
+**Before → after:**
+- **Codex's `middleware-repro.mjs`.** Only the import and source path were made configurable. Run on real default builds from the previous verification (`5eM-Hw2nt0aGWC3AAsFSF`) and from this one (`AJ38FitnXGFXFNcHtSLDp`):
+  - `43b5061`: the pristine copy passes. Deleting `server/middleware.js`, then the edge runtime, passes as candidate and as baseline, identical to Codex's log.
+  - `761e11b`: the pristine copy passes. Each deletion fails as candidate and as baseline with `missing server/middleware-manifest.json middleware["/"] → server/middleware.js` (and `→ server/edge-runtime-webpack.js`).
+- **`middleware-cases-on-real-build.mjs`.** Each case runs on a fresh copy of the real build, alongside a pristine copy as the passing control:
+  - the control passes under both verifiers;
+  - eight cases, each certified by `43b5061` as candidate and as baseline, are rejected by `761e11b` both ways with their own error: middleware only deleted; edge runtime only deleted; a directory in place of the executable; a `null` entry; `files: false`; an escaping file; sortedMiddleware naming an absent entry; a function entry with a missing file.
+- **New tests on the old verifier:** 33 of the 35 new tests that run fail. The two that pass are the valid-build control and `sortedMiddleware [null]`, which the old schema already rejected. All 165 earlier tests, including Codex's six cases, pass on both verifiers. The verdict-only variant gives the same 33.
+
+**Verification of `761e11b`** (fresh clone, fresh `npm ci`, Node 22.23.4, no `.env*` apart from `.env.example`, no production credentials):
+- typecheck, test typecheck and lint pass. Vitest: **49 files, 968 passed, 2 skipped** (the two `chmod` cases, skipped as root).
+- **Builds**, each with build exit 0 and budget exit 0 (`builds.txt` now records the real build and budget exit codes; the earlier summary's `budget-exit` field recorded an unrelated command):
+  - baseline `b596b92` (`XbRU1Lo9Ic5PXzfiXQFiv`);
+  - default with the flag absent (`AJ38FitnXGFXFNcHtSLDp`);
+  - `=0` (`anJ7xu9prIO5yuHQC-ccm`);
+  - harness build (`LEpxJN1WIZDjuS0cHx3i4`).
+
+  Budget PASS **+986 B of +1024 B** on all three default-type builds; the allowance is unchanged.
+- **Verifier on real outputs:**
+  - default and `=0` against the baseline → `VERDICT OK`; the baseline alone → OK;
+  - harness build → OK in harness mode, FAIL in default mode;
+  - empty inputs → FAIL.
+- **Real-copy CLI failures** (exit 1, `VERDICT FAIL`, empty stderr), each as candidate and as baseline: the earlier four (`null` build manifest, `false` app-build manifest, pages manifest removed, a directory in place of a chunk) plus **middleware executable removed, edge runtime removed, and `middleware["/"] = null`**.
+- **Codex's six earlier cases** on this build: the pristine copy passes; all six fail under `43b5061` and under `761e11b`.
+- Default server: fixture URLs and traversal → 404; page bodies equal the baseline with hashes masked.
+- **Functional browser matrix on the final harness build:** run through `e2e-harness-run.mjs`, with run manifests at commit `761e11b`, tree `133bece5`, clean, BUILD_ID `LEpxJN1WIZDjuS0cHx3i4`, in Chromium 151, Firefox 153 and WebKit 26.5.
+  - **First batch A: 158/159 — FAILED.** One WebKit test, `matrix-grandfather` "inspector on the 2.5 mm width…", timed out waiting for the W field. The click on the shape never produced a selection: the inspector still showed "Page" after 90 s. My real-build reproduction scripts were running at the same time as this batch.
+  - Batch B 69/69 and batch C 69/69.
+  - **Batch A rerun alone: 159/159.** So the latest full set is 159 + 69 + 69 = 297/297, but **only after a rerun**. The failed run is preserved.
+  - **Focused stress of that test**, WebKit, 4 workers, no other load: **39/40 — one failure** with the same symptom.
+  - A further 60/60 ran with an uncommitted diagnostic probe in `click()`; the run is labelled `…UNCOMMITTED-PROBE` and its manifest records the dirty file. No failure occurred, so the cause was not captured.
+  - The app and test code this test runs are identical to `43b5061` and `3773002` (`761e11b` changes only the verifier and its test). This is an **intermittent WebKit test-side race that already existed, about 2 in 100 runs of this test**, not something this change introduced. Fixing it is outside this authorization, so it is left as an open item for Ben: the harness `click()` waits ≤ 3 s for the selection and then continues instead of retrying or failing clearly.
+  - Canary contacts 0 and non-loopback `connect()` 0 in every batch.
+- **Performance: not rerun.** The existing evidence keeps its original identities (`3773002`). **Q8 is open.**
+- **Hosted CI:** pending Ben's push (see the delivery).
 
 ## 7 · Tests (Vitest, jsdom where needed; no new dependencies)
 
